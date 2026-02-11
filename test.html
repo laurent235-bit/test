@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Frigo Pro v12</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root { --accent: #1a73e8; --bg: #f8f9fa; }
+        body { font-family: 'Segoe UI', system-ui; background: var(--bg); margin: 0; padding: 10px; color: #202124; }
+        .card { background: white; border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.12); margin-bottom: 12px; overflow: hidden; }
+        
+        /* Style des menus déroulants (Accordéons) */
+        .collapsible { background: white; color: var(--accent); cursor: pointer; padding: 18px; width: 100%; border: none; text-align: left; outline: none; font-size: 16px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
+        .collapsible:after { content: '\002B'; font-size: 20px; font-weight: bold; }
+        .active:after { content: "\2212"; }
+        .content { padding: 0 15px; max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; background-color: white; }
+
+        /* Articles */
+        .stock-item { padding: 12px 0; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+        .btn-group { display: flex; gap: 8px; }
+        .btn-action { border: none; padding: 8px 12px; border-radius: 8px; font-size: 11px; font-weight: bold; cursor: pointer; }
+        .btn-entame { background: #fff3e0; color: #ff9800; border: 1px solid #ffe0b2; }
+        .btn-entame.active { background: #ff9800; color: white; }
+        .btn-retirer { background: #fce8e6; color: #d93025; border: 1px solid #fad2cf; }
+
+        .btn-scan { background: var(--accent); color: white; width: 100%; padding: 15px; border: none; border-radius: 12px; font-weight: bold; margin: 10px 0; }
+        input[type="text"] { width: calc(100% - 24px); padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; }
+        .config-hidden { display: none; }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <button class="collapsible">📸 Nouveau Ticket / Ajout</button>
+        <div class="content">
+            <div class="config-hidden">
+                <input id="gKey" value="AIzaSyDkEElOSuBBJJhYJVAUApVDdIr1G_AKFo8">
+                <input id="sUrl" value="https://ylguhodjcgistealluzy.supabase.co">
+                <input id="sKey" value="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsZ3Vob2RqY2dpc3RlYWxsdXp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA2MjcxMDAsImV4cCI6MjA4NjIwMzEwMH0.0czapM1DeFs7T3pTrExUMUKUcyUHi3w-p_jKj6XkTUM">
+            </div>
+            <input type="file" id="photo" accept="image/*" capture="environment">
+            <button class="btn-scan" onclick="analyserTicket()">Lancer l'analyse</button>
+            <hr>
+            <input type="text" id="manualName" placeholder="Nom de l'article manuel...">
+            <button class="btn-scan" style="background:#34a853" onclick="ajouterManuel()">Ajouter manuellement</button>
+            <div id="status" style="text-align:center; padding:10px; font-size:12px;"></div>
+        </div>
+    </div>
+
+    <div class="card">
+        <button class="collapsible active">❄️ Mon Stock Actuel</button>
+        <div class="content" style="max-height: 1000px;">
+            <div id="stockList">Chargement...</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <button class="collapsible">🛒 Liste de Courses</button>
+        <div class="content">
+            <div id="shoppingList" style="padding-bottom:15px;"></div>
+        </div>
+    </div>
+
+    <div class="card" style="border: 2px solid #8e24aa;">
+        <button class="collapsible" style="color:#8e24aa">🍽️ On mange quoi ?</button>
+        <div class="content">
+            <button class="btn-scan" style="background:#8e24aa" onclick="genererRecettes()">Demander au Chef</button>
+            <div id="recetteZone" style="padding:15px; font-size:14px;"></div>
+        </div>
+    </div>
+
+<script>
+    let monSupabase;
+
+    window.onload = function() {
+        monSupabase = window.supabase.createClient(document.getElementById('sUrl').value, document.getElementById('sKey').value);
+        chargerTout();
+        setupCollapsibles();
+    };
+
+    function setupCollapsibles() {
+        const coll = document.getElementsByClassName("collapsible");
+        for (let i = 0; i < coll.length; i++) {
+            coll[i].addEventListener("click", function() {
+                this.classList.toggle("active");
+                const content = this.nextElementSibling;
+                if (content.style.maxHeight){
+                    content.style.maxHeight = null;
+                } else {
+                    content.style.maxHeight = content.scrollHeight + "px";
+                } 
+            });
+        }
+    }
+
+    async function chargerTout() {
+        const { data, error } = await monSupabase.from('inventaire2').select('*').order('id', { descending: true });
+        if (error) return;
+
+        // STOCK
+        const stockItems = data.filter(item => item.etat !== 'Vide');
+        document.getElementById('stockList').innerHTML = stockItems.map(item => `
+            <div class="stock-item">
+                <span style="${item.etat === 'Entamé' ? 'color:#ff9800;font-weight:bold' : ''}">${item.nom} ${item.etat === 'Entamé' ? '🔸' : ''}</span>
+                <div class="btn-group">
+                    <button class="btn-action btn-entame ${item.etat === 'Entamé' ? 'active' : ''}" onclick="basculerEntame(${item.id}, '${item.etat}')">OUVERT</button>
+                    <button class="btn-action btn-retirer" onclick="retirerQuestion(${id=item.id}, '${item.nom.replace(/'/g, "\\'")}')">RETIRER</button>
+                </div>
+            </div>
+        `).join('') || "Frigo vide.";
+
+        // COURSES
+        const shopItems = data.filter(item => item.etat === 'Vide');
+        document.getElementById('shoppingList').innerHTML = shopItems.map(item => `
+            <div class="stock-item">
+                <span>${item.nom}</span>
+                <button onclick="supprimerDefinitif(${item.id})" style="border:none;background:none;font-size:18px;">🗑️</button>
+            </div>
+        `).join('') || "Liste vide.";
+    }
+
+    // --- Fonctions identiques à la V10 mais adaptées ---
+    async function ajouterManuel() {
+        const nom = document.getElementById('manualName').value;
+        if (!nom) return;
+        await monSupabase.from('inventaire2').insert([{ nom: nom, etat: 'Intact' }]);
+        document.getElementById('manualName').value = "";
+        chargerTout();
+    }
+
+    async function basculerEntame(id, etatActuel) {
+        const nouvelEtat = (etatActuel === 'Entamé') ? 'Intact' : 'Entamé';
+        await monSupabase.from('inventaire2').update({ etat: nouvelEtat }).eq('id', id);
+        chargerTout();
+    }
+
+    async function retirerQuestion(id, nom) {
+        if (confirm("Ajouter '" + nom + "' aux courses ?")) {
+            await monSupabase.from('inventaire2').update({ etat: 'Vide' }).eq('id', id);
+        } else {
+            await monSupabase.from('inventaire2').delete().eq('id', id);
+        }
+        chargerTout();
+    }
+
+    async function supprimerDefinitif(id) {
+        await monSupabase.from('inventaire2').delete().eq('id', id);
+        chargerTout();
+    }
+
+    async function genererRecettes() {
+        const zone = document.getElementById('recetteZone');
+        const { data } = await monSupabase.from('inventaire2').select('nom, etat').neq('etat', 'Vide');
+        if (!data.length) return zone.innerText = "Frigo vide !";
+        zone.innerText = "⏳ Chef en cuisine...";
+        const list = data.map(i => i.nom + " (" + i.etat + ")").join(", ");
+        const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${document.getElementById('gKey').value}`, {
+            method: 'POST',
+            body: JSON.stringify({ contents: [{ parts: [{ text: "Avec ces ingrédients: " + list + ", propose 2 repas rapides avec emojis." }] }] })
+        });
+        const res = await resp.json();
+        zone.innerHTML = res.candidates[0].content.parts[0].text.replace(/\n/g, "<br>");
+    }
+
+    async function analyserTicket() {
+        const file = document.getElementById('photo').files[0];
+        if (!file) return;
+        document.getElementById('status').innerText = "Analyse...";
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = async () => {
+            const base64 = reader.result.split(',')[1];
+            const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${document.getElementById('gKey').value}`, {
+                method: 'POST',
+                body: JSON.stringify({ contents: [{ parts: [{ text: "JSON: [{\"nom\":\"...\"}]" }, { inline_data: { mime_type: "image/jpeg", data: base64 } }] }] })
+            });
+            const res = await resp.json();
+            const articles = JSON.parse(res.candidates[0].content.parts[0].text.replace(/```json|```/g, "").trim());
+            await monSupabase.from('inventaire2').insert(articles.map(a => ({...a, etat: 'Intact'})));
+            document.getElementById('status').innerText = "✅ OK";
+            chargerTout();
+        };
+    }
+</script>
+</body>
+</html>
