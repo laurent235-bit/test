@@ -150,18 +150,56 @@
     }
 
     async function genererRecettes() {
-        const zone = document.getElementById('recetteZone');
-        const { data } = await monSupabase.from('inventaire2').select('nom, etat').neq('etat', 'Vide');
-        if (!data.length) return zone.innerText = "Frigo vide !";
-        zone.innerText = "⏳ Chef en cuisine...";
-        const list = data.map(i => i.nom + " (" + i.etat + ")").join(", ");
-        const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${document.getElementById('gKey').value}`, {
-            method: 'POST',
-            body: JSON.stringify({ contents: [{ parts: [{ text: "Avec ces ingrédients: " + list + ", propose 2 repas rapides avec emojis." }] }] })
-        });
-        const res = await resp.json();
-        zone.innerHTML = res.candidates[0].content.parts[0].text.replace(/\n/g, "<br>");
+    const zone = document.getElementById('recetteZone');
+    const envie = document.getElementById('envie').value;
+    const pers = document.getElementById('nbPers').value;
+    const gKey = document.getElementById('gKey').value;
+    
+    // 1. Récupération des ingrédients (Uniquement ceux qui ne sont pas vides)
+    const { data, error } = await monSupabase.from('inventaire2').select('nom, etat').neq('etat', 'Vide');
+    
+    if (error || !data || data.length === 0) {
+        return zone.innerText = "Frigo vide ! Ajoute des ingrédients pour cuisiner.";
     }
+    
+    zone.innerHTML = "⏳ <i>Le Chef prépare vos suggestions personnalisées...</i>";
+
+    // 2. Construction de la liste pour l'IA
+    const listeIngredients = data.map(i => i.nom + (i.etat === 'Entamé' ? ' (déjà ouvert)' : '')).join(", ");
+    
+    // 3. Prompt optimisé avec tes nouvelles fonctions
+    const promptIA = `Agis en tant que Chef. Avec ces ingrédients : ${listeIngredients}. 
+                      Propose 2 idées de repas rapides pour ${pers} personnes. 
+                      ${envie ? "L'utilisateur aimerait utiliser : " + envie : ""} 
+                      Réponds avec des emojis, sois concis et structure avec des titres en gras.`;
+
+    // 4. Appel API (On utilise l'URL 2.0-flash qui est sur ton GitHub)
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${gKey}`;
+
+    try {
+        const resp = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: [{ parts: [{ text: promptIA }] }] })
+        });
+
+        const res = await resp.json();
+
+        if (res.candidates && res.candidates[0].content.parts[0].text) {
+            let texteFinal = res.candidates[0].content.parts[0].text;
+            
+            // Mise en forme propre (Markdown vers HTML)
+            zone.innerHTML = texteFinal
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') 
+                .replace(/\n/g, "<br>");
+        } else {
+            zone.innerText = "Le Chef est un peu fatigué. Réessaie dans quelques secondes.";
+        }
+    } catch (e) {
+        console.error(e);
+        zone.innerText = "Erreur de connexion : Vérifie ta connexion internet ou ton quota Gemini.";
+    }
+}
 
     async function analyserTicket() {
         const file = document.getElementById('photo').files[0];
@@ -185,3 +223,4 @@
 </script>
 </body>
 </html>
+
