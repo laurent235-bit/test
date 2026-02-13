@@ -3,70 +3,78 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Frigo Pro v12</title>
+    <title>Frigo Pro v14 - Gestion par Zones</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        :root { --accent: #1a73e8; --bg: #f8f9fa; }
+        :root { --accent: #1a73e8; --bg: #f8f9fa; --chef: #8e24aa; }
         body { font-family: 'Segoe UI', system-ui; background: var(--bg); margin: 0; padding: 10px; color: #202124; }
         .card { background: white; border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.12); margin-bottom: 12px; overflow: hidden; }
         
-        /* Style des menus déroulants (Accordéons) */
-        .collapsible { background: white; color: var(--accent); cursor: pointer; padding: 18px; width: 100%; border: none; text-align: left; outline: none; font-size: 16px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
-        .collapsible:after { content: '\002B'; font-size: 20px; font-weight: bold; }
+        .collapsible { background: white; color: var(--accent); cursor: pointer; padding: 15px; width: 100%; border: none; text-align: left; outline: none; font-size: 15px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f1f1f1; }
+        .collapsible:after { content: '\002B'; font-size: 18px; }
         .active:after { content: "\2212"; }
         .content { padding: 0 15px; max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; background-color: white; }
 
-        /* Articles */
-        .stock-item { padding: 12px 0; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
-        .btn-group { display: flex; gap: 8px; }
-        .btn-action { border: none; padding: 8px 12px; border-radius: 8px; font-size: 11px; font-weight: bold; cursor: pointer; }
-        .btn-entame { background: #fff3e0; color: #ff9800; border: 1px solid #ffe0b2; }
+        .stock-item-container { border-bottom: 1px solid #eee; padding: 10px 0; }
+        .stock-item { display: flex; justify-content: space-between; align-items: center; }
+        .item-name { cursor: pointer; flex-grow: 1; font-weight: 500; }
+        .btn-group { display: flex; gap: 5px; }
+        .btn-action { border: none; padding: 6px 10px; border-radius: 6px; font-size: 10px; font-weight: bold; cursor: pointer; }
+        .btn-entame { background: #fff3e0; color: #ff9800; }
         .btn-entame.active { background: #ff9800; color: white; }
-        .btn-retirer { background: #fce8e6; color: #d93025; border: 1px solid #fad2cf; }
+        .btn-retirer { background: #fce8e6; color: #d93025; }
 
         .btn-scan { background: var(--accent); color: white; width: 100%; padding: 15px; border: none; border-radius: 12px; font-weight: bold; margin: 10px 0; }
-        input[type="text"] { width: calc(100% - 24px); padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; }
+        input[type="text"], input[type="number"], select { padding: 10px; margin: 5px 0; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; width: 100%; box-sizing: border-box; }
         .config-hidden { display: none; }
+        .chef-box { padding: 15px; background: #fdf7ff; border-radius: 12px; margin-top: 10px; border: 1px solid #f3e5f5; }
     </style>
 </head>
 <body>
 
+    <div class="config-hidden">
+        <input id="gKey" value="AIzaSyDkEElOSuBBJJhYJVAUApVDdIr1G_AKFo8">
+        <input id="sUrl" value="https://ylguhodjcgistealluzy.supabase.co">
+        <input id="sKey" value="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsZ3Vob2RqY2dpc3RlYWxsdXp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA2MjcxMDAsImV4cCI6MjA4NjIwMzEwMH0.0czapM1DeFs7T3pTrExUMUKUcyUHi3w-p_jKj6XkTUM">
+    </div>
+
     <div class="card">
         <button class="collapsible">📸 Nouveau Ticket / Ajout</button>
         <div class="content">
-            <div class="config-hidden">
-                <input id="gKey" value="AIzaSyDkEElOSuBBJJhYJVAUApVDdIr1G_AKFo8">
-                <input id="sUrl" value="https://ylguhodjcgistealluzy.supabase.co">
-                <input id="sKey" value="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsZ3Vob2RqY2dpc3RlYWxsdXp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA2MjcxMDAsImV4cCI6MjA4NjIwMzEwMH0.0czapM1DeFs7T3pTrExUMUKUcyUHi3w-p_jKj6XkTUM">
-            </div>
-            <input type="file" id="photo" accept="image/*" capture="environment">
-            <button class="btn-scan" onclick="analyserTicket()">Lancer l'analyse</button>
+            <input type="file" id="photo" accept="image/*" capture="environment" style="margin-top:10px">
+            <button class="btn-scan" onclick="analyserTicket()">Lancer l'analyse ticket</button>
             <hr>
-            <input type="text" id="manualName" placeholder="Nom de l'article manuel...">
-            <button class="btn-scan" style="background:#34a853" onclick="ajouterManuel()">Ajouter manuellement</button>
+            <input type="text" id="manualName" placeholder="Ajout manuel...">
+            <button class="btn-scan" style="background:#34a853;" onclick="ajouterManuel()">OK</button>
             <div id="status" style="text-align:center; padding:10px; font-size:12px;"></div>
         </div>
     </div>
 
-    <div class="card">
-        <button class="collapsible active">❄️ Mon Stock Actuel</button>
-        <div class="content" style="max-height: 1000px;">
-            <div id="stockList">Chargement...</div>
-        </div>
+    <div class="card" style="border: 2px solid #fbbc04;">
+        <button class="collapsible active" style="color:#f29900;">📥 À RANGER (Vrac)</button>
+        <div class="content"><div id="list-Vrac">Chargement...</div></div>
     </div>
+
+    <div class="card"><button class="collapsible">🥦 Frigo</button><div class="content"><div id="list-Frigo"></div></div></div>
+    <div class="card"><button class="collapsible">❄️ Congélateur</button><div class="content"><div id="list-Congélateur"></div></div></div>
+    <div class="card"><button class="collapsible">🍝 Placard</button><div class="content"><div id="list-Placard"></div></div></div>
+    <div class="card"><button class="collapsible">🧼 Salle de bain</button><div class="content"><div id="list-Salle de bain"></div></div></div>
+    <div class="card"><button class="collapsible">📦 Autre</button><div class="content"><div id="list-Autre"></div></div></div>
 
     <div class="card">
         <button class="collapsible">🛒 Liste de Courses</button>
-        <div class="content">
-            <div id="shoppingList" style="padding-bottom:15px;"></div>
-        </div>
+        <div class="content"><div id="shoppingList"></div></div>
     </div>
 
-    <div class="card" style="border: 2px solid #8e24aa;">
-        <button class="collapsible" style="color:#8e24aa">🍽️ On mange quoi ?</button>
+    <div class="card" style="border: 2px solid var(--chef);">
+        <button class="collapsible" style="color:var(--chef)">🍽️ On mange quoi ?</button>
         <div class="content">
-            <button class="btn-scan" style="background:#8e24aa" onclick="genererRecettes()">Demander au Chef</button>
-            <div id="recetteZone" style="padding:15px; font-size:14px;"></div>
+            <div class="chef-box">
+                <input type="number" id="nbPers" value="2" style="width:60px"> pers.
+                <input type="text" id="envie" placeholder="Une envie ?">
+                <button class="btn-scan" style="background:var(--chef)" onclick="genererRecettes()">Demander au Chef</button>
+                <div id="recetteZone" style="padding-top:10px; font-size:14px;"></div>
+            </div>
         </div>
     </div>
 
@@ -85,121 +93,110 @@
             coll[i].addEventListener("click", function() {
                 this.classList.toggle("active");
                 const content = this.nextElementSibling;
-                if (content.style.maxHeight){
-                    content.style.maxHeight = null;
-                } else {
-                    content.style.maxHeight = content.scrollHeight + "px";
-                } 
+                content.style.maxHeight = content.style.maxHeight ? null : content.scrollHeight + "px";
             });
         }
     }
 
-    async function chargerTout() {
-        const { data, error } = await monSupabase.from('inventaire2').select('*').order('id', { descending: true });
-        if (error) return;
-
-        // STOCK
-        const stockItems = data.filter(item => item.etat !== 'Vide');
-        document.getElementById('stockList').innerHTML = stockItems.map(item => `
+    function genererItemHTML(item) {
+        const nomSec = item.nom.replace(/'/g, "\\'");
+        const z = item.zone || "";
+        return `
+        <div class="stock-item-container">
             <div class="stock-item">
-                <span style="${item.etat === 'Entamé' ? 'color:#ff9800;font-weight:bold' : ''}">${item.nom} ${item.etat === 'Entamé' ? '🔸' : ''}</span>
+                <span class="item-name" onclick="modifierNom(${item.id}, '${nomSec}')" style="${item.etat === 'Entamé' ? 'color:#ff9800;font-weight:bold' : ''}">
+                    ${item.nom} ${item.etat === 'Entamé' ? '🔸' : ''}
+                </span>
                 <div class="btn-group">
                     <button class="btn-action btn-entame ${item.etat === 'Entamé' ? 'active' : ''}" onclick="basculerEntame(${item.id}, '${item.etat}')">OUVERT</button>
-                    <button class="btn-action btn-retirer" onclick="retirerQuestion(${id=item.id}, '${item.nom.replace(/'/g, "\\'")}')">RETIRER</button>
+                    <button class="btn-action btn-retirer" onclick="retirerQuestion(${item.id}, '${nomSec}')">X</button>
                 </div>
             </div>
-        `).join('') || "Frigo vide.";
-
-        // COURSES
-        const shopItems = data.filter(item => item.etat === 'Vide');
-        document.getElementById('shoppingList').innerHTML = shopItems.map(item => `
-            <div class="stock-item">
-                <span>${item.nom}</span>
-                <button onclick="supprimerDefinitif(${item.id})" style="border:none;background:none;font-size:18px;">🗑️</button>
-            </div>
-        `).join('') || "Liste vide.";
+            <select onchange="changerZone(${item.id}, this.value)" style="margin-top:5px; height:30px; font-size:11px;">
+                <option value="" ${z === '' ? 'selected' : ''}>📍 Déplacer vers...</option>
+                <option value="Frigo" ${z === 'Frigo' ? 'selected' : ''}>🥦 Frigo</option>
+                <option value="Congélateur" ${z === 'Congélateur' ? 'selected' : ''}>❄️ Congélo</option>
+                <option value="Placard" ${z === 'Placard' ? 'selected' : ''}>🍝 Placard</option>
+                <option value="Salle de bain" ${z === 'Salle de bain' ? 'selected' : ''}>🧼 SdB</option>
+                <option value="Autre" ${z === 'Autre' ? 'selected' : ''}>📦 Autre</option>
+                <option value="Vrac">♻️ Remettre en vrac</option>
+            </select>
+        </div>`;
     }
 
-    // --- Fonctions identiques à la V10 mais adaptées ---
+    async function chargerTout() {
+        const { data, error } = await monSupabase.from('inventaire2').select('*');
+        if (error) return;
+        data.sort((a, b) => a.nom.localeCompare(b.nom));
+        const zones = ["Vrac", "Frigo", "Congélateur", "Placard", "Salle de bain", "Autre"];
+        zones.forEach(z => document.getElementById('list-' + z).innerHTML = "");
+        document.getElementById('shoppingList').innerHTML = "";
+
+        data.forEach(item => {
+            if (item.etat === 'Vide') {
+                document.getElementById('shoppingList').innerHTML += `
+                    <div class="stock-item"><span>${item.nom}</span><button onclick="supprimerDefinitif(${item.id})" style="border:none;background:none;font-size:18px;">🗑️</button></div>`;
+            } else {
+                let dest = item.zone;
+                if (!dest || dest === "" || dest === "Vrac") dest = "Vrac";
+                const div = document.getElementById('list-' + dest);
+                if (div) div.innerHTML += genererItemHTML(item);
+            }
+        });
+        zones.forEach(z => { if (document.getElementById('list-' + z).innerHTML === "") document.getElementById('list-' + z).innerHTML = "<p style='font-size:12px; color:gray; padding:10px;'>Vide.</p>"; });
+    }
+
+    window.changerZone = async function(id, nouvelleZone) {
+        const zUpdate = (nouvelleZone === "Vrac") ? null : nouvelleZone;
+        await monSupabase.from('inventaire2').update({ zone: zUpdate }).eq('id', id);
+        chargerTout();
+    };
+
+    async function modifierNom(id, nomActuel) {
+        const n = prompt("Nom :", nomActuel);
+        if (n) { await monSupabase.from('inventaire2').update({ nom: n }).eq('id', id); chargerTout(); }
+    }
+
     async function ajouterManuel() {
         const nom = document.getElementById('manualName').value;
-        if (!nom) return;
-        await monSupabase.from('inventaire2').insert([{ nom: nom, etat: 'Intact' }]);
-        document.getElementById('manualName').value = "";
-        chargerTout();
+        if (nom) { await monSupabase.from('inventaire2').insert([{ nom: nom, etat: 'Intact' }]); document.getElementById('manualName').value = ""; chargerTout(); }
     }
 
-    async function basculerEntame(id, etatActuel) {
-        const nouvelEtat = (etatActuel === 'Entamé') ? 'Intact' : 'Entamé';
-        await monSupabase.from('inventaire2').update({ etat: nouvelEtat }).eq('id', id);
+    async function basculerEntame(id, etat) {
+        const nEtat = (etat === 'Entamé') ? 'Intact' : 'Entamé';
+        await monSupabase.from('inventaire2').update({ etat: nEtat }).eq('id', id);
         chargerTout();
     }
 
     async function retirerQuestion(id, nom) {
-        if (confirm("Ajouter '" + nom + "' aux courses ?")) {
-            await monSupabase.from('inventaire2').update({ etat: 'Vide' }).eq('id', id);
-        } else {
-            await monSupabase.from('inventaire2').delete().eq('id', id);
-        }
+        if (confirm("Courses ?")) await monSupabase.from('inventaire2').update({ etat: 'Vide' }).eq('id', id);
+        else await monSupabase.from('inventaire2').delete().eq('id', id);
         chargerTout();
     }
 
-    async function supprimerDefinitif(id) {
-        await monSupabase.from('inventaire2').delete().eq('id', id);
-        chargerTout();
-    }
+    async function supprimerDefinitif(id) { await monSupabase.from('inventaire2').delete().eq('id', id); chargerTout(); }
 
     async function genererRecettes() {
-    const zone = document.getElementById('recetteZone');
-    const envie = document.getElementById('envie').value;
-    const pers = document.getElementById('nbPers').value;
-    const gKey = document.getElementById('gKey').value;
-    
-    // 1. Récupération des ingrédients (Uniquement ceux qui ne sont pas vides)
-    const { data, error } = await monSupabase.from('inventaire2').select('nom, etat').neq('etat', 'Vide');
-    
-    if (error || !data || data.length === 0) {
-        return zone.innerText = "Frigo vide ! Ajoute des ingrédients pour cuisiner.";
+        const zone = document.getElementById('recetteZone');
+        const gKey = document.getElementById('gKey').value.trim();
+        const { data } = await monSupabase.from('inventaire2').select('nom').neq('etat', 'Vide');
+        if (!data || data.length === 0) return zone.innerText = "Frigo vide !";
+        
+        zone.innerHTML = "⏳ <i>Le Chef réfléchit...</i>";
+        const prompt = "Fais 2 recettes pour " + document.getElementById('nbPers').value + " pers avec : " + data.map(i => i.nom).join(", ") + ". Envie : " + document.getElementById('envie').value;
+        
+        try {
+            const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${gKey}`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+            });
+            const res = await resp.json();
+            if (res.candidates) {
+                let t = res.candidates[0].content.parts[0].text;
+                zone.innerHTML = t.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>').replace(/\n/g, "<br>");
+            }
+        } catch (e) { zone.innerText = "Erreur Chef."; }
     }
-    
-    zone.innerHTML = "⏳ <i>Le Chef prépare vos suggestions personnalisées...</i>";
-
-    // 2. Construction de la liste pour l'IA
-    const listeIngredients = data.map(i => i.nom + (i.etat === 'Entamé' ? ' (déjà ouvert)' : '')).join(", ");
-    
-    // 3. Prompt optimisé avec tes nouvelles fonctions
-    const promptIA = `Agis en tant que Chef. Avec ces ingrédients : ${listeIngredients}. 
-                      Propose 2 idées de repas rapides pour ${pers} personnes. 
-                      ${envie ? "L'utilisateur aimerait utiliser : " + envie : ""} 
-                      Réponds avec des emojis, sois concis et structure avec des titres en gras.`;
-
-    // 4. Appel API (On utilise l'URL 2.0-flash qui est sur ton GitHub)
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${gKey}`;
-
-    try {
-        const resp = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contents: [{ parts: [{ text: promptIA }] }] })
-        });
-
-        const res = await resp.json();
-
-        if (res.candidates && res.candidates[0].content.parts[0].text) {
-            let texteFinal = res.candidates[0].content.parts[0].text;
-            
-            // Mise en forme propre (Markdown vers HTML)
-            zone.innerHTML = texteFinal
-                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') 
-                .replace(/\n/g, "<br>");
-        } else {
-            zone.innerText = "Le Chef est un peu fatigué. Réessaie dans quelques secondes.";
-        }
-    } catch (e) {
-        console.error(e);
-        zone.innerText = "Erreur de connexion : Vérifie ta connexion internet ou ton quota Gemini.";
-    }
-}
 
     async function analyserTicket() {
         const file = document.getElementById('photo').files[0];
@@ -209,18 +206,16 @@
         reader.readAsDataURL(file);
         reader.onload = async () => {
             const base64 = reader.result.split(',')[1];
-            const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${document.getElementById('gKey').value}`, {
+            const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${document.getElementById('gKey').value}`, {
                 method: 'POST',
                 body: JSON.stringify({ contents: [{ parts: [{ text: "JSON: [{\"nom\":\"...\"}]" }, { inline_data: { mime_type: "image/jpeg", data: base64 } }] }] })
             });
             const res = await resp.json();
             const articles = JSON.parse(res.candidates[0].content.parts[0].text.replace(/```json|```/g, "").trim());
             await monSupabase.from('inventaire2').insert(articles.map(a => ({...a, etat: 'Intact'})));
-            document.getElementById('status').innerText = "✅ OK";
-            chargerTout();
+            document.getElementById('status').innerText = "✅"; chargerTout();
         };
     }
 </script>
 </body>
 </html>
-
