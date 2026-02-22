@@ -283,20 +283,56 @@ async function chargerGrimoire() {
 
 // --- LOGIQUE INVENTAIRE ---
 async function chargerTout() {
+    // 1. On récupère les données
     const { data: items } = await monSupabase.from('inventaire2').select('*').order('nom');
-    const mapping = { 'FRIGO': 'list-Frigo', 'CONGELATEUR': 'list-Congélateur', 'PLACARD': 'list-Placard', 'ANIMAUX': 'list-Animaux', 'HORS_CUISINE': 'list-Maison' };
-    Object.values(mapping).forEach(id => { if(document.getElementById(id)) document.getElementById(id).innerHTML = ""; });
-    document.getElementById('shoppingList').innerHTML = "";
+    
+    // 2. Le dictionnaire des emplacements
+    const mapping = { 
+        'FRIGO': 'list-Frigo', 
+        'CONGELATEUR': 'list-Congélateur', 
+        'PLACARD': 'list-Placard', 
+        'ANIMAUX': 'list-Animaux', 
+        'HORS_CUISINE': 'list-Maison' 
+    };
 
+    // 3. On vide tout avant de remplir
+    Object.values(mapping).forEach(id => { 
+        if(document.getElementById(id)) document.getElementById(id).innerHTML = ""; 
+    });
+    const shopList = document.getElementById('shoppingList');
+    if(shopList) shopList.innerHTML = "";
+
+    // 4. On boucle sur chaque article
     items.forEach(item => {
         if (item.etat === 'Vide') {
-            document.getElementById('shoppingList').innerHTML += `<div class="item"><span>🛒 ${item.nom}</span><button onclick="modifierQuantite(${item.id},0,1)" style="color:green; border:none; background:none; font-weight:bold;">REMETTRE</button></div>`;
+            // --- SECTION LISTE DE COURSES ---
+            if(shopList) {
+                shopList.innerHTML += `
+                    <div class="item" style="background: #fff5f5; border-radius: 8px; margin-bottom: 5px; padding: 10px; display: flex; justify-content: space-between; align-items: center;">
+                        <span style="color: var(--danger); font-weight: bold;">🛒 ${item.nom}</span>
+                        <div style="display: flex; gap: 5px;">
+                            <button onclick="modifierQuantite(${item.id}, 0, 1)" style="background: var(--mur); color: white; border: none; border-radius: 5px; padding: 5px 10px; cursor: pointer; font-size: 11px;">✅ ACHETÉ</button>
+                            <button onclick="supprimerDefinitif(${item.id})" style="background: white; border: 1px solid var(--danger); color: var(--danger); border-radius: 5px; padding: 5px 10px; cursor: pointer; font-size: 11px;">🗑️ SUPPRIMER</button>
+                        </div>
+                    </div>`;
+            }
         } else {
+            // --- SECTION STOCK NORMAL ---
             const container = document.getElementById(mapping[item.emplacement] || 'list-Placard');
-            if(container) container.innerHTML += `<div class="item"><span><b>${item.nom}</b></span><div><button class="qte-btn" onclick="modifierQuantite(${item.id},${item.quantite},-1)">-</button> <b style="display:inline-block; width:20px; text-align:center;">${item.quantite}</b> <button class="qte-btn" onclick="modifierQuantite(${item.id},${item.quantite},1)">+</button></div></div>`;
+            if(container) {
+                 container.innerHTML += `
+                    <div class="item">
+                        <span><b>${item.nom}</b></span>
+                        <div>
+                            <button class="qte-btn" onclick="modifierQuantite(${item.id},${item.quantite},-1)">-</button> 
+                            <b style="display:inline-block; width:20px; text-align:center;">${item.quantite}</b> 
+                            <button class="qte-btn" onclick="modifierQuantite(${item.id},${item.quantite},1)">+</button>
+                        </div>
+                    </div>`;
+            }
         }
-    });
-}
+    }); // <--- C'était cette fermeture qui manquait pour le forEach
+} // <--- Et celle-là pour la fonction chargerTout
 
 async function modifierQuantite(id, qte, delta) {
     const nv = qte + delta;
@@ -308,6 +344,13 @@ async function modifierQuantite(id, qte, delta) {
         await monSupabase.from('inventaire2').update({ quantite: nv }).eq('id', id);
     }
     chargerTout();
+}
+
+async function supprimerDefinitif(id) {
+    if(confirm("Voulez-vous retirer cet article de la liste de courses ?")) {
+        await monSupabase.from('inventaire2').delete().eq('id', id);
+        chargerTout();
+    }
 }
 
 async function posterMessage() {
