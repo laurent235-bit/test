@@ -3,219 +3,325 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Frigo Pro v14 - Gestion par Zones</title>
+    <title>FRIGO ELITE v28</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        :root { --accent: #1a73e8; --bg: #f8f9fa; --chef: #8e24aa; }
-        body { font-family: 'Segoe UI', system-ui; background: var(--bg); margin: 0; padding: 10px; color: #202124; }
-        .card { background: white; border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.12); margin-bottom: 12px; overflow: hidden; }
+        :root { --accent: #1a73e8; --chef: #8e24aa; --mur: #34a853; --danger: #ea4335; --maison: #ef6c00; --animaux: #00838f; }
+        body { font-family: 'Segoe UI', sans-serif; background: #f4f7f6; margin: 0; padding: 15px; color: #333; }
         
-        .collapsible { background: white; color: var(--accent); cursor: pointer; padding: 15px; width: 100%; border: none; text-align: left; outline: none; font-size: 15px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f1f1f1; }
-        .collapsible:after { content: '\002B'; font-size: 18px; }
-        .active:after { content: "\2212"; }
-        .content { padding: 0 15px; max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; background-color: white; }
+        /* Bouton Micro Unique */
+        .mic-section { text-align: center; margin-bottom: 20px; }
+        .btn-mic { background: white; border: 3px solid var(--accent); color: var(--accent); padding: 15px 30px; border-radius: 50px; font-weight: bold; font-size: 16px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        #statut-vocal { margin-top: 10px; font-weight: bold; color: var(--accent); min-height: 1.2em; }
 
-        .stock-item-container { border-bottom: 1px solid #eee; padding: 10px 0; }
-        .stock-item { display: flex; justify-content: space-between; align-items: center; }
-        .item-name { cursor: pointer; flex-grow: 1; font-weight: 500; }
-        .btn-group { display: flex; gap: 5px; }
-        .btn-action { border: none; padding: 6px 10px; border-radius: 6px; font-size: 10px; font-weight: bold; cursor: pointer; }
-        .btn-entame { background: #fff3e0; color: #ff9800; }
-        .btn-entame.active { background: #ff9800; color: white; }
-        .btn-retirer { background: #fce8e6; color: #d93025; }
+        /* Le Chef */
+        .chef-card { background: #f3e5f5; border: 2px solid var(--chef); border-radius: 20px; padding: 15px; margin-bottom: 20px; }
+        .chef-input-zone { display: flex; gap: 8px; margin-top: 10px; }
+        .chef-input { flex: 1; padding: 12px; border-radius: 10px; border: 1px solid #ddd; }
+        .btn-chef-go { background: var(--chef); color: white; border: none; padding: 0 20px; border-radius: 10px; font-weight: bold; cursor: pointer; }
+        .recette-propo { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
+        .recette-box { background: white; padding: 12px; border-radius: 12px; border: 1px solid #d1c4e9; font-size: 13px; }
 
-        .btn-scan { background: var(--accent); color: white; width: 100%; padding: 15px; border: none; border-radius: 12px; font-weight: bold; margin: 10px 0; }
-        input[type="text"], input[type="number"], select { padding: 10px; margin: 5px 0; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; width: 100%; box-sizing: border-box; }
-        .config-hidden { display: none; }
-        .chef-box { padding: 15px; background: #fdf7ff; border-radius: 12px; margin-top: 10px; border: 1px solid #f3e5f5; }
+        /* Structures de listes */
+        .card { background: white; border-radius: 15px; margin-bottom: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); overflow: hidden; }
+        .collapsible { width: 100%; padding: 15px; border: none; background: none; text-align: left; font-size: 16px; font-weight: bold; display: flex; justify-content: space-between; cursor: pointer; border-bottom: 1px solid #f0f0f0; }
+        .content { padding: 0 15px; max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; }
+        .item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #eee; }
+        .qte-btn { width: 35px; height: 35px; border-radius: 8px; border: 1px solid #ccc; background: #fff; font-size: 18px; }
     </style>
 </head>
 <body>
 
-    <div class="config-hidden">
-        <input id="gKey" value="AIzaSyDkEElOSuBBJJhYJVAUApVDdIr1G_AKFo8">
+    <div class="mic-section">
+        <button id="btn-vocal" class="btn-mic">🎤 SORTIR UN ALIMENT (VOCAL)</button>
+        <div id="statut-vocal">Dites par exemple : "retire un lait"</div>
+    </div>
+
+    <div class="chef-card">
+        <b style="color:var(--chef); font-size: 18px;">👨‍🍳 Demander au Chef</b>
+        <div class="chef-input-zone">
+            <input type="text" id="chef-prompt" class="chef-input" placeholder="Ex: Un plat rapide avec mes légumes...">
+            <button onclick="demanderAuChef()" class="btn-chef-go">GO</button>
+        </div>
+        <div id="recette-zone" class="recette-propo"></div>
+    </div>
+
+    <div style="display:none">
+        <input id="gKey" value="AIzaSyBclnemxauwfFzJd9mOhYk-kre8AoSU5P0">
         <input id="sUrl" value="https://ylguhodjcgistealluzy.supabase.co">
         <input id="sKey" value="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsZ3Vob2RqY2dpc3RlYWxsdXp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA2MjcxMDAsImV4cCI6MjA4NjIwMzEwMH0.0czapM1DeFs7T3pTrExUMUKUcyUHi3w-p_jKj6XkTUM">
     </div>
 
-    <div class="card">
-        <button class="collapsible">📸 Nouveau Ticket / Ajout</button>
+    <div class="card" style="border-left: 8px solid var(--danger);"><button class="collapsible">🛒 LISTE DE COURSES</button><div class="content"><div id="shoppingList"></div></div></div>
+    <div class="card"><button class="collapsible">🥦 FRIGO</button><div class="content"><div id="list-Frigo"></div></div></div>
+    <div class="card"><button class="collapsible">❄️ CONGÉLATEUR</button><div class="content"><div id="list-Congélateur"></div></div></div>
+    <div class="card"><button class="collapsible">🍝 PLACARD</button><div class="content"><div id="list-Placard"></div></div></div>
+    <div class="card" style="border-left: 8px solid var(--maison);"><button class="collapsible">🏠 MAISON</button><div class="content"><div id="list-Maison"></div></div></div>
+    <div class="card" style="border-left: 8px solid var(--animaux);"><button class="collapsible">🐾 ANIMAUX</button><div class="content"><div id="list-Animaux"></div></div></div>
+
+    <div class="card" style="border-left: 8px solid var(--mur);"><button class="collapsible">📌 NOTES FAMILLE</button>
         <div class="content">
-            <input type="file" id="photo" accept="image/*" capture="environment" style="margin-top:10px">
-            <button class="btn-scan" onclick="analyserTicket()">Lancer l'analyse ticket</button>
-            <hr>
-            <input type="text" id="manualName" placeholder="Ajout manuel...">
-            <button class="btn-scan" style="background:#34a853;" onclick="ajouterManuel()">OK</button>
-            <div id="status" style="text-align:center; padding:10px; font-size:12px;"></div>
-        </div>
-    </div>
-
-    <div class="card" style="border: 2px solid #fbbc04;">
-        <button class="collapsible active" style="color:#f29900;">📥 À RANGER (Vrac)</button>
-        <div class="content"><div id="list-Vrac">Chargement...</div></div>
-    </div>
-
-    <div class="card"><button class="collapsible">🥦 Frigo</button><div class="content"><div id="list-Frigo"></div></div></div>
-    <div class="card"><button class="collapsible">❄️ Congélateur</button><div class="content"><div id="list-Congélateur"></div></div></div>
-    <div class="card"><button class="collapsible">🍝 Placard</button><div class="content"><div id="list-Placard"></div></div></div>
-    <div class="card"><button class="collapsible">🧼 Salle de bain</button><div class="content"><div id="list-Salle de bain"></div></div></div>
-    <div class="card"><button class="collapsible">📦 Autre</button><div class="content"><div id="list-Autre"></div></div></div>
-
-    <div class="card">
-        <button class="collapsible">🛒 Liste de Courses</button>
-        <div class="content"><div id="shoppingList"></div></div>
-    </div>
-
-    <div class="card" style="border: 2px solid var(--chef);">
-        <button class="collapsible" style="color:var(--chef)">🍽️ On mange quoi ?</button>
-        <div class="content">
-            <div class="chef-box">
-                <input type="number" id="nbPers" value="2" style="width:60px"> pers.
-                <input type="text" id="envie" placeholder="Une envie ?">
-                <button class="btn-scan" style="background:var(--chef)" onclick="genererRecettes()">Demander au Chef</button>
-                <div id="recetteZone" style="padding-top:10px; font-size:14px;"></div>
+            <div id="mur-messages" style="margin: 10px 0;"></div>
+            <div style="display:flex; gap:5px; padding-bottom:15px;">
+                <input type="text" id="nouveau-message" style="flex:1; padding:10px; border-radius:8px;" placeholder="Message...">
+                <button onclick="posterMessage()" style="background:var(--mur); color:white; border:none; border-radius:8px; padding:0 15px;">OK</button>
             </div>
         </div>
     </div>
+    <div class="card" style="border-left: 8px solid var(--chef);"><button class="collapsible">📖 RECETTES SAUVEGARDÉES</button><div class="content"><div id="grimoire-zone"></div></div></div>
 
 <script>
-    let monSupabase;
+let monSupabase;
+// --- INITIALISATION DU MICRO (À METTRE TOUT EN HAUT DU SCRIPT) ---
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition;
 
-    window.onload = function() {
-        monSupabase = window.supabase.createClient(document.getElementById('sUrl').value, document.getElementById('sKey').value);
-        chargerTout();
-        setupCollapsibles();
-    };
+if (SpeechRecognition) {
+    recognition = new SpeechRecognition();
+    recognition.lang = 'fr-FR';
+    recognition.continuous = false;
+    recognition.interimResults = false;
+} else {
+    alert("Désolé, votre navigateur ne supporte pas la reconnaissance vocale.");
+}
 
-    function setupCollapsibles() {
-        const coll = document.getElementsByClassName("collapsible");
-        for (let i = 0; i < coll.length; i++) {
-            coll[i].addEventListener("click", function() {
-                this.classList.toggle("active");
-                const content = this.nextElementSibling;
-                content.style.maxHeight = content.style.maxHeight ? null : content.scrollHeight + "px";
-            });
+// --- GESTION DU BOUTON (À METTRE DANS WINDOW.ONLOAD OU APRÈS) ---
+document.getElementById('btn-vocal').onclick = () => {
+    if (!recognition) return;
+    try {
+        recognition.start();
+        document.getElementById('statut-vocal').innerText = "🎙️ Écoute en cours... Parlez maintenant";
+    } catch (e) {
+        console.log("Le micro est déjà actif");
+    }
+};
+
+// --- QUAND L'IA REÇOIT LA PHRASE ---
+recognition.onresult = async (event) => {
+    const phrase = event.results[0][0].transcript;
+    const statut = document.getElementById('statut-vocal');
+    
+    // 1. Affichage immédiat (IMPORTANT)
+    statut.innerText = "💬 Entendu : " + phrase;
+
+    try {
+        const gKey = document.getElementById('gKey').value;
+        const { data: produits } = await monSupabase.from('inventaire2').select('id, nom, quantite').neq('etat', 'Vide');
+        
+        // On utilise bien la version 2.5 comme demandé
+        const MODEL_25 = "gemini-2.5-flash";
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_25}:generateContent?key=${gKey}`;
+
+        const prompt = `Phrase: "${phrase}". Stock: ${JSON.stringify(produits)}. Trouve l'ID du produit. Réponds en JSON : {"id": ID}`;
+
+        const resp = await fetch(url, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+        });
+        
+        const data = await resp.json();
+        
+        // Sécurité si l'IA ne répond pas
+        if (!data.candidates) {
+            statut.innerText = "❌ Erreur IA (Vérifie ta clé ou quota)";
+            return;
+        }
+
+        const res = JSON.parse(data.candidates[0].content.parts[0].text.replace(/```json|```/g, ""));
+        
+        if(res.id) {
+            const p = produits.find(x => x.id === res.id);
+            // On déduit -1 directement
+            await modifierQuantite(res.id, p.quantite, -1);
+            statut.innerText = "✅ Retiré : " + p.nom;
+        } else {
+            statut.innerText = "❓ Produit non reconnu dans le stock.";
+        }
+    } catch(e) { 
+        console.error(e);
+        statut.innerText = "❌ Erreur de traitement.";
+    }
+};
+
+// En cas d'erreur micro (Permission refusée, etc.)
+recognition.onerror = (event) => {
+    document.getElementById('statut-vocal').innerText = "❌ Erreur Micro : " + event.error;
+    if(event.error === 'not-allowed') alert("Activez l'autorisation du micro dans les réglages du navigateur (le cadenas à gauche de l'adresse).");
+};
+
+window.onload = () => {
+    monSupabase = window.supabase.createClient(document.getElementById('sUrl').value, document.getElementById('sKey').value);
+    chargerTout(); chargerMur(); chargerGrimoire();
+    setupCollapsibles();
+};
+
+function setupCollapsibles() {
+    const coll = document.getElementsByClassName("collapsible");
+    for (let i = 0; i < coll.length; i++) {
+        coll[i].onclick = function() {
+            this.classList.toggle("active");
+            const content = this.nextElementSibling;
+            content.style.maxHeight = content.style.maxHeight ? null : content.scrollHeight + "px";
         }
     }
+}
 
-    function genererItemHTML(item) {
-        const nomSec = item.nom.replace(/'/g, "\\'");
-        const z = item.zone || "";
-        return `
-        <div class="stock-item-container">
-            <div class="stock-item">
-                <span class="item-name" onclick="modifierNom(${item.id}, '${nomSec}')" style="${item.etat === 'Entamé' ? 'color:#ff9800;font-weight:bold' : ''}">
-                    ${item.nom} ${item.etat === 'Entamé' ? '🔸' : ''}
-                </span>
-                <div class="btn-group">
-                    <button class="btn-action btn-entame ${item.etat === 'Entamé' ? 'active' : ''}" onclick="basculerEntame(${item.id}, '${item.etat}')">OUVERT</button>
-                    <button class="btn-action btn-retirer" onclick="retirerQuestion(${item.id}, '${nomSec}')">X</button>
-                </div>
-            </div>
-            <select onchange="changerZone(${item.id}, this.value)" style="margin-top:5px; height:30px; font-size:11px;">
-                <option value="" ${z === '' ? 'selected' : ''}>📍 Déplacer vers...</option>
-                <option value="Frigo" ${z === 'Frigo' ? 'selected' : ''}>🥦 Frigo</option>
-                <option value="Congélateur" ${z === 'Congélateur' ? 'selected' : ''}>❄️ Congélo</option>
-                <option value="Placard" ${z === 'Placard' ? 'selected' : ''}>🍝 Placard</option>
-                <option value="Salle de bain" ${z === 'Salle de bain' ? 'selected' : ''}>🧼 SdB</option>
-                <option value="Autre" ${z === 'Autre' ? 'selected' : ''}>📦 Autre</option>
-                <option value="Vrac">♻️ Remettre en vrac</option>
-            </select>
-        </div>`;
-    }
+// --- CONFIGURATION DU MODÈLE 2.5 ---
+const MODEL_VERSION = "gemini-2.5-flash"; // Utilisation de ta version 2.5
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_VERSION}:generateContent`;
 
-    async function chargerTout() {
-        const { data, error } = await monSupabase.from('inventaire2').select('*');
-        if (error) return;
-        data.sort((a, b) => a.nom.localeCompare(b.nom));
-        const zones = ["Vrac", "Frigo", "Congélateur", "Placard", "Salle de bain", "Autre"];
-        zones.forEach(z => document.getElementById('list-' + z).innerHTML = "");
-        document.getElementById('shoppingList').innerHTML = "";
+// --- FONCTION VOCALE (SORTIE) ---
+recognition.onresult = async (event) => {
+    const phrase = event.results[0][0].transcript;
+    const statut = document.getElementById('statut-vocal');
+    
+    // AFFICHAGE IMMÉDIAT DU TEXTE ENTENDU
+    statut.innerText = "💬 Analyse de : " + phrase;
 
-        data.forEach(item => {
-            if (item.etat === 'Vide') {
-                document.getElementById('shoppingList').innerHTML += `
-                    <div class="stock-item"><span>${item.nom}</span><button onclick="supprimerDefinitif(${item.id})" style="border:none;background:none;font-size:18px;">🗑️</button></div>`;
-            } else {
-                let dest = item.zone;
-                if (!dest || dest === "" || dest === "Vrac") dest = "Vrac";
-                const div = document.getElementById('list-' + dest);
-                if (div) div.innerHTML += genererItemHTML(item);
-            }
+    try {
+        const gKey = document.getElementById('gKey').value;
+        const { data: produits } = await monSupabase.from('inventaire2').select('id, nom, quantite').neq('etat', 'Vide');
+        
+        const prompt = `Utilisateur: "${phrase}". Stock: ${JSON.stringify(produits)}. Trouve l'ID du produit. Réponds UNIQUEMENT en JSON : {"id": ID}`;
+
+        const resp = await fetch(`${GEMINI_URL}?key=${gKey}`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
         });
-        zones.forEach(z => { if (document.getElementById('list-' + z).innerHTML === "") document.getElementById('list-' + z).innerHTML = "<p style='font-size:12px; color:gray; padding:10px;'>Vide.</p>"; });
-    }
-
-    window.changerZone = async function(id, nouvelleZone) {
-        const zUpdate = (nouvelleZone === "Vrac") ? null : nouvelleZone;
-        await monSupabase.from('inventaire2').update({ zone: zUpdate }).eq('id', id);
-        chargerTout();
-    };
-
-    async function modifierNom(id, nomActuel) {
-        const n = prompt("Nom :", nomActuel);
-        if (n) { await monSupabase.from('inventaire2').update({ nom: n }).eq('id', id); chargerTout(); }
-    }
-
-    async function ajouterManuel() {
-        const nom = document.getElementById('manualName').value;
-        if (nom) { await monSupabase.from('inventaire2').insert([{ nom: nom, etat: 'Intact' }]); document.getElementById('manualName').value = ""; chargerTout(); }
-    }
-
-    async function basculerEntame(id, etat) {
-        const nEtat = (etat === 'Entamé') ? 'Intact' : 'Entamé';
-        await monSupabase.from('inventaire2').update({ etat: nEtat }).eq('id', id);
-        chargerTout();
-    }
-
-    async function retirerQuestion(id, nom) {
-        if (confirm("Courses ?")) await monSupabase.from('inventaire2').update({ etat: 'Vide' }).eq('id', id);
-        else await monSupabase.from('inventaire2').delete().eq('id', id);
-        chargerTout();
-    }
-
-    async function supprimerDefinitif(id) { await monSupabase.from('inventaire2').delete().eq('id', id); chargerTout(); }
-
-    async function genererRecettes() {
-        const zone = document.getElementById('recetteZone');
-        const gKey = document.getElementById('gKey').value.trim();
-        const { data } = await monSupabase.from('inventaire2').select('nom').neq('etat', 'Vide');
-        if (!data || data.length === 0) return zone.innerText = "Frigo vide !";
         
-        zone.innerHTML = "⏳ <i>Le Chef réfléchit...</i>";
-        const prompt = "Fais 2 recettes pour " + document.getElementById('nbPers').value + " pers avec : " + data.map(i => i.nom).join(", ") + ". Envie : " + document.getElementById('envie').value;
+        const data = await resp.json();
+        const res = JSON.parse(data.candidates[0].content.parts[0].text.replace(/```json|```/g, ""));
         
-        try {
-            const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${gKey}`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-            });
-            const res = await resp.json();
-            if (res.candidates) {
-                let t = res.candidates[0].content.parts[0].text;
-                zone.innerHTML = t.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>').replace(/\n/g, "<br>");
-            }
-        } catch (e) { zone.innerText = "Erreur Chef."; }
+        if(res.id) {
+            const p = produits.find(x => x.id === res.id);
+            await modifierQuantite(res.id, p.quantite, -1);
+            statut.innerText = "✅ Retiré : " + p.nom;
+        }
+    } catch(e) { 
+        statut.innerText = "❌ Erreur 2.5 ou produit inconnu.";
+        console.error("Erreur Gemini 2.5:", e);
     }
+};
 
-    async function analyserTicket() {
-        const file = document.getElementById('photo').files[0];
-        if (!file) return;
-        document.getElementById('status').innerText = "Analyse...";
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = async () => {
-            const base64 = reader.result.split(',')[1];
-            const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${document.getElementById('gKey').value}`, {
-                method: 'POST',
-                body: JSON.stringify({ contents: [{ parts: [{ text: "JSON: [{\"nom\":\"...\"}]" }, { inline_data: { mime_type: "image/jpeg", data: base64 } }] }] })
-            });
-            const res = await resp.json();
-            const articles = JSON.parse(res.candidates[0].content.parts[0].text.replace(/```json|```/g, "").trim());
-            await monSupabase.from('inventaire2').insert(articles.map(a => ({...a, etat: 'Intact'})));
-            document.getElementById('status').innerText = "✅"; chargerTout();
-        };
+// --- LE CHEF (TEXTE UNIQUEMENT) ---
+async function demanderAuChef() {
+    const userPrompt = document.getElementById('chef-prompt').value;
+    const zone = document.getElementById('recette-zone');
+    const gKey = document.getElementById('gKey').value;
+    
+    if(!userPrompt) return alert("Dis au chef ce que tu veux !");
+    
+    zone.style.display = "grid";
+    zone.innerHTML = "<p style='grid-column: 1/3; text-align:center;'>👨‍🍳 Le Chef 2.5 prépare vos options...</p>";
+
+    try {
+        const { data: stock } = await monSupabase.from('inventaire2').select('nom').neq('etat', 'Vide');
+        const ingredients = stock.map(s => s.nom).join(', ');
+
+        const prompt = `Demande: "${userPrompt}". Ingrédients: ${ingredients}. Propose 2 recettes courtes. Réponds STRICTEMENT en JSON : [{"titre":"...", "contenu":"..."}]`;
+        
+        const resp = await fetch(`${GEMINI_URL}?key=${gKey}`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+        });
+        
+        const data = await resp.json();
+        const recettes = JSON.parse(data.candidates[0].content.parts[0].text.replace(/```json|```/g, ""));
+        
+        zone.innerHTML = recettes.map(r => `
+            <div class="recette-box" style="background:white; padding:15px; border-radius:15px; border:1px solid #ddd;">
+                <b style="color:var(--chef); font-size:16px;">${r.titre}</b>
+                <p style="font-size:13px; margin:10px 0;">${r.contenu}</p>
+                <button onclick="sauverRecette('${r.titre.replace(/'/g," ")}','${r.contenu.replace(/'/g," ")}')" 
+                        style="width:100%; background:var(--mur); color:white; border:none; border-radius:10px; padding:10px; cursor:pointer; font-weight:bold;">
+                    💾 SAUVEGARDER
+                </button>
+            </div>
+        `).join('');
+    } catch(e) { 
+        zone.innerHTML = "<p>❌ Erreur de connexion au Chef 2.5.</p>";
     }
+}
+
+// --- SAUVEGARDE RÉELLE (CORRECTION DU 404) ---
+async function sauverRecette(titre, contenu) {
+    try {
+        const { error } = await monSupabase
+            .from('recettes_sauvees')
+            .insert([{ titre, contenu }]);
+
+        if (error) throw error;
+        
+        alert("⭐ Recette ajoutée à votre Grimoire !");
+        chargerGrimoire();
+    } catch (e) {
+        alert("Erreur : La table 'recettes_sauvees' est introuvable. Crée-la sur Supabase.");
+        console.error(e);
+    }
+}
+
+async function chargerGrimoire() {
+    const { data, error } = await monSupabase
+        .from('recettes_sauvees')
+        .select('*')
+        .order('created_at', {ascending: false});
+
+    if (error) return;
+
+    const zone = document.getElementById('grimoire-zone');
+    zone.innerHTML = data.map(r => `
+        <div style="background:white; padding:12px; border-radius:12px; margin-bottom:10px; border-left:4px solid var(--chef);">
+            <b>${r.titre}</b>
+            <p style="font-size:12px; margin:5px 0;">${r.contenu}</p>
+            <button onclick="supprimerRecette(${r.id})" style="color:red; background:none; border:none; font-size:11px; cursor:pointer;">Supprimer</button>
+        </div>
+    `).join('');
+}
+
+// --- LOGIQUE INVENTAIRE ---
+async function chargerTout() {
+    const { data: items } = await monSupabase.from('inventaire2').select('*').order('nom');
+    const mapping = { 'FRIGO': 'list-Frigo', 'CONGELATEUR': 'list-Congélateur', 'PLACARD': 'list-Placard', 'ANIMAUX': 'list-Animaux', 'HORS_CUISINE': 'list-Maison' };
+    Object.values(mapping).forEach(id => { if(document.getElementById(id)) document.getElementById(id).innerHTML = ""; });
+    document.getElementById('shoppingList').innerHTML = "";
+
+    items.forEach(item => {
+        if (item.etat === 'Vide') {
+            document.getElementById('shoppingList').innerHTML += `<div class="item"><span>🛒 ${item.nom}</span><button onclick="modifierQuantite(${item.id},0,1)" style="color:green; border:none; background:none; font-weight:bold;">REMETTRE</button></div>`;
+        } else {
+            const container = document.getElementById(mapping[item.emplacement] || 'list-Placard');
+            if(container) container.innerHTML += `<div class="item"><span><b>${item.nom}</b></span><div><button class="qte-btn" onclick="modifierQuantite(${item.id},${item.quantite},-1)">-</button> <b style="display:inline-block; width:20px; text-align:center;">${item.quantite}</b> <button class="qte-btn" onclick="modifierQuantite(${item.id},${item.quantite},1)">+</button></div></div>`;
+        }
+    });
+}
+
+async function modifierQuantite(id, qte, delta) {
+    const nv = qte + delta;
+    if (nv <= 0) {
+        const rep = prompt("1-Courses, 2-Supprimer, 3-Annuler", "1");
+        if (rep === "1") await monSupabase.from('inventaire2').update({ etat: 'Vide', quantite: 0 }).eq('id', id);
+        else if (rep === "2") await monSupabase.from('inventaire2').delete().eq('id', id);
+    } else {
+        await monSupabase.from('inventaire2').update({ quantite: nv }).eq('id', id);
+    }
+    chargerTout();
+}
+
+async function posterMessage() {
+    const m = document.getElementById('nouveau-message').value;
+    if(!m) return;
+    await monSupabase.from('mur_famille').insert([{ message: m, auteur: 'Laurent' }]);
+    await monSupabase.from('inventaire2').insert([{ nom: m, etat: 'Vide', quantite: 0, emplacement: 'PLACARD' }]);
+    document.getElementById('nouveau-message').value = ""; chargerMur(); chargerTout();
+}
+
+async function chargerMur() {
+    const { data } = await monSupabase.from('mur_famille').select('*').order('created_at', { ascending: false }).limit(3);
+    if(data) document.getElementById('mur-messages').innerHTML = data.map(d => `<div style="background:#e8f5e9; padding:8px; border-radius:8px; margin-bottom:5px; font-size:13px;"><b>${d.auteur}:</b> ${d.message}</div>`).join('');
+}
 </script>
 </body>
 </html>
