@@ -1,370 +1,935 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FRIGO ELITE v28</title>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <style>
-        :root { --accent: #1a73e8; --chef: #8e24aa; --mur: #34a853; --danger: #ea4335; --maison: #ef6c00; --animaux: #00838f; }
-        body { font-family: 'Segoe UI', sans-serif; background: #f4f7f6; margin: 0; padding: 15px; color: #333; }
-        
-        /* Bouton Micro Unique */
-        .mic-section { text-align: center; margin-bottom: 20px; }
-        .btn-mic { background: white; border: 3px solid var(--accent); color: var(--accent); padding: 15px 30px; border-radius: 50px; font-weight: bold; font-size: 16px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-        #statut-vocal { margin-top: 10px; font-weight: bold; color: var(--accent); min-height: 1.2em; }
+										<!DOCTYPE html>
+										<html lang="fr">
+										<head>
+											<meta charset="UTF-8">
+											<meta name="viewport" content="width=device-width, initial-scale=1.0">
+											<title>FRIGO ELITE v2.5</title>
+											<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+											<style>
+												:root { --accent: #1a73e8; --chef: #8e24aa; --mur: #34a853; --danger: #ea4335; --maison: #ef6c00; --animaux: #00838f; }
+												body { font-family: 'Segoe UI', sans-serif; background: #f4f7f6; margin: 0; padding: 15px; color: #333; }
+												.btn { border: none; border-radius: 8px; padding: 12px; font-weight: bold; cursor: pointer; color: white; width: 100%; margin-top: 5px; }
+												.btn-accent { background: var(--accent); }
+												.btn-mur { background: var(--mur); }
+												.card { background: white; border-radius: 15px; margin-bottom: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); overflow: hidden; }
+												.collapsible { width: 100%; padding: 15px; border: none; background: none; text-align: left; font-size: 16px; font-weight: bold; display: flex; justify-content: space-between; cursor: pointer; border-bottom: 1px solid #f0f0f0; }
+												.content { padding: 0 15px; max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; }
+												.scan-zone { background: #e3f2fd; border: 2px dashed var(--accent); border-radius: 15px; padding: 15px; margin-bottom: 20px; }
+												.item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #eee; }
+												.qte-btn { width: 35px; height: 35px; border-radius: 8px; border: 1px solid #ccc; background: #fff; font-size: 18px; }
+											</style>
+										</head>
+										<body>
 
-        /* Le Chef */
-        .chef-card { background: #f3e5f5; border: 2px solid var(--chef); border-radius: 20px; padding: 15px; margin-bottom: 20px; }
-        .chef-input-zone { display: flex; gap: 8px; margin-top: 10px; }
-        .chef-input { flex: 1; padding: 12px; border-radius: 10px; border: 1px solid #ddd; }
-        .btn-chef-go { background: var(--chef); color: white; border: none; padding: 0 20px; border-radius: 10px; font-weight: bold; cursor: pointer; }
-        .recette-propo { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
-        .recette-box { background: white; padding: 12px; border-radius: 12px; border: 1px solid #d1c4e9; font-size: 13px; }
+											<div class="scan-zone">
+												<b style="color:var(--accent)">🧾 ENTRÉE DE COURSES</b>
+												<div style="display: flex; gap: 10px; margin-top: 10px;">
+													<button onclick="document.getElementById('input-photo').click()" class="btn btn-accent" style="flex:1">📸 SCAN TICKET</button>
+													<button onclick="ouvrirEticket()" class="btn btn-accent" style="flex:1">📧 E-TICKET</button>
+												</div>
+												<input type="file" id="input-photo" accept="image/*,application/pdf" capture="environment" style="display:none" onchange="scannerTicket(this)">
+												<div id="statut-scan" style="margin-top: 10px; font-size: 13px; font-weight: bold; text-align: center;"></div>
+											</div>
 
-        /* Structures de listes */
-        .card { background: white; border-radius: 15px; margin-bottom: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); overflow: hidden; }
-        .collapsible { width: 100%; padding: 15px; border: none; background: none; text-align: left; font-size: 16px; font-weight: bold; display: flex; justify-content: space-between; cursor: pointer; border-bottom: 1px solid #f0f0f0; }
-        .content { padding: 0 15px; max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; }
-        .item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #eee; }
-        .qte-btn { width: 35px; height: 35px; border-radius: 8px; border: 1px solid #ccc; background: #fff; font-size: 18px; }
-    </style>
-</head>
-<body>
+											<div class="card" style="padding:15px; border: 2px solid var(--accent);">
+												<button id="btn-vocal" class="btn btn-accent">🎤 SORTIR UN ALIMENT (VOCAL)</button>
+												<div id="statut-vocal" style="text-align:center; margin-top:5px; font-size:13px;"></div>
+											</div>
+								<button id="btn-chef" style="background: #ff9800; color: white; border: none; padding: 10px; border-radius: 50%; cursor: pointer; font-size: 20px;">👨‍🍳</button>
 
-    <div class="mic-section">
-        <button id="btn-vocal" class="btn-mic">🎤 SORTIR UN ALIMENT (VOCAL)</button>
-        <div id="statut-vocal">Dites par exemple : "retire un lait"</div>
+								<div id="zone-recette" style="margin-top: 20px; padding: 15px; background: #fff8e1; border-left: 5px solid #ff9800; display: none; white-space: pre-wrap; font-family: sans-serif;">
+									<h3 id="titre-recette" style="margin-top: 0;"></h3>
+									<div id="corps-recette"></div>
+								</div>
+											<div class="card" style="padding:15px; background: #f3e5f5; border: 2px solid var(--chef); margin-top:15px;">
+												<b style="color:var(--chef)">👨‍🍳 CHEF GEMINI 2.5 FLASH</b>
+												<div style="display:flex; gap:5px; margin-top:10px;">
+													<input type="text" id="chef-prompt" placeholder="Une idée de recette ?" style="flex:1; padding:10px; border-radius:8px; border:1px solid #ddd;">
+													<button onclick="demanderAuChef()" class="btn btn-mur" style="width:60px; margin:0">GO</button>
+												</div>
+												<div id="recette-zone" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;"></div>
+											</div>
+
+											<div class="card" style="padding:15px; border: 1px solid #ddd; margin-top:15px;">
+												<b style="font-size:14px;">➕ AJOUT MANUEL</b>
+												<div style="display:flex; flex-direction:column; gap:8px; margin-top:10px;">
+													<input type="text" id="add-nom" placeholder="Nom de l'article" style="padding:8px; border-radius:5px; border:1px solid #ccc;">
+													<div style="display:flex; gap:5px;">
+														<select id="add-emplacement" style="flex:1; padding:8px; border-radius:5px;">
+															<option value="FRIGO">Frigo</option><option value="PLACARD">Placard</option><option value="CONGELATEUR">Congélo</option><option value="ANIMAUX">Animaux</option><option value="HORS_CUISINE">Maison</option>
+														</select>
+														<input type="number" id="add-qte" value="1" style="width:50px; padding:8px; border-radius:5px;">
+													</div>
+													<button onclick="ajouterManuel()" class="btn btn-mur">ENREGISTRER</button>
+												</div>
+											</div>
+
+											<div class="card" style="border-left: 8px solid var(--danger);">
+											<button class="collapsible">🛒 LISTE DE COURSES & MUR FAMILLE</button>
+											<div class="content">
+												<div style="display: flex; gap: 5px; margin-bottom: 15px;">
+													<input type="text" id="nouvelArticleFamille" placeholder="Rajouter un truc..." 
+														   style="flex: 1; padding: 10px; border: 2px solid #fed7d7; border-radius: 8px;">
+													<button onclick="ajouterAuMur()" 
+															style="background: #e53e3e; color: white; border: none; border-radius: 8px; padding: 0 15px; font-weight: bold; cursor: pointer;">
+														+
+													</button>
+												</div>
+
+												<button onclick="viderTouteLaListe()" class="btn" style="background: var(--danger); color: white; margin-bottom: 15px; width: 100%; font-weight: bold;">
+													🗑️ VIDER TOUTE LA LISTE
+												</button>
+
+												<div id="shoppingList"></div>
+											</div>
+										</div>
+<div class="card"><button class="collapsible">🥦 FRIGO</button><div class="content"><div id="list-Frigo"></div></div></div>
+
+<div class="card"><button class="collapsible">❄️ CONGÉLATEUR</button><div class="content"><div id="list-Congélateur"></div></div></div>
+
+<div class="card"><button class="collapsible">🍝 PLACARD</button><div class="content"><div id="list-Placard"></div></div></div>
+
+<div class="card" style="border-left: 8px solid var(--chef);">
+    <button class="collapsible">📖 GRIMOIRE</button>
+    <div class="content">
+        <input type="text" id="search-grimoire" onkeyup="filtrerGrimoire()" placeholder="🔍 Chercher une recette..." style="width:100%; padding:10px; border-radius:8px; border:1px solid #ddd; margin: 10px 0;">
+        <div id="grimoire-zone"></div>
     </div>
+</div>
 
-    <div class="chef-card">
-        <b style="color:var(--chef); font-size: 18px;">👨‍🍳 Demander au Chef</b>
-        <div class="chef-input-zone">
-            <input type="text" id="chef-prompt" class="chef-input" placeholder="Ex: Un plat rapide avec mes légumes...">
-            <button onclick="demanderAuChef()" class="btn-chef-go">GO</button>
-        </div>
-        <div id="recette-zone" class="recette-propo"></div>
-    </div>
-
-    <div style="display:none">
-        <input id="gKey" value="AIzaSyBclnemxauwfFzJd9mOhYk-kre8AoSU5P0">
-        <input id="sUrl" value="https://ylguhodjcgistealluzy.supabase.co">
-        <input id="sKey" value="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsZ3Vob2RqY2dpc3RlYWxsdXp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA2MjcxMDAsImV4cCI6MjA4NjIwMzEwMH0.0czapM1DeFs7T3pTrExUMUKUcyUHi3w-p_jKj6XkTUM">
-    </div>
-
-    <div class="card" style="border-left: 8px solid var(--danger);"><button class="collapsible">🛒 LISTE DE COURSES</button><div class="content"><div id="shoppingList"></div></div></div>
-    <div class="card"><button class="collapsible">🥦 FRIGO</button><div class="content"><div id="list-Frigo"></div></div></div>
-    <div class="card"><button class="collapsible">❄️ CONGÉLATEUR</button><div class="content"><div id="list-Congélateur"></div></div></div>
-    <div class="card"><button class="collapsible">🍝 PLACARD</button><div class="content"><div id="list-Placard"></div></div></div>
-    <div class="card" style="border-left: 8px solid var(--maison);"><button class="collapsible">🏠 MAISON</button><div class="content"><div id="list-Maison"></div></div></div>
-    <div class="card" style="border-left: 8px solid var(--animaux);"><button class="collapsible">🐾 ANIMAUX</button><div class="content"><div id="list-Animaux"></div></div></div>
-
-    <div class="card" style="border-left: 8px solid var(--mur);"><button class="collapsible">📌 NOTES FAMILLE</button>
-        <div class="content">
-            <div id="mur-messages" style="margin: 10px 0;"></div>
-            <div style="display:flex; gap:5px; padding-bottom:15px;">
-                <input type="text" id="nouveau-message" style="flex:1; padding:10px; border-radius:8px;" placeholder="Message...">
-                <button onclick="posterMessage()" style="background:var(--mur); color:white; border:none; border-radius:8px; padding:0 15px;">OK</button>
+<div class="card" style="border-left: 8px solid #38a169;">
+    <button class="collapsible">
+        🍱 ANTI-GASPI : TUPPS & RESTES 
+        <span id="badge-danger" style="background: #e53e3e; color: white; border-radius: 50%; padding: 2px 8px; font-size: 0.8em; margin-left: 10px; display: none;">0</span>
+    </button>
+    <div class="content">
+        <div style="background: #f0fff4; padding: 12px; border-radius: 10px; margin-bottom: 15px; border: 1px solid #c6f6d5;">
+            <p style="margin:0 0 10px 0; font-size: 0.9em; color: #2f855a; font-weight: bold;">📝 Noter un reste :</p>
+            <div style="display: flex; gap: 5px;">
+                <input type="text" id="nomTup" placeholder="Ex: Reste de Lasagnes" style="flex: 1; padding: 10px; border: 1px solid #98e6ad; border-radius: 8px;">
+                <button onclick="ajouterTup()" style="background: #38a169; color: white; border: none; border-radius: 8px; padding: 0 15px; cursor: pointer; font-weight: bold;">OK</button>
             </div>
         </div>
+        <div id="listeTups"></div>
     </div>
-    <div class="card" style="border-left: 8px solid var(--chef);"><button class="collapsible">📖 RECETTES SAUVEGARDÉES</button><div class="content"><div id="grimoire-zone"></div></div></div>
+</div>
 
-<script>
-let monSupabase;
-// --- INITIALISATION DU MICRO (À METTRE TOUT EN HAUT DU SCRIPT) ---
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-let recognition;
-
-if (SpeechRecognition) {
-    recognition = new SpeechRecognition();
-    recognition.lang = 'fr-FR';
-    recognition.continuous = false;
-    recognition.interimResults = false;
-} else {
-    alert("Désolé, votre navigateur ne supporte pas la reconnaissance vocale.");
-}
-
-// --- GESTION DU BOUTON (À METTRE DANS WINDOW.ONLOAD OU APRÈS) ---
-document.getElementById('btn-vocal').onclick = () => {
-    if (!recognition) return;
-    try {
-        recognition.start();
-        document.getElementById('statut-vocal').innerText = "🎙️ Écoute en cours... Parlez maintenant";
-    } catch (e) {
-        console.log("Le micro est déjà actif");
-    }
-};
-
-// --- QUAND L'IA REÇOIT LA PHRASE ---
-recognition.onresult = async (event) => {
-    const phrase = event.results[0][0].transcript;
-    const statut = document.getElementById('statut-vocal');
-    
-    // 1. Affichage immédiat (IMPORTANT)
-    statut.innerText = "💬 Entendu : " + phrase;
-
-    try {
-        const gKey = document.getElementById('gKey').value;
-        const { data: produits } = await monSupabase.from('inventaire2').select('id, nom, quantite').neq('etat', 'Vide');
-        
-        // On utilise bien la version 2.5 comme demandé
-        const MODEL_25 = "gemini-2.5-flash";
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_25}:generateContent?key=${gKey}`;
-
-        const prompt = `Phrase: "${phrase}". Stock: ${JSON.stringify(produits)}. Trouve l'ID du produit. Réponds en JSON : {"id": ID}`;
-
-        const resp = await fetch(url, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-        });
-        
-        const data = await resp.json();
-        
-        // Sécurité si l'IA ne répond pas
-        if (!data.candidates) {
-            statut.innerText = "❌ Erreur IA (Vérifie ta clé ou quota)";
-            return;
-        }
-
-        const res = JSON.parse(data.candidates[0].content.parts[0].text.replace(/```json|```/g, ""));
-        
-        if(res.id) {
-            const p = produits.find(x => x.id === res.id);
-            // On déduit -1 directement
-            await modifierQuantite(res.id, p.quantite, -1);
-            statut.innerText = "✅ Retiré : " + p.nom;
-        } else {
-            statut.innerText = "❓ Produit non reconnu dans le stock.";
-        }
-    } catch(e) { 
-        console.error(e);
-        statut.innerText = "❌ Erreur de traitement.";
-    }
-};
-
-// En cas d'erreur micro (Permission refusée, etc.)
-recognition.onerror = (event) => {
-    document.getElementById('statut-vocal').innerText = "❌ Erreur Micro : " + event.error;
-    if(event.error === 'not-allowed') alert("Activez l'autorisation du micro dans les réglages du navigateur (le cadenas à gauche de l'adresse).");
-};
-
-window.onload = () => {
-    monSupabase = window.supabase.createClient(document.getElementById('sUrl').value, document.getElementById('sKey').value);
-    chargerTout(); chargerMur(); chargerGrimoire();
-    setupCollapsibles();
-};
-
-function setupCollapsibles() {
-    const coll = document.getElementsByClassName("collapsible");
-    for (let i = 0; i < coll.length; i++) {
-        coll[i].onclick = function() {
-            this.classList.toggle("active");
-            const content = this.nextElementSibling;
-            content.style.maxHeight = content.style.maxHeight ? null : content.scrollHeight + "px";
-        }
-    }
-}
-
-// --- CONFIGURATION DU MODÈLE 2.5 ---
-const MODEL_VERSION = "gemini-2.5-flash"; // Utilisation de ta version 2.5
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_VERSION}:generateContent`;
-
-// --- FONCTION VOCALE (SORTIE) ---
-recognition.onresult = async (event) => {
-    const phrase = event.results[0][0].transcript;
-    const statut = document.getElementById('statut-vocal');
-    
-    // AFFICHAGE IMMÉDIAT DU TEXTE ENTENDU
-    statut.innerText = "💬 Analyse de : " + phrase;
-
-    try {
-        const gKey = document.getElementById('gKey').value;
-        const { data: produits } = await monSupabase.from('inventaire2').select('id, nom, quantite').neq('etat', 'Vide');
-        
-        const prompt = `Utilisateur: "${phrase}". Stock: ${JSON.stringify(produits)}. Trouve l'ID du produit. Réponds UNIQUEMENT en JSON : {"id": ID}`;
-
-        const resp = await fetch(`${GEMINI_URL}?key=${gKey}`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-        });
-        
-        const data = await resp.json();
-        const res = JSON.parse(data.candidates[0].content.parts[0].text.replace(/```json|```/g, ""));
-        
-        if(res.id) {
-            const p = produits.find(x => x.id === res.id);
-            await modifierQuantite(res.id, p.quantite, -1);
-            statut.innerText = "✅ Retiré : " + p.nom;
-        }
-    } catch(e) { 
-        statut.innerText = "❌ Erreur 2.5 ou produit inconnu.";
-        console.error("Erreur Gemini 2.5:", e);
-    }
-};
-
-// --- LE CHEF (TEXTE UNIQUEMENT) ---
-async function demanderAuChef() {
-    const userPrompt = document.getElementById('chef-prompt').value;
-    const zone = document.getElementById('recette-zone');
-    const gKey = document.getElementById('gKey').value;
-    
-    if(!userPrompt) return alert("Dis au chef ce que tu veux !");
-    
-    zone.style.display = "grid";
-    zone.innerHTML = "<p style='grid-column: 1/3; text-align:center;'>👨‍🍳 Le Chef 2.5 prépare vos options...</p>";
-
-    try {
-        const { data: stock } = await monSupabase.from('inventaire2').select('nom').neq('etat', 'Vide');
-        const ingredients = stock.map(s => s.nom).join(', ');
-
-        const prompt = `Demande: "${userPrompt}". Ingrédients: ${ingredients}. Propose 2 recettes courtes. Réponds STRICTEMENT en JSON : [{"titre":"...", "contenu":"..."}]`;
-        
-        const resp = await fetch(`${GEMINI_URL}?key=${gKey}`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-        });
-        
-        const data = await resp.json();
-        const recettes = JSON.parse(data.candidates[0].content.parts[0].text.replace(/```json|```/g, ""));
-        
-        zone.innerHTML = recettes.map(r => `
-            <div class="recette-box" style="background:white; padding:15px; border-radius:15px; border:1px solid #ddd;">
-                <b style="color:var(--chef); font-size:16px;">${r.titre}</b>
-                <p style="font-size:13px; margin:10px 0;">${r.contenu}</p>
-                <button onclick="sauverRecette('${r.titre.replace(/'/g," ")}','${r.contenu.replace(/'/g," ")}')" 
-                        style="width:100%; background:var(--mur); color:white; border:none; border-radius:10px; padding:10px; cursor:pointer; font-weight:bold;">
-                    💾 SAUVEGARDER
-                </button>
+<div class="card" style="border-left: 8px solid #3182ce;">
+    <button class="collapsible">📅 PLANNING DE LA SEMAINE</button>
+    <div class="content">
+        <p style="text-align: center; font-size: 12px; color: gray; margin-top: 10px;">Clique sur une case pour ajouter ou modifier un repas.</p>
+        <div id="planning-grid" style="display: flex; flex-direction: column; gap: 10px; padding: 10px;">
             </div>
-        `).join('');
-    } catch(e) { 
-        zone.innerHTML = "<p>❌ Erreur de connexion au Chef 2.5.</p>";
-    }
-}
+    </div>
+</div>
+											<div style="display:none">
+												<input id="gKey" value="AIzaSyD-Ax8ShZg1rE25p76W5Dld3kY21H5fnoU">
+												<input id="sUrl" value="https://ylguhodjcgistealluzy.supabase.co">
+												<input id="sKey" value="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsZ3Vob2RqY2dpc3RlYWxsdXp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA2MjcxMDAsImV4cCI6MjA4NjIwMzEwMH0.0czapM1DeFs7T3pTrExUMUKUcyUHi3w-p_jKj6XkTUM">
+											</div>
 
-// --- SAUVEGARDE RÉELLE (CORRECTION DU 404) ---
-async function sauverRecette(titre, contenu) {
-    try {
-        const { error } = await monSupabase
-            .from('recettes_sauvees')
-            .insert([{ titre, contenu }]);
+								<script>
+										let monSupabase;
+										let recettesTemporaires = [];
+										const MODEL_25 = "gemini-2.5-flash"; 
 
-        if (error) throw error;
-        
-        alert("⭐ Recette ajoutée à votre Grimoire !");
-        chargerGrimoire();
-    } catch (e) {
-        alert("Erreur : La table 'recettes_sauvees' est introuvable. Crée-la sur Supabase.");
-        console.error(e);
-    }
-}
+										window.onload = () => {
+											// 1. Initialisation de Supabase
+											monSupabase = window.supabase.createClient(
+												document.getElementById('sUrl').value, 
+												document.getElementById('sKey').value
+											);
 
-async function chargerGrimoire() {
-    const { data, error } = await monSupabase
-        .from('recettes_sauvees')
-        .select('*')
-        .order('created_at', {ascending: false});
+											// 2. Lancement des fonctions de chargement (une seule fois suffit !)
+											chargerTout(); 
+											chargerGrimoire(); 
+											chargerPlanning();
+											setupCollapsibles();
+										};
 
-    if (error) return;
+										function setupCollapsibles() {
+											const coll = document.getElementsByClassName("collapsible");
+											for (let i = 0; i < coll.length; i++) {
+												coll[i].onclick = function() {
+													this.classList.toggle("active");
+													const content = this.nextElementSibling;
+													content.style.maxHeight = content.style.maxHeight ? null : content.scrollHeight + "px";
+												}
+											}
+										}
 
-    const zone = document.getElementById('grimoire-zone');
-    zone.innerHTML = data.map(r => `
-        <div style="background:white; padding:12px; border-radius:12px; margin-bottom:10px; border-left:4px solid var(--chef);">
-            <b>${r.titre}</b>
-            <p style="font-size:12px; margin:5px 0;">${r.contenu}</p>
-            <button onclick="supprimerRecette(${r.id})" style="color:red; background:none; border:none; font-size:11px; cursor:pointer;">Supprimer</button>
-        </div>
-    `).join('');
-}
+								// ==========================================================
+								// 1. INITIALISATION DES VARIABLES
+								// ==========================================================
+								window.attenteReponseIA = false;
+								window.attenteChoixProduit = false;
+								window.produitsPossibles = [];
+								window.dernierProduitSupprime = null;
+								window.attenteChoixRecette = false;
+								window.dernieresPropositions = [];
 
-// --- LOGIQUE INVENTAIRE ---
-async function chargerTout() {
-    // 1. On récupère les données
-    const { data: items } = await monSupabase.from('inventaire2').select('*').order('nom');
+								const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+								let recognition = (SpeechRecognition) ? new SpeechRecognition() : null;
+
+								// ==========================================================
+								// 2. FONCTION APPEL GEMINI
+								// ==========================================================
+								async function appelGemini(payload) {
+									const gKey = document.getElementById('gKey').value;
+									const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_25}:generateContent?key=${gKey}`;
+									const resp = await fetch(url, { 
+										method: 'POST', 
+										headers: {'Content-Type': 'application/json'}, 
+										body: JSON.stringify(payload) 
+									});
+									const d = await resp.json();
+									if (!d.candidates) throw new Error("Réponse vide de l'IA");
+									return d.candidates[0].content.parts[0].text;
+								}
+	// ==========================================================
+			// 3. CONFIGURATION DU BLOC VOCAL
+			// ==========================================================
+			if (recognition) {
+				recognition.lang = 'fr-FR';
+				recognition.continuous = false;
+
+				recognition.onresult = async (e) => { 
+					const phrase = e.results[0][0].transcript.toLowerCase();
+					const statut = document.getElementById('statut-vocal');
+					if (statut) statut.innerText = "💬 J'ai entendu : " + phrase;
+
+					// --- 1. SÉCURITÉ STOP ---
+					if (phrase.includes("stop") || phrase.includes("annule")) {
+						window.speechSynthesis.cancel();
+						window.attenteChoixRecette = false;
+						faireParlerIA("D'accord.");
+						return;
+					}
+
+					// --- 2. SI ON ATTEND TON CHOIX (Écriture de la recette) ---
+		if (window.attenteChoixRecette) {
+			try {
+				if (statut) statut.innerText = "✍️ Le Chef rédige la recette...";
+                
+				// PROMPT MODIFIÉ POUR OBTENIR LE MÊME FORMAT QUE LE CHEF ÉCRIT
+				const promptRecette = `L'utilisateur a choisi : "${phrase}" parmi tes idées : ${window.dernieresPropositions}. 
+				Écris la recette détaillée. 
+				RÉPONDS UNIQUEMENT AU FORMAT JSON STRICTEMENT COMME CECI : 
+				[{"titre":"Nom du plat", "contenu":"Liste des ingrédients\\n\\n1. Étape 1\\n2. Étape 2..."}]`;
+				
+				const resultatBrut = await appelGemini({ contents: [{ parts: [{ text: promptRecette }] }] });
+				
+				// On découpe proprement le JSON pour éviter les erreurs
+				const jsonStr = resultatBrut.substring(resultatBrut.indexOf('['), resultatBrut.lastIndexOf(']') + 1);
+				
+				// On stocke dans LA MÊME variable que ton bouton classique
+				recettesTemporaires = JSON.parse(jsonStr);
+				
+				// On injecte le MÊME design (la carte avec le bouton SAUVER)
+				const zone = document.getElementById('zone-recette');
+				if (zone) {
+					zone.innerHTML = recettesTemporaires.map((r, i) => `
+						<div style="background:white; padding:12px; border-radius:12px; border:1px solid #ddd; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-top: 15px;">
+							<b style="color:var(--chef); font-size:14px;">${r.titre}</b>
+							<p style="font-size:12px; margin:10px 0; color:#555; white-space: pre-wrap;">${r.contenu}</p>
+							<button onclick="sauverRecetteDirect(${i})" style="width:100%; background:var(--mur); color:white; border:none; padding:8px; border-radius:8px; cursor:pointer; font-weight:bold;">💾 SAUVER</button>
+						</div>`).join('');
+					zone.style.display = "block";
+				}
+				
+				window.attenteChoixRecette = false;
+				faireParlerIA("C'est prêt ! Je t'ai affiché la recette, tu peux la sauvegarder dans ton grimoire.");
+			} catch (err) { 
+				console.error("Erreur de rendu recette :", err);
+				faireParlerIA("Mince, j'ai eu un petit souci pour formater la recette.");
+			}
+			return;
+		}
+
+		// --- 3. SI TU DEMANDES DES IDÉES (Lancement Chef) ---
+		if (phrase.includes("chef") || phrase.includes("propose") || phrase.includes("recette") || phrase.includes("mange") || phrase.includes("idées")) {
+			try {
+				if (statut) statut.innerText = "👨‍🍳 Le Chef réfléchit...";
+				
+				// On récupère le stock
+				const { data: produits } = await monSupabase.from('inventaire2').select('nom').neq('etat', 'Vide');
+				const liste = produits.map(p => p.nom).join(', ');
+
+				// TON PROMPT ADAPTÉ POUR LA VOIX
+				const promptChef = `
+				Tu es un Chef cuisinier expert et pragmatique.
+				DEMANDE UTILISATEUR : "${phrase}"
+				STOCK DISPONIBLE : ${liste}
+
+				CONSIGNES STRICTES :
+				1. Ne propose que des plats réalisables AVEC le stock en l'associant intelligemment.
+				2. Si l'utilisateur demande un plat précis (ex: "des frites"), respecte la technique (friture) et n'invente pas un substitut (ex: purée) sauf si l'ingrédient principal manque.
+				3. C'est l'étape de proposition : NE DONNE SURTOUT PAS la recette, ni les étapes, ni la liste des ingrédients.
+				4. Formule une phrase naturelle à l'oral pour proposer exactement 3 noms de plats courts et précis.
+				5. Termine OBLIGATOIREMENT ta réponse par : "Lequel te tente ?"`;
+				
+				// APPEL GEMINI
+				const idees = await appelGemini({ contents: [{ parts: [{ text: promptChef }] }] });
+				
+				window.dernieresPropositions = idees;
+				window.attenteChoixRecette = true;
+				
+				faireParlerIA(idees);
+			} catch (err) { 
+				console.error("ERREUR GEMINI :", err);
+				alert("L'IA ne répond pas.");
+			}
+			return;
+		}
+					// --- 4. CHOIX PRÉCIS PRODUIT ---
+					if (window.attenteChoixProduit) {
+						try {
+							const promptAffinement = `L'utilisateur a dit : "${phrase}". Parmi : ${JSON.stringify(window.produitsPossibles)}, lequel est le bon ? Réponds uniquement l'ID.`;
+							const textID = await appelGemini({ contents: [{ parts: [{ text: promptAffinement }] }] });
+							const idTrouve = parseInt(textID.trim().replace(/[^0-9]/g, ''));
+							if (idTrouve > 0) {
+								const p = window.produitsPossibles.find(x => x.id === idTrouve);
+								window.attenteChoixProduit = false;
+								await executerLogiqueSuppression(p); 
+							}
+						} catch (err) { console.error(err); }
+						return;
+					}
+
+					// --- 5. OUI/NON COURSES ---
+					if (window.attenteReponseIA) {
+						if (phrase.includes("oui") || phrase.includes("ajoute") || phrase.includes("vas-y")) {
+							const p = window.dernierProduitSupprime;
+							if (p) {
+								await monSupabase.from('inventaire2').update({ etat: 'Vide', quantite: 0 }).eq('id', p.id);
+								faireParlerIA("C'est fait, ajouté aux courses.");
+								if (typeof chargerTout === 'function') await chargerTout();
+							}
+						} else {
+							faireParlerIA("D'accord.");
+						}
+						window.attenteReponseIA = false;
+						return;
+					}
+
+					// --- 6. SUPPRESSION ---
+					if (phrase.includes("supprime") || phrase.includes("retire") || phrase.includes("enlève")) {
+						try {
+							const { data: produits } = await monSupabase.from('inventaire2').select('*').neq('etat', 'Vide');
+							const promptChoix = `Phrase: "${phrase}". Stock: ${JSON.stringify(produits)}. Trouve l'ID du produit. Réponds uniquement JSON: {"ids": [numéro]}`;
+							const text = await appelGemini({ contents: [{ parts: [{ text: promptChoix }] }] });
+							const res = JSON.parse(text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1));
+							if (res.ids && res.ids.length > 0) {
+								const p = produits.find(x => x.id === res.ids[0]);
+								await executerLogiqueSuppression(p);
+							}
+						} catch (err) { console.error("Erreur suppression :", err); }
+						return;
+					}
+
+				}; // Fin de onresult  <-- C'EST LE SEUL BON ENDROIT !
+			} // Fin de if(recognition) <-- C'EST LE SEUL BON ENDROIT !
+
+			// --- GESTION DES BOUTONS ---
+			const btnVocal = document.getElementById('btn-vocal');
+			if (btnVocal) {
+				btnVocal.onclick = () => { 
+					try { recognition.start(); } catch(e) { console.log("Déjà actif"); } 
+				};
+			}
+
+			const btnChef = document.getElementById('btn-chef');
+			if (btnChef) {
+				btnChef.onclick = () => {
+					const statut = document.getElementById('statut-vocal');
+					if (statut) statut.innerText = "🎤 Le Chef t'écoute...";
+					window.attenteChoixRecette = false; 
+					try { recognition.start(); } catch(e) { console.log("Déjà actif"); }
+				};
+			}
+								// ==========================================================
+								// 4. FONCTION LOGIQUE DU CHEF
+								// ==========================================================
+								async function lancerLeChef() {
+									const statut = document.getElementById('statut-vocal');
+									if (statut) statut.innerText = "👨‍🍳 Le Chef regarde tes restes...";
+									try {
+										const { data: produits } = await monSupabase.from('inventaire2').select('*').neq('etat', 'Vide');
+										const listeProduits = produits.map(p => `${p.nom} (Qté: ${p.quantite})`).join(', ');
+										const promptChef = `Regarde mon stock : ${listeProduits}. Propose 3 idées de plats rapides. Juste les noms. Demande : "Lequel te tente ?"`;
+										const reponse = await appelGemini({ contents: [{ parts: [{ text: promptChef }] }] });
+										
+										window.attenteChoixRecette = true;
+										window.dernieresPropositions = reponse; 
+										faireParlerIA(reponse);
+										
+										setTimeout(() => { 
+											if (statut) statut.innerText = "🎤 Chef à l'écoute...";
+											try { recognition.start(); } catch(e) {}
+										}, 4500); 
+									} catch (err) { console.error(err); }
+								}; // Ferme btnChef.onclick
+						
+							
+								async function scannerTicket(input) {
+									const file = input.files[0];
+									if(!file) return;
+									
+									if (file.size > 4 * 1024 * 1024) {
+										alert("Le fichier est trop lourd (max 4Mo).");
+										return;
+									}
+
+											const statut = document.getElementById('statut-scan');
+											statut.innerText = "⏳ Analyse en cours (PDF/Image)...";
+
+											const reader = new FileReader();
+											reader.onload = async () => {
+												try {
+													const base64Data = reader.result.split(',')[1];
+													const mimeType = file.type;
+
+													const payload = {
+														contents: [{
+															parts: [
+																{ text: "Tu es un expert en ticket de caisse. Extrais les articles. Emplacements: FRIGO, PLACARD, CONGELATEUR, ANIMAUX, HORS_CUISINE. Réponds UNIQUEMENT le JSON: [{\"nom\":\"...\",\"quantite\":1,\"emplacement\":\"...\"}]" },
+																{ inline_data: { mime_type: mimeType, data: base64Data } }
+															]
+														}],
+														generationConfig: {
+															temperature: 0.1, // On baisse la température pour éviter que l'IA ne divague
+														}
+													};
+
+													const text = await appelGemini(payload);
+													traiterRetourGemini(text);
+												} catch(e) {
+													console.error("Détail erreur:", e);
+													statut.innerText = "❌ Le serveur Gemini est saturé (503). Réessayez dans 10 secondes.";
+												}
+											};
+											reader.readAsDataURL(file);
+										}
+
+										function ouvrirEticket() {
+											const texte = prompt("Collez le ticket :");
+											if(texte) appelGemini({ contents: [{ parts: [{ text: `Ticket: ${texte}. Liste articles, qté, emplacements. JSON STRICT: [{\"nom\":\"...\",\"quantite\":1,\"emplacement\":\"...\"}]` }] }] }).then(traiterRetourGemini).catch(()=>alert("Erreur E-ticket"));
+										}
+
+										async function traiterRetourGemini(text) {
+											try {
+												const articles = JSON.parse(text.substring(text.indexOf('['), text.lastIndexOf(']') + 1));
+												for (let a of articles) {
+													await monSupabase.from('inventaire2').insert([{ nom: a.nom, quantite: a.quantite, emplacement: a.emplacement, etat: 'Plein' }]);
+												}
+												document.getElementById('statut-scan').innerText = "✅ " + articles.length + " articles ajoutés !";
+												chargerTout();
+											} catch(e) { document.getElementById('statut-scan').innerText = "❌ Format invalide."; }
+										}
+
+										// CHEF
+										async function demanderAuChef() {
+											const pU = document.getElementById('chef-prompt').value;
+											const z = document.getElementById('recette-zone');
+											if(!pU) return;
+											
+											z.innerHTML = "<p style='grid-column:1/3; text-align:center;'>👨‍🍳 Chef Gemini 2.5 examine votre stock...</p>";
+											
+											const { data: stock } = await monSupabase.from('inventaire2').select('nom').neq('etat', 'Vide');
+											const ing = stock.map(s => s.nom).join(', ');
+
+											try {
+												const promptExpert = `
+												Tu es un Chef cuisinier expert et pragmatique.
+												DEMANDE UTILISATEUR : "${pU}"
+												STOCK DISPONIBLE : ${ing}
+
+												CONSIGNES STRICTES :
+												1. Ne propose que des plats réalisables AVEC le stock.
+												2. Si l'utilisateur demande un plat précis (ex: "des frites"), respecte la technique (friture) et n'invente pas un substitut (ex: purée) sauf si l'ingrédient principal manque.
+												3. Sois bref et précis.
+												
+												RÉPONDS UNIQUEMENT AU FORMAT JSON : 
+												[{"titre":"Nom du plat", "contenu":"Recette courte en 3 étapes"}]`;
+
+												const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL_25}:generateContent?key=${document.getElementById('gKey').value}`, {
+													method: 'POST',
+													body: JSON.stringify({ contents: [{ parts: [{ text: promptExpert }] }] })
+												});
+												
+												const d = await resp.json();
+												const t = d.candidates[0].content.parts[0].text;
+												recettesTemporaires = JSON.parse(t.substring(t.indexOf('['), t.lastIndexOf(']') + 1));
+												
+												z.innerHTML = recettesTemporaires.map((r, i) => `
+													<div style="background:white; padding:12px; border-radius:12px; border:1px solid #ddd; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+														<b style="color:var(--chef); font-size:14px;">${r.titre}</b>
+														<p style="font-size:12px; margin:10px 0; color:#555;">${r.contenu}</p>
+														<button onclick="sauverRecetteDirect(${i})" style="width:100%; background:var(--mur); color:white; border:none; padding:8px; border-radius:8px; cursor:pointer; font-weight:bold;">💾 SAUVER</button>
+													</div>`).join('');
+											} catch(e) { 
+												z.innerHTML = "<p>❌ Le Chef a eu un petit souci de réflexion. Réessayez.</p>"; 
+											}
+										}
+
+										async function sauverRecetteDirect(i) {
+    const r = recettesTemporaires[i];
     
-    // 2. Le dictionnaire des emplacements
-    const mapping = { 
-        'FRIGO': 'list-Frigo', 
-        'CONGELATEUR': 'list-Congélateur', 
-        'PLACARD': 'list-Placard', 
-        'ANIMAUX': 'list-Animaux', 
-        'HORS_CUISINE': 'list-Maison' 
-    };
+    // 1. On sauvegarde dans Supabase
+    await monSupabase.from('recettes_sauvees').insert([{ titre: r.titre, contenu: r.contenu }]);
+    alert("Sauvegardé dans le Grimoire !"); 
+    
+    // 2. On met à jour l'affichage du Grimoire
+    chargerGrimoire();
 
-    // 3. On vide tout avant de remplir
-    Object.values(mapping).forEach(id => { 
-        if(document.getElementById(id)) document.getElementById(id).innerHTML = ""; 
+    // 3. NOUVEAUTÉ : On efface la recette de l'écran du Chef
+    const zoneVocale = document.getElementById('zone-recette');
+    if (zoneVocale) {
+        zoneVocale.innerHTML = ""; 
+        zoneVocale.style.display = "none"; // On cache la zone
+    }
+    
+    const zoneTexte = document.getElementById('recette-zone');
+    if (zoneTexte) {
+        zoneTexte.innerHTML = ""; // On vide aussi la zone du Chef écrit au cas où
+    }
+}
+
+										// --- FONCTION DE CHARGEMENT PRINCIPALE ---
+										async function chargerTout() {
+											// 1. Récupération des données depuis Supabase
+											const { data: items, error } = await monSupabase.from('inventaire2').select('*').order('nom');
+											
+											if (error) {
+												console.error("Erreur de chargement:", error);
+												return;
+											}
+
+											// 2. Mapping des emplacements vers les IDs HTML
+											const mapping = { 
+												'FRIGO': 'list-Frigo', 
+												'CONGELATEUR': 'list-Congélateur', 
+												'PLACARD': 'list-Placard', 
+												'ANIMAUX': 'list-Animaux', 
+												'HORS_CUISINE': 'list-Maison' 
+											};
+											
+											// 3. Reset (vidage) de toutes les listes avant affichage
+											Object.values(mapping).forEach(id => { 
+												const el = document.getElementById(id);
+												if(el) el.innerHTML = ""; 
+											});
+											
+											const sl = document.getElementById('shoppingList'); 
+											if(sl) sl.innerHTML = "";
+
+											const lt = document.getElementById('listeTups');
+											if(lt) lt.innerHTML = "";
+											
+											let nbDanger = 0; // Compteur pour le badge rouge Anti-Gaspi
+
+											if(!items) return;
+
+											// 4. Boucle sur chaque article
+											items.forEach(item => {
+												
+												// --- CAS A : LISTE DE COURSES ---
+												if (item.etat === 'Vide') {
+													if(sl) {
+														sl.innerHTML += `
+														<div class="item" style="background:#fff5f5; padding:10px; border-radius:10px; border:1px solid #fed7d7; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+															<span style="font-weight:600; color:#c53030;">🛒 ${item.nom}</span>
+															<div style="display:flex; gap:10px; align-items:center;">
+																<button onclick="copierNom('${item.nom.replace(/'/g, "\\'")}', this)" 
+																		style="background:#4a5568; color:white; border:none; border-radius:6px; padding:6px 12px; cursor:pointer; font-size:13px;">Copier</button>
+																<button onclick="supprimerDefinitif(${item.id})" 
+																		style="background:none; border:none; color:#9b2c2c; cursor:pointer; font-size:20px;">🗑️</button>
+															</div>
+														</div>`;
+													}
+												} 
+												
+												// --- CAS B : TUPPERWARE (ANTI-GASPI) ---
+												else if (item.etat === 'Tup') {
+													if(lt) {
+														const dateEnregistree = new Date(item.emplacement);
+														const aujourdhui = new Date();
+														const joursPasses = Math.floor((aujourdhui - dateEnregistree) / (1000 * 60 * 60 * 24));
+
+														let couleur = "#48bb78"; // Vert
+														let msg = "Frais";
+														if (joursPasses >= 3) { couleur = "#ed8936"; msg = "À consommer"; } // Orange
+														if (joursPasses >= 5) { 
+															couleur = "#e53e3e"; 
+															msg = "DANGER"; 
+															nbDanger++; // On compte l'alerte
+														}
+
+														lt.innerHTML += `
+														<div class="item" style="border-left: 6px solid ${couleur}; background:white; padding:10px; border-radius:10px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+															<div>
+																<b style="font-size:14px;">🍱 ${item.nom}</b><br>
+																<small style="color:gray;">Il y a ${joursPasses} jour(s)</small>
+															</div>
+															<div style="display:flex; align-items:center; gap:10px;">
+																<span style="background:${couleur}; color:white; font-size:10px; padding:2px 6px; border-radius:10px; font-weight:bold;">${msg}</span>
+																<button onclick="supprimerDefinitif(${item.id})" style="background:none; border:none; color:#9b2c2c; cursor:pointer; font-size:18px;">🗑️</button>
+															</div>
+														</div>`;
+													}
+												}
+
+												// --- CAS C : STOCK CLASSIQUE (FRIGO, PLACARD...) ---
+												else {
+													const container = document.getElementById(mapping[item.emplacement] || 'list-Placard');
+													if(container) {
+														const couleurEtat = item.etat === 'Entamé' ? '#ef6c00' : '#333';
+														const labelEtat = item.etat === 'Entamé' ? '⚠️ Entamé' : '📦 Plein';
+
+														container.innerHTML += `
+														<div class="item" style="border-left: 4px solid ${item.etat === 'Entamé' ? '#ef6c00' : '#4a5568'}; padding-left:10px;">
+															<div style="flex:1">
+																<b style="color:${couleurEtat}">${item.nom}</b><br>
+																<small style="cursor:pointer; color:gray;" onclick="basculerEtat(${item.id}, '${item.etat}')">${labelEtat}</small>
+															</div>
+															<div style="display:flex; align-items:center; gap:5px;">
+																<button class="qte-btn" onclick="modifierQuantite(${item.id},${item.quantite},-1)">-</button>
+																<b style="width:25px; text-align:center;">${item.quantite}</b>
+																<button class="qte-btn" onclick="modifierQuantite(${item.id},${item.quantite},1)">+</button>
+																<button onclick="basculerEtat(${item.id}, '${item.etat}')" style="background:none; border:none; font-size:20px; cursor:pointer;">
+																	${item.etat === 'Entamé' ? '🍴' : '🍽️'}
+																</button>
+															</div>
+														</div>`;
+													}
+												}
+											});
+
+											// 5. Mise à jour du badge d'alerte sur l'onglet
+											const badge = document.getElementById('badge-danger');
+											if (badge) {
+												if (nbDanger > 0) {
+													badge.innerText = nbDanger;
+													badge.style.display = "inline-block";
+												} else {
+													badge.style.display = "none";
+												}
+											}
+										}
+
+										async function basculerEtat(id, etatActuel) {
+											const nouvelEtat = (etatActuel === 'Plein') ? 'Entamé' : 'Plein';
+											await monSupabase.from('inventaire2').update({ etat: nouvelEtat }).eq('id', id);
+											chargerTout();
+										}
+										async function modifierQuantite(id, qte, delta) {
+											const nv = qte + delta;
+											if (nv <= 0) {
+												const r = prompt("1-Courses, 2-Supprimer", "1");
+												if (r === "1") await monSupabase.from('inventaire2').update({ etat: 'Vide', quantite: 0 }).eq('id', id);
+												else if (r === "2") await monSupabase.from('inventaire2').delete().eq('id', id);
+											} else { await monSupabase.from('inventaire2').update({ quantite: nv, etat: 'Plein' }).eq('id', id); }
+											chargerTout();
+										}
+
+										async function supprimerDefinitif(id) { if(confirm("Supprimer ?")) { await monSupabase.from('inventaire2').delete().eq('id', id); chargerTout(); } }
+
+										async function ajouterManuel() {
+											const n = document.getElementById('add-nom').value;
+											const e = document.getElementById('add-emplacement').value;
+											const q = parseInt(document.getElementById('add-qte').value);
+											if(!n) return;
+											await monSupabase.from('inventaire2').insert([{ nom: n, emplacement: e, quantite: q, etat: 'Plein' }]);
+											document.getElementById('add-nom').value = ""; chargerTout();
+										}
+
+										// --- FONCTIONS GRIMOIRE (VERSION UNIQUE ET NETTOYÉE) ---
+										function filtrerGrimoire() {
+											const input = document.getElementById('search-grimoire').value.toLowerCase();
+											const zone = document.getElementById('grimoire-zone');
+											// On récupère les blocs de recettes (ce sont les divs directes dans grimoire-zone)
+											const items = zone.children;
+											
+											for (let i = 0; i < items.length; i++) {
+												const titre = items[i].getElementsByTagName('b')[0];
+												if (titre) {
+													const txt = titre.textContent || titre.innerText;
+													// Si le titre contient le texte tapé, on affiche, sinon on cache
+													items[i].style.display = txt.toLowerCase().indexOf(input) > -1 ? "" : "none";
+												}
+											}
+										}
+
+										async function chargerGrimoire() {
+											const { data, error } = await monSupabase.from('recettes_sauvees').select('*').order('created_at', {ascending: false});
+											const g = document.getElementById('grimoire-zone');
+											
+											if (error) return console.error("Erreur Grimoire:", error);
+
+											if(data) {
+												g.innerHTML = data.map(r => `
+													<div style="background: white; padding: 15px; border-radius: 10px; margin-bottom: 10px; border: 1px solid #ddd; position: relative;">
+														<button onclick="supprimerRecette(${r.id})" 
+																style="position: absolute; top: 10px; right: 10px; background: #ea4335; color: white; border: none; border-radius: 5px; cursor: pointer; padding: 5px 10px; font-weight: bold; font-size: 11px;">
+															🗑️
+														</button>
+														<div style="padding-right: 40px;">
+															<b style="color:var(--chef); display: block; margin-bottom: 5px;">${r.titre}</b>
+															<p style="font-size: 12px; margin: 0; white-space: pre-wrap; color: #555;">${r.contenu}</p>
+														</div>
+													</div>`).join('');
+											}
+										}
+
+										// N'oublie pas sa petite soeur pour que le bouton fonctionne
+										async function supprimerRecette(id) {
+											if(confirm("Supprimer cette recette ?")) {
+												await monSupabase.from('recettes_sauvees').delete().eq('id', id);
+												chargerGrimoire();
+											}
+										}
+
+										async function viderTouteLaListe() {
+											if (confirm("Voulez-vous vraiment vider toute votre liste de courses ?")) {
+												const { error } = await monSupabase
+													.from('inventaire2')
+													.delete()
+													.eq('etat', 'Vide');
+
+												if (error) {
+													console.error("Erreur lors du vidage :", error);
+													alert("Erreur lors de la suppression.");
+												} else {
+													chargerTout(); // On rafraîchit l'affichage
+												}
+											}
+										}
+
+										function copierNom(nom, btn) {
+											// 1. On copie le texte dans le presse-papier
+											navigator.clipboard.writeText(nom).then(() => {
+												// 2. Petit effet visuel pour confirmer la copie
+												const texteOriginal = btn.innerText;
+												btn.innerText = "✅ Copié !";
+												btn.style.background = "#48bb78"; // Devient vert
+												btn.style.color = "white";
+												
+												// 3. On remet le bouton à la normale après 1.5 seconde
+												setTimeout(() => {
+													btn.innerText = texteOriginal;
+													btn.style.background = "#4a5568"; // Gris foncé
+												}, 1500);
+											}).catch(err => {
+												console.error("Erreur de copie : ", err);
+												alert("Impossible de copier le texte.");
+											});
+										}
+										async function ajouterAuMur() {
+											const input = document.getElementById('nouvelArticleFamille');
+											const nom = input.value.trim();
+
+											if (nom === "") return; // On n'ajoute pas de vide
+
+											// On envoie à Supabase
+											const { error } = await monSupabase
+												.from('inventaire2')
+												.insert([{ 
+													nom: nom, 
+													etat: 'Vide', 
+													emplacement: 'PLACARD', // Par défaut
+													quantite: 1 
+												}]);
+
+											if (error) {
+												console.error("Erreur ajout famille:", error);
+												alert("Zut, ça n'a pas marché !");
+											} else {
+												input.value = ""; // On vide le champ
+												chargerTout();    // On rafraîchit la liste pour voir l'article
+											}
+										}
+
+										// Optionnel : Permettre d'ajouter en appuyant sur "Entrée"
+										document.getElementById('nouvelArticleFamille')?.addEventListener('keypress', function (e) {
+											if (e.key === 'Enter') {
+												ajouterAuMur();
+											}
+										});
+
+										async function ajouterTup() {
+											const input = document.getElementById('nomTup');
+											const nomBase = input.value.trim();
+											if (nomBase === "") return;
+
+											// On stocke la date ISO pour pouvoir faire des calculs après (ex: 2026-02-24)
+											const dateAujourdhui = new Date().toISOString().split('T')[0];
+											
+											const { error } = await monSupabase
+												.from('inventaire2')
+												.insert([{ 
+													nom: nomBase, 
+													etat: 'Tup', // On utilise un état spécial "Tup"
+													emplacement: dateAujourdhui, // On détourne 'emplacement' pour stocker la date brute
+													quantite: 1 
+												}]);
+
+											if (!error) {
+												input.value = "";
+												chargerTout();
+											}
+										}
+										// ==========================================================
+// 5. FONCTIONS DU PLANNING DE LA SEMAINE
+// ==========================================================
+const joursDeLaSemaine = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+
+async function chargerPlanning() {
+    const grid = document.getElementById('planning-grid');
+    if (!grid) return;
+
+    // 1. On récupère le planning depuis Supabase
+    const { data, error } = await monSupabase.from('planning').select('*');
+    if (error) { console.error("Erreur planning :", error); return; }
+
+    // 2. On construit l'affichage jour par jour
+    let html = '';
+    joursDeLaSemaine.forEach(jour => {
+        html += `
+        <div style="background: white; padding: 10px; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+            <h3 style="margin: 0 0 10px 0; font-size: 16px; color: #4a5568; text-align: center;">${jour}</h3>
+            <div style="display: flex; gap: 10px;">
+                ${genererCasePlanning(data, jour, 'Midi')}
+                ${genererCasePlanning(data, jour, 'Soir')}
+            </div>
+        </div>`;
     });
-    const shopList = document.getElementById('shoppingList');
-    if(shopList) shopList.innerHTML = "";
+    grid.innerHTML = html;
+}
 
-    // 4. On boucle sur chaque article
-    items.forEach(item => {
-        if (item.etat === 'Vide') {
-            // --- SECTION LISTE DE COURSES ---
-            if(shopList) {
-                shopList.innerHTML += `
-                    <div class="item" style="background: #fff5f5; border-radius: 8px; margin-bottom: 5px; padding: 10px; display: flex; justify-content: space-between; align-items: center;">
-                        <span style="color: var(--danger); font-weight: bold;">🛒 ${item.nom}</span>
-                        <div style="display: flex; gap: 5px;">
-                            <button onclick="modifierQuantite(${item.id}, 0, 1)" style="background: var(--mur); color: white; border: none; border-radius: 5px; padding: 5px 10px; cursor: pointer; font-size: 11px;">✅ ACHETÉ</button>
-                            <button onclick="supprimerDefinitif(${item.id})" style="background: white; border: 1px solid var(--danger); color: var(--danger); border-radius: 5px; padding: 5px 10px; cursor: pointer; font-size: 11px;">🗑️ SUPPRIMER</button>
-                        </div>
-                    </div>`;
-            }
-        } else {
-            // --- SECTION STOCK NORMAL ---
-            const container = document.getElementById(mapping[item.emplacement] || 'list-Placard');
-            if(container) {
-                 container.innerHTML += `
-                    <div class="item">
-                        <span><b>${item.nom}</b></span>
-                        <div>
-                            <button class="qte-btn" onclick="modifierQuantite(${item.id},${item.quantite},-1)">-</button> 
-                            <b style="display:inline-block; width:20px; text-align:center;">${item.quantite}</b> 
-                            <button class="qte-btn" onclick="modifierQuantite(${item.id},${item.quantite},1)">+</button>
-                        </div>
-                    </div>`;
-            }
+function genererCasePlanning(dataPlanning, jour, moment) {
+    // On cherche si un repas est déjà enregistré pour ce jour/moment
+    const repas = dataPlanning.find(r => r.jour === jour && r.moment === moment);
+    
+    const nomPlat = repas ? repas.plat : "+ Ajouter";
+    const bgCouleur = repas ? "#e6fffa" : "#f7fafc"; // Vert pastel si rempli, gris clair si vide
+    const texteCouleur = repas ? "#285e61" : "#a0aec0";
+
+    return `
+    <div onclick="modifierPlanning('${jour}', '${moment}', '${repas ? repas.id : ''}')" 
+         style="flex: 1; background: ${bgCouleur}; padding: 15px 5px; border-radius: 8px; text-align: center; cursor: pointer; border: 1px dashed #cbd5e0; transition: 0.2s;">
+        <b style="font-size: 12px; color: #718096; text-transform: uppercase;">${moment}</b><br>
+        <span style="font-size: 14px; font-weight: bold; color: ${texteCouleur}; display: block; margin-top: 5px;">${nomPlat}</span>
+    </div>`;
+}
+
+async function modifierPlanning(jour, moment, idExistant) {
+    // On demande à l'utilisateur ce qu'il veut manger
+    const nouveauPlat = prompt(`Que veux-tu manger ${jour} ${moment} ?\n(Laisse vide pour effacer le repas)`);
+    
+    // Si l'utilisateur clique sur "Annuler"
+    if (nouveauPlat === null) return;
+
+    if (nouveauPlat.trim() === "") {
+        // S'il efface le texte, on supprime de la base de données
+        if (idExistant) {
+            await monSupabase.from('planning').delete().eq('id', idExistant);
         }
-    }); // <--- C'était cette fermeture qui manquait pour le forEach
-} // <--- Et celle-là pour la fonction chargerTout
-
-async function modifierQuantite(id, qte, delta) {
-    const nv = qte + delta;
-    if (nv <= 0) {
-        const rep = prompt("1-Courses, 2-Supprimer, 3-Annuler", "1");
-        if (rep === "1") await monSupabase.from('inventaire2').update({ etat: 'Vide', quantite: 0 }).eq('id', id);
-        else if (rep === "2") await monSupabase.from('inventaire2').delete().eq('id', id);
     } else {
-        await monSupabase.from('inventaire2').update({ quantite: nv }).eq('id', id);
+        // Sinon, on met à jour ou on insère
+        if (idExistant) {
+            await monSupabase.from('planning').update({ plat: nouveauPlat }).eq('id', idExistant);
+        } else {
+            await monSupabase.from('planning').insert([{ jour: jour, moment: moment, plat: nouveauPlat }]);
+        }
     }
-    chargerTout();
+    
+    // On rafraîchit l'affichage !
+    chargerPlanning();
 }
+										function faireParlerIA(message) {
+						// 1. ON NETTOIE LE TEXTE POUR LA VOIX
+						// On enlève les étoiles (*), les dièses (#) et les tirets de liste
+						const textePropre = message.replace(/[*#]/g, '').replace(/-/g, ' ');
 
-async function supprimerDefinitif(id) {
-    if(confirm("Voulez-vous retirer cet article de la liste de courses ?")) {
-        await monSupabase.from('inventaire2').delete().eq('id', id);
-        chargerTout();
-    }
-}
+						const synthese = window.speechSynthesis;
+						// On donne le texte PROPRE à l'énoncé
+						const énoncé = new SpeechSynthesisUtterance(textePropre);
+						énoncé.lang = 'fr-FR';
+						
+						énoncé.onend = function() {
+							console.log("L'IA a fini de parler. Relance du micro...");
+							if (window.attenteChoixRecette || window.attenteChoixProduit || window.attenteReponseIA) {
+								try {
+									recognition.start(); 
+								} catch(e) {
+									console.log("Le micro est déjà actif.");
+								}
+							}
+						};
 
-async function posterMessage() {
-    const m = document.getElementById('nouveau-message').value;
-    if(!m) return;
-    await monSupabase.from('mur_famille').insert([{ message: m, auteur: 'Laurent' }]);
-    await monSupabase.from('inventaire2').insert([{ nom: m, etat: 'Vide', quantite: 0, emplacement: 'PLACARD' }]);
-    document.getElementById('nouveau-message').value = ""; chargerMur(); chargerTout();
-}
+						synthese.speak(énoncé);
+					}
+										async function supprimerProduitVocal(nomRecherche) {
+											const { data: produits } = await monSupabase
+												.from('inventaire2')
+												.select('*')
+												.ilike('nom', `%${nomRecherche}%`);
 
-async function chargerMur() {
-    const { data } = await monSupabase.from('mur_famille').select('*').order('created_at', { ascending: false }).limit(3);
-    if(data) document.getElementById('mur-messages').innerHTML = data.map(d => `<div style="background:#e8f5e9; padding:8px; border-radius:8px; margin-bottom:5px; font-size:13px;"><b>${d.auteur}:</b> ${d.message}</div>`).join('');
-}
-</script>
-</body>
-</html>
+											if (!produits || produits.length === 0) {
+												faireParlerIA("Désolé, je n'ai pas trouvé de " + nomRecherche);
+												window.attenteReponseIA = false;
+												return;
+											}
+
+											// CAS 1 : On en trouve un seul
+											if (produits.length === 1) {
+												const p = produits[0];
+												await executerLogiqueSuppression(p);
+											} 
+											// CAS 2 : On en trouve plusieurs
+											else {
+												window.produitsPossibles = produits;
+												window.attenteChoixProduit = true; 
+												let noms = produits.map(x => x.nom).join(" ou ");
+												faireParlerIA("J'ai trouvé plusieurs produits : " + noms + ". Lequel veux-tu retirer ?");
+											}
+										} // <--- FIN DE LA FONCTION
+
+										function gererReponseOuiNon(phrase) {
+											if (phrase.includes("oui") || phrase.includes("vas-y") || phrase.includes("ajoute")) {
+												const p = window.dernierProduitSupprime;
+												if (p) {
+													// On le marque comme 'Vide' pour qu'il apparaisse dans les courses
+													monSupabase.from('inventaire2').update({ etat: 'Vide' }).eq('id', p.id)
+														.then(() => {
+															faireParlerIA("C'est noté, je l'ai ajouté aux courses.");
+															if (typeof chargerTout === 'function') chargerTout();
+														});
+												}
+											} else {
+												faireParlerIA("Entendu, je ne l'ajoute pas.");
+											}
+											window.attenteReponseIA = false;
+											window.dernierProduitSupprime = null;
+										}
+										async function executerLogiqueSuppression(p) {
+											if (p.quantite > 1) {
+												// Il en reste d'autres
+												const nouvelleQte = p.quantite - 1;
+												await monSupabase.from('inventaire2').update({ quantite: nouvelleQte }).eq('id', p.id);
+												if (typeof chargerTout === 'function') await chargerTout();
+												
+												window.attenteReponseIA = false;
+												faireParlerIA("C'est fait, il reste désormais " + nouvelleQte + " " + p.nom);
+											} else {
+												// CAS N°1 : C'était le dernier
+												window.dernierProduitSupprime = p;
+												window.attenteReponseIA = true; // On active le "Oui/Non"
+												
+												// On ne supprime pas encore, on attend le "Oui" pour basculer
+												faireParlerIA("C'était le dernier " + p.nom + ". Veux-tu que je le rajoute à ta liste de courses ?");
+											}
+										}		
+										</script>
+										</body>
+										</html>
