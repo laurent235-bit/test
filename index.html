@@ -123,7 +123,7 @@
     </div>
 </div>
 											<div style="display:none">
-												<input id="gKey" value="AIzaSyD-Ax8ShZg1rE25p76W5Dld3kY21H5fnoU">
+												<input id="gKey" value="AIzaSyCOl9-4btBC7h8R42vNsBXXeq8rtVdCkPs">
 												<input id="sUrl" value="https://ylguhodjcgistealluzy.supabase.co">
 												<input id="sKey" value="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsZ3Vob2RqY2dpc3RlYWxsdXp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA2MjcxMDAsImV4cCI6MjA4NjIwMzEwMH0.0czapM1DeFs7T3pTrExUMUKUcyUHi3w-p_jKj6XkTUM">
 											</div>
@@ -176,7 +176,7 @@
 								// ==========================================================
 								async function appelGemini(payload) {
 									const gKey = document.getElementById('gKey').value;
-									const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_25}:generateContent?key=${gKey}`;
+									const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${gKey}`;
 									const resp = await fetch(url, { 
 										method: 'POST', 
 										headers: {'Content-Type': 'application/json'}, 
@@ -932,4 +932,5 @@ async function modifierPlanning(jour, moment, idExistant) {
 										}		
 										</script>
 										</body>
+
 										</html>
