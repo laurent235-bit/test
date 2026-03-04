@@ -186,47 +186,44 @@
 									if (!d.candidates) throw new Error("Réponse vide de l'IA");
 									return d.candidates[0].content.parts[0].text;
 								}
-// 3. CONFIGURATION DU BLOC VOCAL (CORRIGÉ & COMPLET)
+	// ==========================================================
+			// 3. CONFIGURATION DU BLOC VOCAL (RÉPARÉ ET SPÉCIAL MOBILE)
 // ==========================================================
 if (recognition) {
     recognition.lang = 'fr-FR';
-    recognition.continuous = false; 
-    recognition.interimResults = false; // Empêche les faux départs
+    
+    // --- LES 2 LIGNES MAGIQUES POUR LE TÉLÉPHONE ---
+    recognition.continuous = false;
+    recognition.interimResults = false;
 
     recognition.onresult = async (e) => { 
-        // 1. On coupe le micro tout de suite (Fix Mobile)
+        // --- ON COUPE LE MICRO IMMÉDIATEMENT ---
         recognition.stop(); 
 
         const phrase = e.results[0][0].transcript.toLowerCase();
+        const statut = document.getElementById('statut-vocal') || document.getElementById('status');
         
-        // 2. On affiche ce qu'on a entendu (Feedback visuel)
-        // Attention : vérifie que l'ID dans ton HTML est bien 'status' ou 'statut-vocal'
-        const zoneStatus = document.getElementById('status') || document.getElementById('statut-vocal');
-        if (zoneStatus) zoneStatus.innerText = "🗣️ J'ai entendu : " + phrase;
+        if (statut) statut.innerText = "💬 J'ai entendu : " + phrase;
         
-        // 3. LA LOGIQUE QUI MANQUAIT : ON AGIT !
+        // --- ON LANCE L'ACTION ---
         if (modeVocalActuel === 'SUPPRESSION') {
-            // Cas 1 : On veut jeter un truc
-            console.log("Mode Suppression activé avec : " + phrase);
-            await traiterSuppressionVocale(phrase); // <--- On appelle la fonction IA
-            
+            await traiterSuppressionVocale(phrase); // ou supprimerProduitVocal selon ton code
         } else if (modeVocalActuel === 'CHEF') {
-            // Cas 2 : On parle au Chef
-            const champEnvie = document.getElementById('envie'); // ou 'chef-prompt' selon ton HTML
+            const champEnvie = document.getElementById('chef-prompt') || document.getElementById('envie');
             if (champEnvie) {
                 champEnvie.value = phrase;
-                alert("👨‍🍳 Chef : OK, j'ai noté '" + phrase + "' pour la recette !");
             }
         }
     };
     
     recognition.onerror = (e) => {
-        console.error("Erreur micro:", e.error);
         if(e.error !== 'no-speech' && e.error !== 'aborted') {
-             alert("Petit souci micro : " + e.error);
+            console.log("Erreur micro : " + e.error);
         }
     };
 }
+// ==========================================================
+
 					// --- 1. SÉCURITÉ STOP ---
 					if (phrase.includes("stop") || phrase.includes("annule")) {
 						window.speechSynthesis.cancel();
