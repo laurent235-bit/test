@@ -123,7 +123,7 @@
     </div>
 </div>
 											<div style="display:none">
-												<input id="gKey" value="AIzaSyCOl9-4btBC7h8R42vNsBXXeq8rtVdCkPs">
+												<input id="gKey" value="AIzaSyCUKUDQEGjnCbqDIkeLvRiyWqt_VGfINf0">
 												<input id="sUrl" value="https://ylguhodjcgistealluzy.supabase.co">
 												<input id="sKey" value="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsZ3Vob2RqY2dpc3RlYWxsdXp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA2MjcxMDAsImV4cCI6MjA4NjIwMzEwMH0.0czapM1DeFs7T3pTrExUMUKUcyUHi3w-p_jKj6XkTUM">
 											</div>
@@ -176,7 +176,7 @@
 								// ==========================================================
 								async function appelGemini(payload) {
 									const gKey = document.getElementById('gKey').value;
-									const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${gKey}`;
+									const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_25}:generateContent?key=${gKey}`;
 									const resp = await fetch(url, { 
 										method: 'POST', 
 										headers: {'Content-Type': 'application/json'}, 
@@ -427,50 +427,79 @@
 											} catch(e) { document.getElementById('statut-scan').innerText = "❌ Format invalide."; }
 										}
 
-										// CHEF
-										async function demanderAuChef() {
-											const pU = document.getElementById('chef-prompt').value;
-											const z = document.getElementById('recette-zone');
-											if(!pU) return;
-											
-											z.innerHTML = "<p style='grid-column:1/3; text-align:center;'>👨‍🍳 Chef Gemini 2.5 examine votre stock...</p>";
-											
-											const { data: stock } = await monSupabase.from('inventaire2').select('nom').neq('etat', 'Vide');
-											const ing = stock.map(s => s.nom).join(', ');
+										// CHEF (VERSION CORRIGÉE & STABLE)
+async function demanderAuChef() {
+    const pU = document.getElementById('chef-prompt').value;
+    const z = document.getElementById('recette-zone');
+    const gKey = document.getElementById('gKey').value.trim(); // .trim() pour éviter les espaces invisibles
+    
+    if(!pU) return;
+    
+    z.innerHTML = "<p style='grid-column:1/3; text-align:center;'>👨‍🍳 Chef Gemini 1.5 examine votre stock...</p>";
+    
+    // 1. Récupération du stock depuis Supabase
+    const { data: stock } = await monSupabase.from('inventaire2').select('nom').neq('etat', 'Vide');
+    
+    // Petite sécurité si la base est vide ou inaccessible
+    const ing = stock ? stock.map(s => s.nom).join(', ') : "Rien de spécial";
 
-											try {
-												const promptExpert = `
-												Tu es un Chef cuisinier expert et pragmatique.
-												DEMANDE UTILISATEUR : "${pU}"
-												STOCK DISPONIBLE : ${ing}
+    try {
+        const promptExpert = `
+        Tu es un Chef cuisinier expert et pragmatique.
+        DEMANDE UTILISATEUR : "${pU}"
+        STOCK DISPONIBLE : ${ing}
 
-												CONSIGNES STRICTES :
-												1. Ne propose que des plats réalisables AVEC le stock.
-												2. Si l'utilisateur demande un plat précis (ex: "des frites"), respecte la technique (friture) et n'invente pas un substitut (ex: purée) sauf si l'ingrédient principal manque.
-												3. Sois bref et précis.
-												
-												RÉPONDS UNIQUEMENT AU FORMAT JSON : 
-												[{"titre":"Nom du plat", "contenu":"Recette courte en 3 étapes"}]`;
+        CONSIGNES STRICTES :
+        1. Ne propose que des plats réalisables AVEC le stock.
+        2. Si l'utilisateur demande un plat précis (ex: "des frites"), respecte la technique.
+        3. Sois bref et précis.
+        
+        RÉPONDS UNIQUEMENT AU FORMAT JSON STRICT (tableau d'objets) : 
+        [{"titre":"Nom du plat", "contenu":"Recette courte en 3 étapes"}]`;
 
-												const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL_25}:generateContent?key=${document.getElementById('gKey').value}`, {
-													method: 'POST',
-													body: JSON.stringify({ contents: [{ parts: [{ text: promptExpert }] }] })
-												});
-												
-												const d = await resp.json();
-												const t = d.candidates[0].content.parts[0].text;
-												recettesTemporaires = JSON.parse(t.substring(t.indexOf('['), t.lastIndexOf(']') + 1));
-												
-												z.innerHTML = recettesTemporaires.map((r, i) => `
-													<div style="background:white; padding:12px; border-radius:12px; border:1px solid #ddd; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-														<b style="color:var(--chef); font-size:14px;">${r.titre}</b>
-														<p style="font-size:12px; margin:10px 0; color:#555;">${r.contenu}</p>
-														<button onclick="sauverRecetteDirect(${i})" style="width:100%; background:var(--mur); color:white; border:none; padding:8px; border-radius:8px; cursor:pointer; font-weight:bold;">💾 SAUVER</button>
-													</div>`).join('');
-											} catch(e) { 
-												z.innerHTML = "<p>❌ Le Chef a eu un petit souci de réflexion. Réessayez.</p>"; 
-											}
-										}
+        // 2. Appel API (Correction syntaxe : suppression du ; en trop)
+const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL_25}:generateContent?key=${gKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' }, // <--- INDISPENSABLE !
+    body: JSON.stringify({ contents: [{ parts: [{ text: promptExpert }] }] })
+});
+
+if (!resp.ok) {
+    const err = await resp.json();
+    throw new Error(`Erreur API Google (${resp.status}): ${err.error?.message || 'Inconnue'}`);
+}
+
+const d = await resp.json();
+        
+        // 3. Extraction et Nettoyage du JSON
+        if (!d.candidates || !d.candidates[0].content) throw new Error("Réponse vide du Chef");
+        
+        let t = d.candidates[0].content.parts[0].text;
+        
+        // On nettoie les balises Markdown éventuelles (```json ... ```)
+        t = t.replace(/```json/g, '').replace(/```/g, '').trim();
+        
+        // On cherche le début [ et la fin ] pour être sûr d'avoir le tableau
+        const jsonStart = t.indexOf('[');
+        const jsonEnd = t.lastIndexOf(']');
+        
+        if (jsonStart === -1 || jsonEnd === -1) throw new Error("Le format JSON reçu est invalide.");
+        
+        recettesTemporaires = JSON.parse(t.substring(jsonStart, jsonEnd + 1));
+        
+        // 4. Affichage
+        z.innerHTML = recettesTemporaires.map((r, i) => `
+            <div style="background:white; padding:12px; border-radius:12px; border:1px solid #ddd; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom:10px;">
+                <b style="color:var(--chef); font-size:14px;">${r.titre}</b>
+                <p style="font-size:12px; margin:10px 0; color:#555;">${r.contenu}</p>
+                <button onclick="sauverRecetteDirect(${i})" style="width:100%; background:var(--mur); color:white; border:none; padding:8px; border-radius:8px; cursor:pointer; font-weight:bold;">💾 SAUVER</button>
+            </div>`).join('');
+
+    } catch(e) { 
+        console.error(e);
+        z.innerHTML = `<p style="color:red; text-align:center;">❌ Oups : ${e.message}</p>`; 
+    }
+}
 
 										async function sauverRecetteDirect(i) {
     const r = recettesTemporaires[i];
@@ -932,5 +961,4 @@ async function modifierPlanning(jour, moment, idExistant) {
 										}		
 										</script>
 										</body>
-
 										</html>
