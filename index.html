@@ -187,17 +187,28 @@
 									return d.candidates[0].content.parts[0].text;
 								}
 	// ==========================================================
-			// 3. CONFIGURATION DU BLOC VOCAL
-			// ==========================================================
-			if (recognition) {
-				recognition.lang = 'fr-FR';
-				recognition.continuous = false;
+			/// 3. CONFIGURATION DU BLOC VOCAL (MODIFIÉ POUR MOBILE)
+// ==========================================================
+if (recognition) {
+    recognition.lang = 'fr-FR';
+    recognition.continuous = false; 
+    // Ajoute ça pour être sûr qu'il ne cherche pas à deviner les mots en cours de route
+    recognition.interimResults = false; 
 
-				recognition.onresult = async (e) => { 
-					const phrase = e.results[0][0].transcript.toLowerCase();
-					const statut = document.getElementById('statut-vocal');
-					if (statut) statut.innerText = "💬 J'ai entendu : " + phrase;
+    recognition.onresult = async (e) => { 
+        // 🔴 LA LIGNE MAGIQUE EST ICI :
+        recognition.stop(); // <--- Force le téléphone à arrêter d'écouter tout de suite !
 
+        const phrase = e.results[0][0].transcript.toLowerCase();
+        const statut = document.getElementById('statut-vocal');
+        
+        if (statut) statut.innerText = "💬 Analyse en cours : " + phrase;
+        
+        // ... La suite de ton code (appel Gemini, etc.) ...
+    };
+    
+    // ...
+}
 					// --- 1. SÉCURITÉ STOP ---
 					if (phrase.includes("stop") || phrase.includes("annule")) {
 						window.speechSynthesis.cancel();
