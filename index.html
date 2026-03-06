@@ -122,41 +122,94 @@
             </div>
     </div>
 </div>
-											<div style="display:none">
-												<input id="gKey" value="AIzaSyD2FqNTzyHHiBTQcb_GD1WskzLOc_ypMu8">
-												<input id="sUrl" value="https://ylguhodjcgistealluzy.supabase.co">
-												<input id="sKey" value="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsZ3Vob2RqY2dpc3RlYWxsdXp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA2MjcxMDAsImV4cCI6MjA4NjIwMzEwMH0.0czapM1DeFs7T3pTrExUMUKUcyUHi3w-p_jKj6XkTUM">
-											</div>
+											<div id="section-config" style="background: white; padding: 15px; border-radius: 12px; margin-bottom: 15px; border: 2px solid #ea4335;">
+    <label style="display:block; font-size:12px; font-weight:bold; margin-bottom:5px; color:#ea4335;">🔑 CLÉ GEMINI (MÉMOIRE LOCALE)</label>
+    <div style="display:flex; gap:8px;">
+        <input id="gKey" type="password" placeholder="AIzaSyB-vQoWduvrQWMYinbBDuWwkG7M3XPUIXA" 
+               style="flex-grow:1; padding:10px; border:1px solid #ddd; border-radius:8px;">
+        
+        <button onclick="sauvegarderCle()" 
+                style="background:#1e8e3e; color:white; border:none; border-radius:8px; padding:0 15px; cursor:pointer; font-weight:bold;">💾</button>
+    </div>
+    <small style="color:gray; font-size:10px;">La clé est sauvée dans ton téléphone, pas sur internet.</small>
 
-								<script>
-										let monSupabase;
-										let recettesTemporaires = [];
-										const MODEL_25 = "gemini-2.5-flash"; 
+    <input id="sUrl" type="hidden" value="https://ylguhodjcgistealluzy.supabase.co">
+    <input id="sKey" type="hidden" value="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsZ3Vob2RqY2dpc3RlYWxsdXp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA2MjcxMDAsImV4cCI6MjA4NjIwMzEwMH0.0czapM1DeFs7T3pTrExUMUKUcyUHi3w-p_jKj6XkTUM">
+</div>
 
-										window.onload = () => {
-											// 1. Initialisation de Supabase
-											monSupabase = window.supabase.createClient(
-												document.getElementById('sUrl').value, 
-												document.getElementById('sKey').value
-											);
+  <script>
+    // --- VARIABLES GLOBALES ---
+    let monSupabase;
+    let recettesTemporaires = [];
+    let modeVocalActuel = ""; 
+    const MODEL_25 = "gemini-2.5-flash"; 
 
-											// 2. Lancement des fonctions de chargement (une seule fois suffit !)
-											chargerTout(); 
-											chargerGrimoire(); 
-											chargerPlanning();
-											setupCollapsibles();
-										};
+    // --- 1. LE CERVEAU AU DÉMARRAGE ---
+    window.onload = () => {
+        try {
+            // A. Récupération de la clé Gemini (LocalStorage)
+            const cleStockee = localStorage.getItem('ma_cle_gemini_secrete');
+            const champGKey = document.getElementById('gKey');
+            if (cleStockee && champGKey) {
+                champGKey.value = cleStockee;
+            }
 
-										function setupCollapsibles() {
-											const coll = document.getElementsByClassName("collapsible");
-											for (let i = 0; i < coll.length; i++) {
-												coll[i].onclick = function() {
-													this.classList.toggle("active");
-													const content = this.nextElementSibling;
-													content.style.maxHeight = content.style.maxHeight ? null : content.scrollHeight + "px";
-												}
-											}
-										}
+            // B. Initialisation de Supabase
+            const elUrl = document.getElementById('sUrl');
+            const elKey = document.getElementById('sKey');
+            if (elUrl && elKey) {
+                monSupabase = window.supabase.createClient(elUrl.value, elKey.value);
+                console.log("✅ Supabase connecté.");
+            }
+
+            // C. Lancement de TOUS tes chargements
+            if (typeof setupVocal === "function") setupVocal();
+            if (typeof chargerTout === "function") chargerTout();
+            if (typeof chargerGrimoire === "function") chargerGrimoire();
+            if (typeof chargerPlanning === "function") chargerPlanning();
+            
+            // D. Initialisation des menus
+            setupCollapsibles();
+
+        } catch (err) {
+            console.error("Erreur au démarrage :", err);
+        }
+    }; // Fin du window.onload
+
+    // --- 2. SAUVEGARDER LA CLÉ (Bouton 💾) ---
+    function sauvegarderCle() {
+        const champ = document.getElementById('gKey');
+        if (champ && champ.value) {
+            localStorage.setItem('ma_cle_gemini_secrete', champ.value);
+            alert("Clé enregistrée !");
+            location.reload(); 
+        } else {
+            alert("Veuillez coller une clé d'abord.");
+        }
+    }
+
+   function setupCollapsibles() {
+    const coll = document.getElementsByClassName("collapsible");
+    for (let i = 0; i < coll.length; i++) {
+        coll[i].onclick = function() {
+            this.classList.toggle("active");
+            const content = this.nextElementSibling;
+            
+            if (content) {
+                // Si le menu est fermé (pas de hauteur ou hauteur 0)
+                if (!content.style.maxHeight || content.style.maxHeight === "0px") {
+                    // On lui donne sa hauteur réelle pour qu'il se déplie
+                    content.style.maxHeight = content.scrollHeight + "px";
+                    content.style.padding = "15px"; 
+                } else {
+                    // On le remet à zéro pour qu'il se replie
+                    content.style.maxHeight = "0px";
+                    content.style.padding = "0 15px";
+                }
+            }
+        };
+    }
+}
 
 								// ==========================================================
 								// 1. INITIALISATION DES VARIABLES
