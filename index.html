@@ -630,46 +630,45 @@ if (phrase.includes("supprime") || phrase.includes("retire") || phrase.includes(
 								}; // Ferme btnChef.onclick
 						
 							
-								async function scannerTicket(input) {
-									const file = input.files[0];
-									if(!file) return;
-									
-									if (file.size > 4 * 1024 * 1024) {
-										alert("Le fichier est trop lourd (max 4Mo).");
-										return;
-									}
+async function scannerTicket(input) {
+    const file = input.files[0];
+    if(!file) return;
+    
+    if (file.size > 4 * 1024 * 1024) {
+        alert("Le fichier est trop lourd (max 4Mo).");
+        return;
+    }
 
-											const statut = document.getElementById('statut-scan');
-											statut.innerText = "⏳ Analyse en cours (PDF/Image)...";
+    const statut = document.getElementById('statut-scan');
+    statut.innerText = "⏳ Analyse en cours (PDF/Image)...";
 
-											const reader = new FileReader();
-											reader.onload = async () => {
-												try {
-													const base64Data = reader.result.split(',')[1];
-													const mimeType = file.type;
+    const reader = new FileReader();
+    reader.onload = async () => {
+        try {
+            const base64Data = reader.result.split(',')[1];
+            const mimeType = file.type;
 
-													const payload = {
-														contents: [{
-															parts: [
-																{ text: "Tu es un expert en ticket de caisse. Extrais les articles. Emplacements: FRIGO, PLACARD, CONGELATEUR, ANIMAUX, HORS_CUISINE. Réponds UNIQUEMENT le JSON: [{\"nom\":\"...\",\"quantite\":1,\"emplacement\":\"...\"}]" },
-																{ inline_data: { mime_type: mimeType, data: base64Data } }
-															]
-														}],
-														generationConfig: {
-															temperature: 0.1, // On baisse la température pour éviter que l'IA ne divague
-														}
-													};
+            const payload = {
+                contents: [{
+                    parts: [
+                        { text: "Tu es un expert en ticket de caisse. Extrais les articles. RÈGLE VITALE : Nettoie les noms pour qu'ils soient naturels et lisibles (supprime les marques, les poids, les pourcentages, les lots et les abréviations). Par exemple, 'CREME LEG.SEMI-EP.18% U 3X20CL' DOIT devenir 'Crème légère semi-épaisse'. Emplacements : FRIGO, PLACARD, CONGELATEUR, ANIMAUX, HORS_CUISINE. Réponds UNIQUEMENT le JSON : [{\"nom\":\"...\",\"quantite\":1,\"emplacement\":\"...\"}]" },
+                        { inline_data: { mime_type: mimeType, data: base64Data } }
+                    ]
+                }],
+                generationConfig: {
+                    temperature: 0.1, // On garde la température basse pour qu'il soit très précis
+                }
+            };
 
-													const text = await appelGemini(payload);
-													traiterRetourGemini(text);
-												} catch(e) {
-													console.error("Détail erreur:", e);
-													statut.innerText = "❌ Le serveur Gemini est saturé (503). Réessayez dans 10 secondes.";
-												}
-											};
-											reader.readAsDataURL(file);
-										}
-
+            const text = await appelGemini(payload);
+            traiterRetourGemini(text);
+        } catch(e) {
+            console.error("Détail erreur:", e);
+            statut.innerText = "❌ Le serveur Gemini est saturé (503). Réessayez dans 10 secondes.";
+        }
+    };
+    reader.readAsDataURL(file);
+}
 										function ouvrirEticket() {
 											const texte = prompt("Collez le ticket :");
 											if(texte) appelGemini({ contents: [{ parts: [{ text: `Ticket: ${texte}. Liste articles, qté, emplacements. JSON STRICT: [{\"nom\":\"...\",\"quantite\":1,\"emplacement\":\"...\"}]` }] }] }).then(traiterRetourGemini).catch(()=>alert("Erreur E-ticket"));
@@ -716,12 +715,16 @@ async function demanderAuChef() {
         RÉPONDS UNIQUEMENT AU FORMAT JSON STRICT (tableau d'objets) : 
         [{"titre":"Nom du plat", "contenu":"Recette courte en 3 étapes"}]`;
 
-        // 2. Appel API (Utilisation de la variable MODEL_25 et ajout des headers)
-const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL_25}:generateContent?key=${gKey}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' }, // <--- INDISPENSABLE !
-    body: JSON.stringify({ contents: [{ parts: [{ text: promptExpert }] }] })
-});
+       // 2. Appel au Relais Cloudflare (Le Coffre-fort !)
+  // ⚠️ TRÈS IMPORTANT : Remplace l'adresse ci-dessous par TON vrai lien Cloudflare
+  const urlRelais = "https://gemini-relais.laurent235.workers.dev"; 
+
+  const resp = await fetch(urlRelais, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }, 
+      // On envoie juste la question au relais, il s'occupe du reste !
+      body: JSON.stringify({ prompt: promptExpert }) 
+  });
 
 if (!resp.ok) {
     const err = await resp.json();
