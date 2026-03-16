@@ -148,10 +148,6 @@
         <input id="gKey" type="password" placeholder="xxxxxxxxxxxxxxxxx" 
                style="flex-grow:1; padding:10px; border:1px solid #ddd; border-radius:8px;">
         
-        <button onclick="sauvegarderCle()" 
-                style="background:#1e8e3e; color:white; border:none; border-radius:8px; padding:0 15px; cursor:pointer; font-weight:bold;">💾</button>
-    </div>
-    <small style="color:gray; font-size:10px;">La clé est sauvée dans ton téléphone, pas sur internet.</small>
 
     <input id="sUrl" type="hidden" value="https://ylguhodjcgistealluzy.supabase.co">
     <input id="sKey" type="hidden" value="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsZ3Vob2RqY2dpc3RlYWxsdXp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA2MjcxMDAsImV4cCI6MjA4NjIwMzEwMH0.0czapM1DeFs7T3pTrExUMUKUcyUHi3w-p_jKj6XkTUM">
@@ -196,17 +192,6 @@
         }
     }; // Fin du window.onload
 
-    // --- 2. SAUVEGARDER LA CLÉ (Bouton 💾) ---
-    function sauvegarderCle() {
-        const champ = document.getElementById('gKey');
-        if (champ && champ.value) {
-            localStorage.setItem('ma_cle_gemini_secrete', champ.value);
-            alert("Clé enregistrée !");
-            location.reload(); 
-        } else {
-            alert("Veuillez coller une clé d'abord.");
-        }
-    }
 
    function setupCollapsibles() {
     const coll = document.getElementsByClassName("collapsible");
@@ -245,50 +230,39 @@
 								let recognition = (SpeechRecognition) ? new SpeechRecognition() : null;
 
 								// ==========================================================
-// 2. FONCTION APPEL GEMINI - VERSION MODÈLE 2.5
-// ==========================================================
-async function appelGemini(payload) {
-    const gKey = document.getElementById('gKey').value;
-    
-    // On utilise bien ta variable MODEL_25 qui contient "gemini-2.5-flash"
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_25}:generateContent?key=${gKey}`;
-    
-    // On ajoute des paramètres de sécurité pour éviter que le modèle 2.5 ne bloque la réponse
-    const payloadAvecSecurite = {
-        ...payload,
-        safetySettings: [
-            { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
-            { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
-            { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
-            { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
-        ]
-    };
+async function appelGemini(promptExpert) {
+    const urlRelais = "https://gemini-relais.laurent235.workers.dev"; 
 
-    const resp = await fetch(url, { 
-        method: 'POST', 
-        headers: {'Content-Type': 'application/json'}, 
-        body: JSON.stringify(payloadAvecSecurite) 
-    });
+    try {
+        const resp = await fetch(urlRelais, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: promptExpert }) 
+        });
 
-    const d = await resp.json();
+        const data = await resp.json();
 
-    // 1. On vérifie s'il y a une erreur renvoyée par Google
-    if (d.error) {
-        throw new Error(`Erreur Google 2.5: ${d.error.message}`);
+        // 1. Vérification si le relais ou Google renvoie une erreur
+        if (data.error) {
+            throw new Error(data.error.message || "Erreur inconnue");
+        }
+
+        // 2. Vérification du contenu
+        if (data.candidates && data.candidates.length > 0) {
+            // Si le contenu a été bloqué par sécurité
+            if (data.candidates[0].finishReason === "SAFETY") {
+                return "Désolé, la réponse a été bloquée pour des raisons de sécurité.";
+            }
+            // Sinon, on renvoie le texte
+            return data.candidates[0].content.parts[0].text;
+        } else {
+            return "Le Chef est un peu perdu, il n'a pas trouvé de réponse.";
+        }
+
+    } catch (erreur) {
+        console.error("Erreur détaillée :", erreur);
+        return "Problème de connexion au relais Cloudflare.";
     }
-
-    // 2. On vérifie si la réponse contient bien un candidat
-    if (!d.candidates || d.candidates.length === 0) {
-        console.error("Réponse vide reçue du modèle 2.5 :", d);
-        throw new Error("Le modèle 2.5 a renvoyé une réponse vide (vérifie tes quotas ou ta clé).");
-    }
-
-    // 3. On vérifie si le contenu a été bloqué (safety feedback)
-    if (d.candidates[0].finishReason === "SAFETY") {
-        throw new Error("Le modèle 2.5 a bloqué la réponse pour des raisons de sécurité.");
-    }
-
-    return d.candidates[0].content.parts[0].text;
 }
 	// ==========================================================
 			// 3. CONFIGURATION DU BLOC VOCAL
