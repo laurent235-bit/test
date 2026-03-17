@@ -350,7 +350,59 @@ async function appelGemini(promptExpert) {
         } catch (err) { console.error("Erreur Chef :", err); }
         return;
     }
+// --- 4. CHOIX PRÉCIS PRODUIT (Affinement si doublon) ---
+if (window.attenteChoixProduit) {
+    try {
+        // On prépare le prompt avec tes consignes d'origine
+        const promptAffinement = `L'utilisateur a dit : "${phrase}". Parmi cette liste : ${JSON.stringify(window.produitsPossibles)}, lequel est le bon ? Réponds uniquement l'ID numérique.`;
+        
+        // CORRECTION : On envoie juste le prompt (texte simple)
+        const textID = await appelGemini(promptAffinement);
+        
+        // On nettoie la réponse pour n'avoir que le chiffre
+        const idTrouve = parseInt(textID.trim().replace(/[^0-9]/g, ''));
+        
+        if (idTrouve > 0) {
+            const p = window.produitsPossibles.find(x => x.id === idTrouve);
+            if (p) {
+                window.attenteChoixProduit = false;
+                // On appelle ta fonction de suppression
+                await executerLogiqueSuppression(p); 
+            }
+        }
+    } catch (err) { 
+        console.error("Erreur affinement produit :", err); 
+    }
+    return; // On arrête là pour ne pas déclencher d'autres fonctions
+}
 
+// --- 5. OUI/NON COURSES (Confirmation finale) ---
+if (window.attenteReponseIA) {
+    // Pas besoin d'IA ici, c'est une détection directe dans la phrase
+    if (phrase.includes("oui") || phrase.includes("ajoute") || phrase.includes("vas-y") || phrase.includes("d'accord")) {
+        const p = window.dernierProduitSupprime;
+        if (p) {
+            try {
+                // Mise à jour Supabase
+                await monSupabase.from('inventaire2')
+                    .update({ etat: 'Vide', quantite: 0 })
+                    .eq('id', p.id);
+                
+                faireParlerIA("C'est fait, je l'ai ajouté à ta liste de courses.");
+                
+                // Rafraîchissement de l'affichage si la fonction existe
+                if (typeof chargerTout === 'function') await chargerTout();
+            } catch (err) {
+                console.error("Erreur Supabase courses :", err);
+            }
+        }
+    } else {
+        faireParlerIA("D'accord, je ne l'ajoute pas.");
+    }
+    // On referme le mode attente
+    window.attenteReponseIA = false;
+    return;
+}
     // --- 4. AJOUT D'UN RESTE AU FRIGO ---
     if (phrase.includes("frigo") && (phrase.includes("mis") || phrase.includes("ajoute") || phrase.includes("rangé"))) {
         try {
