@@ -228,29 +228,34 @@ window.onload = () => {
 								let recognition = (SpeechRecognition) ? new SpeechRecognition() : null;
 
 								// ==========================================================
-async function appelGemini(promptExpert) {
-    const urlRelais = "https://gemini-relais.laurent235.workers.dev"; 
+async function appelGemini(message) {
+    const urlRelais = "https://gemini-relais.laurent235.workers.dev";
+    
+    // On prépare le corps de la requête
+    let corps;
+    if (typeof message === 'string') {
+        // C'est du vocal (texte pur)
+        corps = JSON.stringify({ prompt: message });
+    } else {
+        // C'est le ticket de caisse (objet avec prompt + image)
+        corps = JSON.stringify(message);
+    }
 
-    try {
-        const resp = await fetch(urlRelais, {
-            method: 'POST', // <--- C'EST CETTE LIGNE QUI CHANGE TOUT
-            headers: { 
-                'Content-Type': 'application/json' 
-            },
-            body: JSON.stringify({ prompt: promptExpert }) // On emballe le texte ici
-        });
+    const resp = await fetch(urlRelais, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: corps
+    });
 
-        const data = await resp.json();
+    const data = await resp.json();
+    
+    if (data.error) {
+        throw new Error(data.error.message || "Erreur Gemini");
+    }
 
-        // 🕵️ Le moment de vérité pour ta version 2.5
-        if (data.error) {
-            console.error("Erreur Gemini:", data.error.message);
-            // Si le log Cloudflare affiche une erreur 404 ici, 
-            // c'est que la version 2.5 n'est pas acceptée par l'API.
-            return "Erreur du modèle : " + data.error.message;
-        }
-
-        return data.candidates[0].content.parts[0].text;
+    // Extraction de la réponse texte
+    return data.candidates[0].content.parts[0].text;
+}
 
     } catch (erreur) {
         console.error("Erreur fetch:", erreur);
@@ -500,31 +505,29 @@ async function scannerTicket(input) {
     }
 
     const statut = document.getElementById('statut-scan');
-    statut.innerText = "⏳ Analyse en cours (PDF/Image)...";
+    if (statut) statut.innerText = "⏳ Analyse en cours (PDF/Image)...";
 
     const reader = new FileReader();
     reader.onload = async () => {
         try {
+            // 1. On récupère juste la partie brute du base64
             const base64Data = reader.result.split(',')[1];
-            const mimeType = file.type;
 
-            const payload = {
-                contents: [{
-                    parts: [
-                        { text: "Tu es un expert en ticket de caisse. Extrais les articles. RÈGLE VITALE : Nettoie les noms pour qu'ils soient naturels et lisibles (supprime les marques, les poids, les pourcentages, les lots et les abréviations). Par exemple, 'CREME LEG.SEMI-EP.18% U 3X20CL' DOIT devenir 'Crème légère semi-épaisse'. Emplacements : FRIGO, PLACARD, CONGELATEUR, ANIMAUX, HORS_CUISINE. Réponds UNIQUEMENT le JSON : [{\"nom\":\"...\",\"quantite\":1,\"emplacement\":\"...\"}]" },
-                        { inline_data: { mime_type: mimeType, data: base64Data } }
-                    ]
-                }],
-                generationConfig: {
-                    temperature: 0.1, // On garde la température basse pour qu'il soit très précis
-                }
+            // 2. On prépare un message simple pour notre Worker intelligent
+            // On ne construit plus le "payload" complexe ici, c'est le Worker qui le fera
+            const demandeScanner = {
+                prompt: "Tu es un expert en ticket de caisse. Extrais les articles. RÈGLE VITALE : Nettoie les noms pour qu'ils soient naturels et lisibles (supprime les marques, les poids, les pourcentages, les lots et les abréviations). Par exemple, 'CREME LEG.SEMI-EP.18% U 3X20CL' DOIT devenir 'Crème légère semi-épaisse'. Emplacements : FRIGO, PLACARD, CONGELATEUR, ANIMAUX, HORS_CUISINE. Réponds UNIQUEMENT le JSON : [{\"nom\":\"...\",\"quantite\":1,\"emplacement\":\"...\"}]",
+                image: base64Data // On envoie l'image séparément
             };
 
-            const text = await appelGemini(payload);
+            // 3. On appelle notre relais Cloudflare
+            // Note : Ici on passe l'objet complet car appelGemini doit savoir que c'est une image
+            const text = await appelGemini(demandeScanner);
+            
             traiterRetourGemini(text);
         } catch(e) {
             console.error("Détail erreur:", e);
-            statut.innerText = "❌ Le serveur Gemini est saturé (503). Réessayez dans 10 secondes.";
+            if (statut) statut.innerText = "❌ Erreur lors de l'analyse.";
         }
     };
     reader.readAsDataURL(file);
