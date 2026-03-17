@@ -257,304 +257,107 @@ async function appelGemini(promptExpert) {
         return "Le Worker ne répond pas au format POST.";
     }
 }
-	// ==========================================================
-			// 3. CONFIGURATION DU BLOC VOCAL
-			// ==========================================================
-			if (recognition) {
-				recognition.lang = 'fr-FR';
-				recognition.continuous = false;
+	recognition.onresult = async (e) => { 
+    const phrase = e.results[0][0].transcript.toLowerCase();
+    const statut = document.getElementById('statut-vocal');
+    if (statut) statut.innerText = "💬 J'ai entendu : " + phrase;
+    console.log("🎤 Phrase captée :", phrase);
 
-				recognition.onresult = async (e) => { 
-					const phrase = e.results[0][0].transcript.toLowerCase();
-					const statut = document.getElementById('statut-vocal');
-					if (statut) statut.innerText = "💬 J'ai entendu : " + phrase;
-
-					// --- 1. SÉCURITÉ STOP ---
-					if (phrase.includes("stop") || phrase.includes("annule")) {
-						window.speechSynthesis.cancel();
-						window.attenteChoixRecette = false;
-						faireParlerIA("D'accord.");
-						return;
-					}
-// --- 2. SI ON ATTEND TON CHOIX (Écriture de la recette) ---
-if (window.attenteChoixRecette) {
-    try {
-        // 🛑 1. LE DÉTECTEUR DE REFUS ("autre chose", "bof", "non")
-        if (phrase.includes("autre") || phrase.includes("aucun") || phrase.includes("bof") || phrase.includes("non") || phrase.includes("pas ça")) {
-            if (statut) statut.innerText = "🤔 Le Chef cherche de nouvelles idées...";
-            
-            // On récupère le stock pour qu'il ait de la matière
-            const { data: produits } = await monSupabase.from('inventaire2').select('*').neq('etat', 'Vide');
-            let liste = produits ? produits.map(p => p.nom).join(", ") : "";
-
-            // On lance un nouveau prompt spécial "Nouvelles idées"
-            const promptNouvellesIdees = `Tu es un Chef cuisinier. L'utilisateur n'a pas aimé tes idées précédentes et te dit : "${phrase}".
-            STOCK DISPONIBLE : ${liste}
-            Propose 3 NOUVELLES idées de plats, TOTALEMENT DIFFÉRENTES de ce que tu as déjà proposé.
-            Ne donne pas la recette, formule juste une phrase naturelle à l'oral avec 3 noms courts.
-            Termine obligatoirement ta réponse par : "Lequel te tente cette fois ?"`;
-
-            const reponseChef = await appelGemini({ contents: [{ parts: [{ text: promptNouvellesIdees }] }] });
-            
-            // On met à jour la mémoire du Chef avec ces nouvelles idées
-            window.dernieresPropositions = reponseChef; 
-            
-            // Le Chef te parle, et on RESTE en mode attenteChoixRecette !
-            faireParlerIA(reponseChef);
-            return; // 🛑 Très important : on s'arrête ici pour ne pas écrire de recette JSON !
-        }
-
-
-        // 🍳 2. LA SUITE NORMALE (Si tu as bien choisi un plat)
-        if (statut) statut.innerText = "✍️ Le Chef rédige la recette...";
-        
-        const promptRecette = `L'utilisateur a choisi : "${phrase}" parmi tes idées : ${window.dernieresPropositions}. 
-        Écris la recette détaillée. 
-        RÉPONDS UNIQUEMENT AU FORMAT JSON STRICTEMENT COMME CECI : 
-        [{"titre":"Nom du plat", "contenu":"Liste des ingrédients\\n\\n1. Étape 1\\n2. Étape 2..."}]`;
-        
-        const resultatBrut = await appelGemini({ contents: [{ parts: [{ text: promptRecette }] }] });
-        
-        // On découpe proprement le JSON pour éviter les erreurs
-        const jsonStr = resultatBrut.substring(resultatBrut.indexOf('['), resultatBrut.lastIndexOf(']') + 1);
-        
-        // On stocke dans LA MÊME variable que ton bouton classique
-        recettesTemporaires = JSON.parse(jsonStr);
-        
-        // On injecte le MÊME design (la carte avec le bouton SAUVER)
-        const zone = document.getElementById('zone-recette');
-        if (zone) {
-            zone.innerHTML = recettesTemporaires.map((r, i) => `
-                <div style="background:white; padding:12px; border-radius:12px; border:1px solid #ddd; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-top: 15px;">
-                    <b style="color:var(--chef); font-size:14px;">${r.titre}</b>
-                    <p style="font-size:12px; margin:10px 0; color:#555; white-space: pre-wrap;">${r.contenu}</p>
-                    <button onclick="sauverRecetteDirect(${i})" style="width:100%; background:var(--mur); color:white; border:none; padding:8px; border-radius:8px; cursor:pointer; font-weight:bold;">💾 SAUVER</button>
-                </div>`).join('');
-            zone.style.display = "block";
-        }
-        
-        // On sort du mode dialogue seulement une fois la recette affichée
+    // --- 1. SÉCURITÉ STOP ---
+    if (phrase.includes("stop") || phrase.includes("annule")) {
+        window.speechSynthesis.cancel();
         window.attenteChoixRecette = false;
-        faireParlerIA("C'est prêt ! Je t'ai affiché la recette, tu peux la sauvegarder dans ton grimoire.");
-    } catch (err) { 
-        console.error("Erreur de rendu recette :", err);
-        faireParlerIA("Mince, j'ai eu un petit souci pour formater la recette.");
+        if (typeof faireParlerIA === "function") faireParlerIA("D'accord.");
+        return;
     }
-    return;
-}
-		// --- 2. SI ON ATTEND TON CHOIX (Écriture de la recette) ---
-if (window.attenteChoixRecette) {
-    try {
-        // 🛑 1. LE DÉTECTEUR DE REFUS ("autre chose", "bof", "non")
-        if (phrase.includes("autre") || phrase.includes("aucun") || phrase.includes("bof") || phrase.includes("non") || phrase.includes("pas ça")) {
-            if (statut) statut.innerText = "🤔 Le Chef cherche de nouvelles idées...";
-            
-            // On récupère le stock pour qu'il ait de la matière
-            const { data: produits } = await monSupabase.from('inventaire2').select('*').neq('etat', 'Vide');
-            let liste = produits ? produits.map(p => p.nom).join(", ") : "";
 
-            // On lance un nouveau prompt spécial "Nouvelles idées"
-            const promptNouvellesIdees = `Tu es un Chef cuisinier. L'utilisateur n'a pas aimé tes idées précédentes et te dit : "${phrase}".
-            STOCK DISPONIBLE : ${liste}
-            Propose 3 NOUVELLES idées de plats, TOTALEMENT DIFFÉRENTES de ce que tu as déjà proposé.
-            Ne donne pas la recette, formule juste une phrase naturelle à l'oral avec 3 noms courts.
-            Termine obligatoirement ta réponse par : "Lequel te tente cette fois ?"`;
+    // --- 2. SI ON ATTEND TON CHOIX (Écriture de la recette) ---
+    if (window.attenteChoixRecette) {
+        try {
+            // 🛑 2a. LE DÉTECTEUR DE REFUS
+            if (phrase.includes("autre") || phrase.includes("aucun") || phrase.includes("bof") || phrase.includes("non") || phrase.includes("pas ça")) {
+                if (statut) statut.innerText = "🤔 Le Chef cherche de nouvelles idées...";
+                const { data: produits } = await monSupabase.from('inventaire2').select('*').neq('etat', 'Vide');
+                let liste = produits ? produits.map(p => p.nom).join(", ") : "";
 
-            const reponseChef = await appelGemini({ contents: [{ parts: [{ text: promptNouvellesIdees }] }] });
+                const promptNouvellesIdees = `Tu es un Chef cuisinier. L'utilisateur n'a pas aimé tes idées précédentes et te dit : "${phrase}".
+                STOCK DISPONIBLE : ${liste}
+                Propose 3 NOUVELLES idées de plats, TOTALEMENT DIFFÉRENTES. Termine par : "Lequel te tente cette fois ?"`;
+
+                // Correction de l'appel (on envoie juste le texte comme prévu par le Worker)
+                const reponseChef = await appelGemini(promptNouvellesIdees);
+                window.dernieresPropositions = reponseChef; 
+                faireParlerIA(reponseChef);
+                return;
+            }
+
+            // 🍳 2b. LA RÉDACTION DE LA RECETTE (Si choix validé)
+            if (statut) statut.innerText = "✍️ Le Chef rédige la recette...";
+            const promptRecette = `L'utilisateur a choisi : "${phrase}" parmi tes idées : ${window.dernieresPropositions}. 
+            RÉPONDS UNIQUEMENT AU FORMAT JSON : [{"titre":"Nom du plat", "contenu":"Ingrédients\\n\\n1. Étape..."}]`;
             
-            // On met à jour la mémoire du Chef avec ces nouvelles idées
-            window.dernieresPropositions = reponseChef; 
+            const resultatBrut = await appelGemini(promptRecette);
+            const jsonStr = resultatBrut.substring(resultatBrut.indexOf('['), resultatBrut.lastIndexOf(']') + 1);
+            recettesTemporaires = JSON.parse(jsonStr);
             
-            // Le Chef te parle, et on RESTE en mode attenteChoixRecette !
-            faireParlerIA(reponseChef);
-            return; // 🛑 Très important : on s'arrête ici pour ne pas écrire de recette JSON !
+            const zone = document.getElementById('zone-recette');
+            if (zone) {
+                zone.innerHTML = recettesTemporaires.map((r, i) => `
+                    <div style="background:white; padding:12px; border-radius:12px; border:1px solid #ddd; margin-top: 15px;">
+                        <b style="color:var(--chef);">${r.titre}</b>
+                        <p style="white-space: pre-wrap;">${r.contenu}</p>
+                        <button onclick="sauverRecetteDirect(${i})" style="width:100%; background:var(--mur); color:white; padding:8px; border-radius:8px;">💾 SAUVER</button>
+                    </div>`).join('');
+                zone.style.display = "block";
+            }
+            window.attenteChoixRecette = false;
+            faireParlerIA("C'est prêt ! Je t'ai affiché la recette.");
+        } catch (err) { 
+            console.error("Erreur recette :", err);
+            faireParlerIA("Mince, j'ai eu un souci pour formater la recette.");
         }
-
-
-        // 🍳 2. LA SUITE NORMALE (Si tu as bien choisi un plat)
-        if (statut) statut.innerText = "✍️ Le Chef rédige la recette...";
-        
-        const promptRecette = `L'utilisateur a choisi : "${phrase}" parmi tes idées : ${window.dernieresPropositions}. 
-        Écris la recette détaillée. 
-        RÉPONDS UNIQUEMENT AU FORMAT JSON STRICTEMENT COMME CECI : 
-        [{"titre":"Nom du plat", "contenu":"Liste des ingrédients\\n\\n1. Étape 1\\n2. Étape 2..."}]`;
-        
-        const resultatBrut = await appelGemini({ contents: [{ parts: [{ text: promptRecette }] }] });
-        
-        // On découpe proprement le JSON pour éviter les erreurs
-        const jsonStr = resultatBrut.substring(resultatBrut.indexOf('['), resultatBrut.lastIndexOf(']') + 1);
-        
-        // On stocke dans LA MÊME variable que ton bouton classique
-        recettesTemporaires = JSON.parse(jsonStr);
-        
-        // On injecte le MÊME design (la carte avec le bouton SAUVER)
-        const zone = document.getElementById('zone-recette');
-        if (zone) {
-            zone.innerHTML = recettesTemporaires.map((r, i) => `
-                <div style="background:white; padding:12px; border-radius:12px; border:1px solid #ddd; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-top: 15px;">
-                    <b style="color:var(--chef); font-size:14px;">${r.titre}</b>
-                    <p style="font-size:12px; margin:10px 0; color:#555; white-space: pre-wrap;">${r.contenu}</p>
-                    <button onclick="sauverRecetteDirect(${i})" style="width:100%; background:var(--mur); color:white; border:none; padding:8px; border-radius:8px; cursor:pointer; font-weight:bold;">💾 SAUVER</button>
-                </div>`).join('');
-            zone.style.display = "block";
-        }
-        
-        // On sort du mode dialogue seulement une fois la recette affichée
-        window.attenteChoixRecette = false;
-        faireParlerIA("C'est prêt ! Je t'ai affiché la recette, tu peux la sauvegarder dans ton grimoire.");
-    } catch (err) { 
-        console.error("Erreur de rendu recette :", err);
-        faireParlerIA("Mince, j'ai eu un petit souci pour formater la recette.");
+        return;
     }
-    return;
-}
 
-		// --- 3. SI TU DEMANDES DES IDÉES (Lancement Chef) ---
-		if (phrase.includes("chef") || phrase.includes("propose") || phrase.includes("recette") || phrase.includes("mange") || phrase.includes("idées")) {
-			try {
-				if (statut) statut.innerText = "👨‍🍳 Le Chef réfléchit...";
-				
-				// On récupère le stock
-				const { data: produits } = await monSupabase.from('inventaire2').select('nom').neq('etat', 'Vide');
-				const liste = produits.map(p => p.nom).join(', ');
+    // --- 3. SI TU DEMANDES DES IDÉES (Lancement Chef) ---
+    if (phrase.includes("chef") || phrase.includes("propose") || phrase.includes("recette") || phrase.includes("mange") || phrase.includes("idées")) {
+        try {
+            if (statut) statut.innerText = "👨‍🍳 Le Chef réfléchit...";
+            const { data: produits } = await monSupabase.from('inventaire2').select('nom').neq('etat', 'Vide');
+            const liste = produits.map(p => p.nom).join(', ');
 
-				// TON PROMPT ADAPTÉ POUR LA VOIX
-				const promptChef = `
-				Tu es un Chef cuisinier expert et pragmatique.
-				DEMANDE UTILISATEUR : "${phrase}"
-				STOCK DISPONIBLE : ${liste}
-
-				CONSIGNES STRICTES :
-				1. Ne propose que des plats réalisables AVEC le stock en l'associant intelligemment.
-				2. Si l'utilisateur demande un plat précis (ex: "des frites"), respecte la technique (friture) et n'invente pas un substitut (ex: purée) sauf si l'ingrédient principal manque.
-				3. C'est l'étape de proposition : NE DONNE SURTOUT PAS la recette, ni les étapes, ni la liste des ingrédients.
-				4. Formule une phrase naturelle à l'oral pour proposer exactement 3 noms de plats courts et précis.
-				5. Termine OBLIGATOIREMENT ta réponse par : "Lequel te tente ?"`;
-				
-				// APPEL GEMINI
-				const idees = await appelGemini({ contents: [{ parts: [{ text: promptChef }] }] });
-				
-				window.dernieresPropositions = idees;
-				window.attenteChoixRecette = true;
-				
-				faireParlerIA(idees);
-			} catch (err) { 
-				console.error("ERREUR GEMINI :", err);
-				alert("L'IA ne répond pas.");
-			}
-			return;
-		}
-					// --- 4. CHOIX PRÉCIS PRODUIT ---
-					if (window.attenteChoixProduit) {
-						try {
-							const promptAffinement = `L'utilisateur a dit : "${phrase}". Parmi : ${JSON.stringify(window.produitsPossibles)}, lequel est le bon ? Réponds uniquement l'ID.`;
-							const textID = await appelGemini({ contents: [{ parts: [{ text: promptAffinement }] }] });
-							const idTrouve = parseInt(textID.trim().replace(/[^0-9]/g, ''));
-							if (idTrouve > 0) {
-								const p = window.produitsPossibles.find(x => x.id === idTrouve);
-								window.attenteChoixProduit = false;
-								await executerLogiqueSuppression(p); 
-							}
-						} catch (err) { console.error(err); }
-						return;
-					}
-
-					// --- 5. OUI/NON COURSES ---
-					if (window.attenteReponseIA) {
-						if (phrase.includes("oui") || phrase.includes("ajoute") || phrase.includes("vas-y")) {
-							const p = window.dernierProduitSupprime;
-							if (p) {
-								await monSupabase.from('inventaire2').update({ etat: 'Vide', quantite: 0 }).eq('id', p.id);
-								faireParlerIA("C'est fait, ajouté aux courses.");
-								if (typeof chargerTout === 'function') await chargerTout();
-							}
-						} else {
-							faireParlerIA("D'accord.");
-						}
-						window.attenteReponseIA = false;
-						return;
-					}
-					
-					// --- 5. AJOUT D'UN RESTE AU FRIGO ---
-					console.log("🗣️ Le micro a entendu :", phrase); // Mouchard 1
-
-					if (phrase.includes("frigo") && (phrase.includes("mis") || phrase.includes("ajoute") || phrase.includes("rangé") || phrase.includes("mettre"))) {
-						console.log("✅ Condition réussie : Le bloc Frigo s'active !"); // Mouchard 2
-						
-						try {
-							const statut = document.getElementById('statut-vocal');
-							if (statut) statut.innerText = "✍️ Ajout au frigo...";
-							
-							const promptAjout = `Tu es un assistant qui note les restes dans un frigo.
-							Voici la phrase : "${phrase}".
-							Mission : Extraire UNIQUEMENT le nom du plat ajouté.
-							1. Enlève "j'ai mis", "ajoute", "rangé", "au frigo", "dans le frigo".
-							2. Enlève les articles (le, la, les, un, une, des).
-							3. Ne réponds QUE le nom pur, avec une majuscule.
-							Ex: "j'ai mis des pâtes au frigo" -> Pâtes`;
-							
-							console.log("🧠 J'envoie la demande à Gemini..."); // Mouchard 3
-							const reponseIA = await appelGemini({ contents: [{ parts: [{ text: promptAjout }] }] });
-							const nomAliment = reponseIA.trim();
-							
-							console.log("🤖 Gemini a répondu :", nomAliment); // Mouchard 4
-
-							if (nomAliment.length > 1) {
-								console.log("🚀 Lancement de la sauvegarde dans Supabase..."); // Mouchard 5
-								await ajouterAuFrigoVocal(nomAliment);
-							} else {
-								faireParlerIA("Je n'ai pas bien compris ce que tu as mis au frigo.");
-							}
-						} catch (err) { 
-							console.error("Erreur ajout frigo :", err); 
-						}
-						return; 
-					}
-					
-// --- 6. SUPPRESSION INTELLIGENTE ---
-if (phrase.includes("supprime") || phrase.includes("retire") || phrase.includes("enlève") || phrase.includes("enlever")) {
-    try {
-        const statut = document.getElementById('statut-vocal');
-        if (statut) statut.innerText = "🧠 Analyse de l'aliment...";
-        
-        // On demande à l'IA d'extraire la RACINE distinctive du produit
-        const promptNettoyage = `Tu es un expert en extraction de mots-clés pour une base de données d'inventaire. 
-        Voici la commande vocale de l'utilisateur : "${phrase}".
-        
-        Ta mission : Extraire UNIQUEMENT la "racine" distinctive du produit (la marque ou l'ingrédient principal) pour maximiser les chances de le trouver.
-        
-        Règles STRICTES :
-        1. Supprime les verbes, les articles et les formules de politesse.
-        2. Supprime les mots génériques de catégorie ou d'emballage (yaourt, brassé, nature, bouteille, boîte, paquet, tranche, pot, brique).
-        3. Mets le mot au SINGULIER.
-        4. Garde UNIQUEMENT l'identifiant fort, la marque ou l'ingrédient central.
-        5. NE RÉPONDS QUE LE RÉSULTAT, sans aucune phrase autour.
-        
-        Exemples :
-        - "supprime le yaourt perle de lait" -> perle de lait
-        - "enlève un yaourt brassé perle de lait framboise" -> perle de lait
-        - "retire les bouteilles de coca cola" -> coca cola
-        - "supprime une boîte de haricots verts" -> haricot vert
-        - "enlève les bananes" -> banane`;
-        
-        const reponseIA = await appelGemini({ contents: [{ parts: [{ text: promptNettoyage }] }] });
-        const motCleParfait = reponseIA.trim().toLowerCase();
-
-        if (motCleParfait.length > 1) {
-            console.log("L'IA a nettoyé la phrase et cherche :", motCleParfait);
-            // On lance la recherche avec le mot parfait !
-            await supprimerProduitVocal(motCleParfait);
-        } else {
-            faireParlerIA("Je n'ai pas bien compris quel aliment tu veux retirer.");
-        }
-    } catch (err) { 
-        console.error("Erreur suppression :", err); 
+            const promptChef = `Chef expert. STOCK : ${liste}. Propose 3 plats courts. Termine par : "Lequel te tente ?"`;
+            const idees = await appelGemini(promptChef);
+            
+            window.dernieresPropositions = idees;
+            window.attenteChoixRecette = true;
+            faireParlerIA(idees);
+        } catch (err) { console.error("Erreur Chef :", err); }
+        return;
     }
-    return;
-}
 
-}; // Fin de onresult (NE PAS TOUCHER)
-} // Fin de if(recognition) (NE PAS TOUCHER)
+    // --- 4. AJOUT D'UN RESTE AU FRIGO ---
+    if (phrase.includes("frigo") && (phrase.includes("mis") || phrase.includes("ajoute") || phrase.includes("rangé"))) {
+        try {
+            const promptAjout = `Extrais uniquement le nom du plat de : "${phrase}". Réponds juste le nom pur avec une majuscule.`;
+            const nomAliment = await appelGemini(promptAjout);
+            if (nomAliment.trim().length > 1) {
+                await ajouterAuFrigoVocal(nomAliment.trim());
+            }
+        } catch (err) { console.error(err); }
+        return;
+    }
+
+    // --- 5. SUPPRESSION INTELLIGENTE ---
+    if (phrase.includes("supprime") || phrase.includes("retire") || phrase.includes("enlève")) {
+        try {
+            const promptNettoyage = `Extrais la racine distinctive du produit de : "${phrase}". Réponds juste le mot au singulier.`;
+            const motCleParfait = await appelGemini(promptNettoyage);
+            await supprimerProduitVocal(motCleParfait.trim().toLowerCase());
+        } catch (err) { console.error(err); }
+        return;
+    }
+};
 
 			// --- GESTION DES BOUTONS ---
 			const btnVocal = document.getElementById('btn-vocal');
