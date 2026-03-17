@@ -160,38 +160,36 @@
     let modeVocalActuel = ""; 
     const MODEL_25 = "gemini-2.5-flash"; 
 
-    // --- 1. LE CERVEAU AU DÉMARRAGE ---
-    window.onload = () => {
-        try {
-            // A. Récupération de la clé Gemini (LocalStorage)
-            const cleStockee = localStorage.getItem('ma_cle_gemini_secrete');
-            const champGKey = document.getElementById('gKey');
-            if (cleStockee && champGKey) {
-                champGKey.value = cleStockee;
-            }
-
-            // B. Initialisation de Supabase
-            const elUrl = document.getElementById('sUrl');
-            const elKey = document.getElementById('sKey');
-            if (elUrl && elKey) {
-                monSupabase = window.supabase.createClient(elUrl.value, elKey.value);
-                console.log("✅ Supabase connecté.");
-            }
-
-            // C. Lancement de TOUS tes chargements
-            if (typeof setupVocal === "function") setupVocal();
-            if (typeof chargerTout === "function") chargerTout();
-            if (typeof chargerGrimoire === "function") chargerGrimoire();
-            if (typeof chargerPlanning === "function") chargerPlanning();
-            
-            // D. Initialisation des menus
-            setupCollapsibles();
-
-        } catch (err) {
-            console.error("Erreur au démarrage :", err);
+   // --- 1. LE CERVEAU AU DÉMARRAGE (NETTOYÉ) ---
+window.onload = () => {
+    try {
+        // A. Initialisation de Supabase (Indispensable pour le stock)
+        const elUrl = document.getElementById('sUrl');
+        const elKey = document.getElementById('sKey');
+        
+        if (elUrl && elKey && elUrl.value !== "" && elKey.value !== "") {
+            monSupabase = window.supabase.createClient(elUrl.value, elKey.value);
+            console.log("✅ Supabase connecté.");
+        } else {
+            console.warn("⚠️ Attention : Supabase n'est pas configuré (URL ou Clé manquante).");
         }
-    }; // Fin du window.onload
 
+        // B. Lancement du micro et des données
+        // On vérifie que les fonctions existent avant de les lancer
+        if (typeof setupVocal === "function") setupVocal();
+        if (typeof chargerTout === "function") chargerTout();
+        if (typeof chargerGrimoire === "function") chargerGrimoire();
+        if (typeof chargerPlanning === "function") chargerPlanning();
+        
+        // C. Initialisation du design
+        if (typeof setupCollapsibles === "function") setupCollapsibles();
+
+        console.log("🚀 Système prêt !");
+
+    } catch (err) {
+        console.error("Erreur critique au démarrage :", err);
+    }
+};
 
    function setupCollapsibles() {
     const coll = document.getElementsByClassName("collapsible");
@@ -235,33 +233,28 @@ async function appelGemini(promptExpert) {
 
     try {
         const resp = await fetch(urlRelais, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt: promptExpert }) 
+            method: 'POST', // <--- C'EST CETTE LIGNE QUI CHANGE TOUT
+            headers: { 
+                'Content-Type': 'application/json' 
+            },
+            body: JSON.stringify({ prompt: promptExpert }) // On emballe le texte ici
         });
 
         const data = await resp.json();
 
-        // 1. Vérification si le relais ou Google renvoie une erreur
+        // 🕵️ Le moment de vérité pour ta version 2.5
         if (data.error) {
-            throw new Error(data.error.message || "Erreur inconnue");
+            console.error("Erreur Gemini:", data.error.message);
+            // Si le log Cloudflare affiche une erreur 404 ici, 
+            // c'est que la version 2.5 n'est pas acceptée par l'API.
+            return "Erreur du modèle : " + data.error.message;
         }
 
-        // 2. Vérification du contenu
-        if (data.candidates && data.candidates.length > 0) {
-            // Si le contenu a été bloqué par sécurité
-            if (data.candidates[0].finishReason === "SAFETY") {
-                return "Désolé, la réponse a été bloquée pour des raisons de sécurité.";
-            }
-            // Sinon, on renvoie le texte
-            return data.candidates[0].content.parts[0].text;
-        } else {
-            return "Le Chef est un peu perdu, il n'a pas trouvé de réponse.";
-        }
+        return data.candidates[0].content.parts[0].text;
 
     } catch (erreur) {
-        console.error("Erreur détaillée :", erreur);
-        return "Problème de connexion au relais Cloudflare.";
+        console.error("Erreur fetch:", erreur);
+        return "Le Worker ne répond pas au format POST.";
     }
 }
 	// ==========================================================
