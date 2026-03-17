@@ -281,8 +281,11 @@ async function appelGemini(promptExpert) {
                 let liste = produits ? produits.map(p => p.nom).join(", ") : "";
 
                 const promptNouvellesIdees = `Tu es un Chef cuisinier. L'utilisateur n'a pas aimé tes idées précédentes et te dit : "${phrase}".
-                STOCK DISPONIBLE : ${liste}
-                Propose 3 NOUVELLES idées de plats, TOTALEMENT DIFFÉRENTES. Termine par : "Lequel te tente cette fois ?"`;
+            STOCK DISPONIBLE : ${liste}
+            Propose 3 NOUVELLES idées de plats, TOTALEMENT DIFFÉRENTES de ce que tu as déjà proposé.
+            Ne donne pas la recette, formule juste une phrase naturelle à l'oral avec 3 noms courts.
+            Termine obligatoirement ta réponse par : "Lequel te tente cette fois ?"`;
+
 
                 // Correction de l'appel (on envoie juste le texte comme prévu par le Worker)
                 const reponseChef = await appelGemini(promptNouvellesIdees);
@@ -294,7 +297,9 @@ async function appelGemini(promptExpert) {
             // 🍳 2b. LA RÉDACTION DE LA RECETTE (Si choix validé)
             if (statut) statut.innerText = "✍️ Le Chef rédige la recette...";
             const promptRecette = `L'utilisateur a choisi : "${phrase}" parmi tes idées : ${window.dernieresPropositions}. 
-            RÉPONDS UNIQUEMENT AU FORMAT JSON : [{"titre":"Nom du plat", "contenu":"Ingrédients\\n\\n1. Étape..."}]`;
+        Écris la recette détaillée. 
+        RÉPONDS UNIQUEMENT AU FORMAT JSON STRICTEMENT COMME CECI : 
+        [{"titre":"Nom du plat", "contenu":"Liste des ingrédients\\n\\n1. Étape 1\\n2. Étape 2..."}]`;
             
             const resultatBrut = await appelGemini(promptRecette);
             const jsonStr = resultatBrut.substring(resultatBrut.indexOf('['), resultatBrut.lastIndexOf(']') + 1);
@@ -326,7 +331,17 @@ async function appelGemini(promptExpert) {
             const { data: produits } = await monSupabase.from('inventaire2').select('nom').neq('etat', 'Vide');
             const liste = produits.map(p => p.nom).join(', ');
 
-            const promptChef = `Chef expert. STOCK : ${liste}. Propose 3 plats courts. Termine par : "Lequel te tente ?"`;
+            const promptChef = `
+				Tu es un Chef cuisinier expert et pragmatique.
+				DEMANDE UTILISATEUR : "${phrase}"
+				STOCK DISPONIBLE : ${liste}
+
+				CONSIGNES STRICTES :
+				1. Ne propose que des plats réalisables AVEC le stock en l'associant intelligemment.
+				2. Si l'utilisateur demande un plat précis (ex: "des frites"), respecte la technique (friture) et n'invente pas un substitut (ex: purée) sauf si l'ingrédient principal manque.
+				3. C'est l'étape de proposition : NE DONNE SURTOUT PAS la recette, ni les étapes, ni la liste des ingrédients.
+				4. Formule une phrase naturelle à l'oral pour proposer exactement 3 noms de plats courts et précis.
+				5. Termine OBLIGATOIREMENT ta réponse par : "Lequel te tente ?"`;
             const idees = await appelGemini(promptChef);
             
             window.dernieresPropositions = idees;
@@ -339,7 +354,13 @@ async function appelGemini(promptExpert) {
     // --- 4. AJOUT D'UN RESTE AU FRIGO ---
     if (phrase.includes("frigo") && (phrase.includes("mis") || phrase.includes("ajoute") || phrase.includes("rangé"))) {
         try {
-            const promptAjout = `Extrais uniquement le nom du plat de : "${phrase}". Réponds juste le nom pur avec une majuscule.`;
+            const promptAjout = `Tu es un assistant qui note les restes dans un frigo.
+							Voici la phrase : "${phrase}".
+							Mission : Extraire UNIQUEMENT le nom du plat ajouté.
+							1. Enlève "j'ai mis", "ajoute", "rangé", "au frigo", "dans le frigo".
+							2. Enlève les articles (le, la, les, un, une, des).
+							3. Ne réponds QUE le nom pur, avec une majuscule.
+							Ex: "j'ai mis des pâtes au frigo" -> Pâtes`;
             const nomAliment = await appelGemini(promptAjout);
             if (nomAliment.trim().length > 1) {
                 await ajouterAuFrigoVocal(nomAliment.trim());
@@ -351,7 +372,24 @@ async function appelGemini(promptExpert) {
     // --- 5. SUPPRESSION INTELLIGENTE ---
     if (phrase.includes("supprime") || phrase.includes("retire") || phrase.includes("enlève")) {
         try {
-            const promptNettoyage = `Extrais la racine distinctive du produit de : "${phrase}". Réponds juste le mot au singulier.`;
+           const promptNettoyage = `Tu es un expert en extraction de mots-clés pour une base de données d'inventaire. 
+        Voici la commande vocale de l'utilisateur : "${phrase}".
+        
+        Ta mission : Extraire UNIQUEMENT la "racine" distinctive du produit (la marque ou l'ingrédient principal) pour maximiser les chances de le trouver.
+        
+        Règles STRICTES :
+        1. Supprime les verbes, les articles et les formules de politesse.
+        2. Supprime les mots génériques de catégorie ou d'emballage (yaourt, brassé, nature, bouteille, boîte, paquet, tranche, pot, brique).
+        3. Mets le mot au SINGULIER.
+        4. Garde UNIQUEMENT l'identifiant fort, la marque ou l'ingrédient central.
+        5. NE RÉPONDS QUE LE RÉSULTAT, sans aucune phrase autour.
+        
+        Exemples :
+        - "supprime le yaourt perle de lait" -> perle de lait
+        - "enlève un yaourt brassé perle de lait framboise" -> perle de lait
+        - "retire les bouteilles de coca cola" -> coca cola
+        - "supprime une boîte de haricots verts" -> haricot vert
+        - "enlève les bananes" -> banane`;
             const motCleParfait = await appelGemini(promptNettoyage);
             await supprimerProduitVocal(motCleParfait.trim().toLowerCase());
         } catch (err) { console.error(err); }
