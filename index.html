@@ -228,40 +228,23 @@ window.onload = () => {
 								let recognition = (SpeechRecognition) ? new SpeechRecognition() : null;
 
 								// ==========================================================
-// --- 1. FONCTION APPEL GEMINI (RELAIS) ---
-async function appelGemini(message) { // <--- Début de la fonction
+async function appelGemini(message) {
     const urlRelais = "https://gemini-relais.laurent235.workers.dev";
     
-    try { // <--- Début du bloc de sécurité try
-        let corps;
-        if (typeof message === 'string') {
-            // C'est du vocal (texte pur)
-            corps = JSON.stringify({ prompt: message });
-        } else {
-            // C'est le ticket (objet avec prompt + image)
-            corps = JSON.stringify(message);
-        }
+    // Si c'est du texte (vocal), on en fait un petit objet {prompt}
+    // Si c'est le payload du ticket, on l'envoie tel quel
+    const corps = (typeof message === 'string') ? { prompt: message } : message;
 
-        const resp = await fetch(urlRelais, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: corps
-        });
+    const resp = await fetch(urlRelais, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(corps)
+    });
 
-        const data = await resp.json();
-        
-        if (data.error) {
-            throw new Error(data.error.message || "Erreur Gemini");
-        }
-
-        return data.candidates[0].content.parts[0].text;
-
-    } catch (erreur) { // <--- Début du bloc erreur
-        console.error("Erreur fetch:", erreur); // C'ÉTAIT TA LIGNE 260
-        return "Le Worker ne répond pas correctement.";
-    } // <--- Fermeture du catch
-} // <--- Fermeture de la fonction appelGemini (VÉRIFIE BIEN QU'IL N'Y EN A PAS UNE DE TROP ICI)
-
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error.message || "Erreur API");
+    return data.candidates[0].content.parts[0].text;
+}
 // --- 2. GESTION DU RÉSULTAT VOCAL ---
 recognition.onresult = async (e) => { 
     const phrase = e.results[0][0].transcript.toLowerCase();
@@ -500,35 +483,32 @@ if (window.attenteReponseIA) {
 async function scannerTicket(input) {
     const file = input.files[0];
     if(!file) return;
-    
-    if (file.size > 4 * 1024 * 1024) {
-        alert("Le fichier est trop lourd (max 4Mo).");
-        return;
-    }
 
     const statut = document.getElementById('statut-scan');
-    if (statut) statut.innerText = "⏳ Analyse en cours (PDF/Image)...";
+    if (statut) statut.innerText = "⏳ Analyse en cours avec Gemini 2.5...";
 
     const reader = new FileReader();
     reader.onload = async () => {
         try {
-            // 1. On récupère juste la partie brute du base64
             const base64Data = reader.result.split(',')[1];
 
-            // 2. On prépare un message simple pour notre Worker intelligent
-            // On ne construit plus le "payload" complexe ici, c'est le Worker qui le fera
-            const demandeScanner = {
-                prompt: "Tu es un expert en ticket de caisse. Extrais les articles. RÈGLE VITALE : Nettoie les noms pour qu'ils soient naturels et lisibles (supprime les marques, les poids, les pourcentages, les lots et les abréviations). Par exemple, 'CREME LEG.SEMI-EP.18% U 3X20CL' DOIT devenir 'Crème légère semi-épaisse'. Emplacements : FRIGO, PLACARD, CONGELATEUR, ANIMAUX, HORS_CUISINE. Réponds UNIQUEMENT le JSON : [{\"nom\":\"...\",\"quantite\":1,\"emplacement\":\"...\"}]",
-                image: base64Data // On envoie l'image séparément
+            // ON REPREND LE FORMAT EXACT QUI FONCTIONNAIT AVANT
+            const payload = {
+                contents: [{
+                    parts: [
+                        { text: "Tu es un expert en ticket de caisse. Extrais les articles. Nettoie les noms pour qu'ils soient naturels. Emplacements : FRIGO, PLACARD, CONGELATEUR, ANIMAUX, HORS_CUISINE. Réponds UNIQUEMENT le JSON : [{\"nom\":\"...\",\"quantite\":1,\"emplacement\":\"...\"}]" },
+                        { inline_data: { mime_type: file.type, data: base64Data } }
+                    ]
+                }],
+                generationConfig: { temperature: 0.1 }
             };
 
-            // 3. On appelle notre relais Cloudflare
-            // Note : Ici on passe l'objet complet car appelGemini doit savoir que c'est une image
-            const text = await appelGemini(demandeScanner);
-            
+            // On envoie le payload complet à appelGemini
+            const text = await appelGemini(payload);
             traiterRetourGemini(text);
+            
         } catch(e) {
-            console.error("Détail erreur:", e);
+            console.error("Erreur Gemini 2.5:", e);
             if (statut) statut.innerText = "❌ Erreur lors de l'analyse.";
         }
     };
