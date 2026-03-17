@@ -228,53 +228,55 @@ window.onload = () => {
 								let recognition = (SpeechRecognition) ? new SpeechRecognition() : null;
 
 								// ==========================================================
-async function appelGemini(message) {
+// --- 1. FONCTION APPEL GEMINI (RELAIS) ---
+async function appelGemini(message) { // <--- Début de la fonction
     const urlRelais = "https://gemini-relais.laurent235.workers.dev";
     
-    // On prépare le corps de la requête
-    let corps;
-    if (typeof message === 'string') {
-        // C'est du vocal (texte pur)
-        corps = JSON.stringify({ prompt: message });
-    } else {
-        // C'est le ticket de caisse (objet avec prompt + image)
-        corps = JSON.stringify(message);
-    }
+    try { // <--- Début du bloc de sécurité try
+        let corps;
+        if (typeof message === 'string') {
+            // C'est du vocal (texte pur)
+            corps = JSON.stringify({ prompt: message });
+        } else {
+            // C'est le ticket (objet avec prompt + image)
+            corps = JSON.stringify(message);
+        }
 
-    const resp = await fetch(urlRelais, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: corps
-    });
+        const resp = await fetch(urlRelais, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: corps
+        });
 
-    const data = await resp.json();
-    
-    if (data.error) {
-        throw new Error(data.error.message || "Erreur Gemini");
-    }
+        const data = await resp.json();
+        
+        if (data.error) {
+            throw new Error(data.error.message || "Erreur Gemini");
+        }
 
-    // Extraction de la réponse texte
-    return data.candidates[0].content.parts[0].text;
-}
+        return data.candidates[0].content.parts[0].text;
 
-    } catch (erreur) {
-        console.error("Erreur fetch:", erreur);
-        return "Le Worker ne répond pas au format POST.";
-    }
-}
-	recognition.onresult = async (e) => { 
+    } catch (erreur) { // <--- Début du bloc erreur
+        console.error("Erreur fetch:", erreur); // C'ÉTAIT TA LIGNE 260
+        return "Le Worker ne répond pas correctement.";
+    } // <--- Fermeture du catch
+} // <--- Fermeture de la fonction appelGemini (VÉRIFIE BIEN QU'IL N'Y EN A PAS UNE DE TROP ICI)
+
+// --- 2. GESTION DU RÉSULTAT VOCAL ---
+recognition.onresult = async (e) => { 
     const phrase = e.results[0][0].transcript.toLowerCase();
     const statut = document.getElementById('statut-vocal');
     if (statut) statut.innerText = "💬 J'ai entendu : " + phrase;
     console.log("🎤 Phrase captée :", phrase);
 
-    // --- 1. SÉCURITÉ STOP ---
+    // --- SÉCURITÉ STOP ---
     if (phrase.includes("stop") || phrase.includes("annule")) {
         window.speechSynthesis.cancel();
         window.attenteChoixRecette = false;
         if (typeof faireParlerIA === "function") faireParlerIA("D'accord.");
         return;
     }
+
 
     // --- 2. SI ON ATTEND TON CHOIX (Écriture de la recette) ---
     if (window.attenteChoixRecette) {
