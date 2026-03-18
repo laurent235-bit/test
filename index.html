@@ -640,7 +640,7 @@ const d = await resp.json();
 async function chargerTout() {
     // 1. Récupération des données depuis Supabase
     const { data: items, error } = await monSupabase.from('inventaire2').select('*').order('nom');
-    
+
     if (error) {
         console.error("Erreur de chargement:", error);
         return;
@@ -657,25 +657,26 @@ async function chargerTout() {
         'AUTRES': 'list-Autres',
         'TUP': 'listeTups'
     };
-    
-    // 3. Reset (vidage) de toutes les listes
+
+    // 3. Reset (vidage) de toutes les listes avant affichage
     Object.values(mapping).forEach(id => { 
         const el = document.getElementById(id);
         if(el) el.innerHTML = ""; 
     });
-    
+
     const sl = document.getElementById('shoppingList'); 
     if(sl) sl.innerHTML = "";
 
     const lt = document.getElementById('listeTups');
     if(lt) lt.innerHTML = "";
-    
+
+    let nbDanger = 0; // Compteur pour le badge rouge Anti-Gaspi
+
     if(!items) return;
 
-    // 4. Boucle sur chaque article pour l'affichage
+    // 4. Boucle sur chaque article
     items.forEach(item => {
-        // ... (Ici ton code actuel qui remplit sl.innerHTML, etc.) ...
-        
+
         // --- CAS A : LISTE DE COURSES ---
         if (item.etat === 'Vide') {
             if(sl) {
@@ -690,82 +691,77 @@ async function chargerTout() {
                     </div>
                 </div>`;
             }
+        } 
+        // --- CAS B : TUPPERWARE (ANTI-GASPI) ---
+        else if (item.etat === 'Tup') {
+            if(lt) {
+                const dateEnregistree = new Date(item.emplacement);
+                const aujourdhui = new Date();
+                const joursPasses = Math.floor((aujourdhui - dateEnregistree) / (1000 * 60 * 60 * 24));
+
+                let couleur = "#48bb78"; // Vert
+                let msg = "Frais";
+                if (joursPasses >= 3) { couleur = "#ed8936"; msg = "À consommer"; } 
+                if (joursPasses >= 5) { 
+                    couleur = "#e53e3e"; 
+                    msg = "DANGER"; 
+                    nbDanger++; 
+                }
+
+                lt.innerHTML += `
+                <div class="item" style="border-left: 6px solid ${couleur}; background:white; padding:10px; border-radius:10px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                    <div>
+                        <b style="font-size:14px;">🍱 ${item.nom}</b><br>
+                        <small style="color:gray;">Il y a ${joursPasses} jour(s)</small>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <span style="background:${couleur}; color:white; font-size:10px; padding:2px 6px; border-radius:10px; font-weight:bold;">${msg}</span>
+                        <button onclick="supprimerDefinitif(${item.id})" style="background:none; border:none; color:#9b2c2c; cursor:pointer; font-size:18px;">🗑️</button>
+                    </div>
+                </div>`;
+            }
         }
-        // ... (Reste de tes conditions : Plein, Alerte, etc.) ...
+        // --- CAS C : STOCK CLASSIQUE (FRIGO, PLACARD...) ---
+        else {
+            const container = document.getElementById(mapping[item.emplacement] || 'list-Placard');
+            if(container) {
+                const couleurEtat = item.etat === 'Entamé' ? '#ef6c00' : '#333';
+                const labelEtat = item.etat === 'Entamé' ? '⚠️ Entamé' : '📦 Plein';
+
+                container.innerHTML += `
+                <div class="item" style="border-left: 4px solid ${item.etat === 'Entamé' ? '#ef6c00' : '#4a5568'}; padding-left:10px; display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; background:white; padding:10px; border-radius:10px;">
+                    <div style="flex:1">
+                        <b style="color:${couleurEtat}">${item.nom}</b><br>
+                        <small style="cursor:pointer; color:gray;" onclick="basculerEtat(${item.id}, '${item.etat}')">${labelEtat}</small>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:5px;">
+                        <button class="qte-btn" onclick="modifierQuantite(${item.id},${item.quantite},-1)">-</button>
+                        <b style="width:25px; text-align:center;">${item.quantite}</b>
+                        <button class="qte-btn" onclick="modifierQuantite(${item.id},${item.quantite},1)">+</button>
+                        <button onclick="basculerEtat(${item.id}, '${item.etat}')" style="background:none; border:none; font-size:20px; cursor:pointer;">
+                            ${item.etat === 'Entamé' ? '🍴' : '🍽️'}
+                        </button>
+                    </div>
+                </div>`;
+            }
+        }
     });
 
-    // ✨ LA TOUCHE FINALE : ON REMPLIT LES SUGGESTIONS UNE FOIS QUE TOUT EST AFFICHÉ
-    remplirSuggestions(); 
-    console.log("✅ 189 suggestions chargées dans la barre de recherche !");
-}
-												
-												// --- CAS B : TUPPERWARE (ANTI-GASPI) ---
-												else if (item.etat === 'Tup') {
-													if(lt) {
-														const dateEnregistree = new Date(item.emplacement);
-														const aujourdhui = new Date();
-														const joursPasses = Math.floor((aujourdhui - dateEnregistree) / (1000 * 60 * 60 * 24));
+    // 5. Mise à jour du badge d'alerte
+    const badge = document.getElementById('badge-danger');
+    if (badge) {
+        if (nbDanger > 0) {
+            badge.innerText = nbDanger;
+            badge.style.display = "inline-block";
+        } else {
+            badge.style.display = "none";
+        }
+    }
 
-														let couleur = "#48bb78"; // Vert
-														let msg = "Frais";
-														if (joursPasses >= 3) { couleur = "#ed8936"; msg = "À consommer"; } // Orange
-														if (joursPasses >= 5) { 
-															couleur = "#e53e3e"; 
-															msg = "DANGER"; 
-															nbDanger++; // On compte l'alerte
-														}
+    // 6. ✨ REMPLISSAGE DES SUGGESTIONS (Pour ta barre de recherche)
+    remplirSuggestions();
 
-														lt.innerHTML += `
-														<div class="item" style="border-left: 6px solid ${couleur}; background:white; padding:10px; border-radius:10px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
-															<div>
-																<b style="font-size:14px;">🍱 ${item.nom}</b><br>
-																<small style="color:gray;">Il y a ${joursPasses} jour(s)</small>
-															</div>
-															<div style="display:flex; align-items:center; gap:10px;">
-																<span style="background:${couleur}; color:white; font-size:10px; padding:2px 6px; border-radius:10px; font-weight:bold;">${msg}</span>
-																<button onclick="supprimerDefinitif(${item.id})" style="background:none; border:none; color:#9b2c2c; cursor:pointer; font-size:18px;">🗑️</button>
-															</div>
-														</div>`;
-													}
-												}
-
-												// --- CAS C : STOCK CLASSIQUE (FRIGO, PLACARD...) ---
-												else {
-													const container = document.getElementById(mapping[item.emplacement] || 'list-Placard');
-													if(container) {
-														const couleurEtat = item.etat === 'Entamé' ? '#ef6c00' : '#333';
-														const labelEtat = item.etat === 'Entamé' ? '⚠️ Entamé' : '📦 Plein';
-
-														container.innerHTML += `
-														<div class="item" style="border-left: 4px solid ${item.etat === 'Entamé' ? '#ef6c00' : '#4a5568'}; padding-left:10px;">
-															<div style="flex:1">
-																<b style="color:${couleurEtat}">${item.nom}</b><br>
-																<small style="cursor:pointer; color:gray;" onclick="basculerEtat(${item.id}, '${item.etat}')">${labelEtat}</small>
-															</div>
-															<div style="display:flex; align-items:center; gap:5px;">
-																<button class="qte-btn" onclick="modifierQuantite(${item.id},${item.quantite},-1)">-</button>
-																<b style="width:25px; text-align:center;">${item.quantite}</b>
-																<button class="qte-btn" onclick="modifierQuantite(${item.id},${item.quantite},1)">+</button>
-																<button onclick="basculerEtat(${item.id}, '${item.etat}')" style="background:none; border:none; font-size:20px; cursor:pointer;">
-																	${item.etat === 'Entamé' ? '🍴' : '🍽️'}
-																</button>
-															</div>
-														</div>`;
-													}
-												}
-											});
-
-											// 5. Mise à jour du badge d'alerte sur l'onglet
-											const badge = document.getElementById('badge-danger');
-											if (badge) {
-												if (nbDanger > 0) {
-													badge.innerText = nbDanger;
-													badge.style.display = "inline-block";
-												} else {
-													badge.style.display = "none";
-												}
-											}
-										}
+} // <--- FIN DE LA FONCTION CHARGERTOUT
 
 										async function basculerEtat(id, etatActuel) {
 											const nouvelEtat = (etatActuel === 'Plein') ? 'Entamé' : 'Plein';
