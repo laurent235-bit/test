@@ -1099,21 +1099,17 @@ async function modifierPlanning(jour, moment, idExistant) {
 										
 
 function rechercherArticle() {
-    // 1. On récupère la saisie de l'utilisateur
+    console.log("⚡ La fonction recherche est bien appelée !"); // AJOUTE CETTE LIGNE
+    
     const barre = document.getElementById('mon-filtre-texte');
     if (!barre) return;
     const motCle = barre.value.toLowerCase();
     
-    // 2. On cible tous tes éléments qui ont la classe "item"
     const tousLesItems = document.querySelectorAll('.item');
-
     tousLesItems.forEach(ligne => {
-        // 3. On récupère le texte visible dans la ligne (le nom de l'aliment)
         const texteLigne = ligne.innerText.toLowerCase();
-        
-        // 4. On affiche si le mot-clé est présent, sinon on cache
         if (texteLigne.includes(motCle)) {
-            ligne.style.display = "flex"; // "flex" car c'est ton style d'origine
+            ligne.style.display = "flex";
         } else {
             ligne.style.display = "none";
         }
