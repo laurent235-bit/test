@@ -1098,18 +1098,24 @@ async function modifierPlanning(jour, moment, idExistant) {
 										}	
 										
 function rechercherArticle() {
-    console.log("⌨️ Détection de frappe !"); 
-    
-    const saisie = document.getElementById('mon-filtre-texte').value.toLowerCase();
-    const articles = document.querySelectorAll('.item');
+    const barre = document.getElementById('mon-filtre-texte');
+    if (!barre) return;
 
-    articles.forEach(article => {
-        const texte = article.innerText.toLowerCase();
-        // On force l'affichage en flex si ça correspond, sinon on cache
-        if (texte.includes(saisie)) {
-            article.style.setProperty('display', 'flex', 'important');
+    const motCle = barre.value.toLowerCase().trim(); // On enlève les espaces inutiles
+    const tousLesItems = document.querySelectorAll('.item');
+
+    console.log("🔍 Filtrage de " + tousLesItems.length + " éléments pour : " + motCle);
+
+    tousLesItems.forEach(ligne => {
+        // On récupère le texte à l'intérieur de la ligne
+        const texteLigne = ligne.innerText.toLowerCase();
+        
+        if (texteLigne.includes(motCle)) {
+            // ON FORCE L'AFFICHAGE (important pour écraser les autres styles)
+            ligne.style.setProperty('display', 'flex', 'important');
         } else {
-            article.style.setProperty('display', 'none', 'important');
+            // ON FORCE LA DISPARITION
+            ligne.style.setProperty('display', 'none', 'important');
         }
     });
 }
