@@ -50,14 +50,7 @@
 												<div id="recette-zone" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;"></div>
 											</div>
 											
-<div id="recherche-container" style="margin-bottom: 15px; position: sticky; top: 0; z-index: 100; background: #f8f9fa; padding: 10px 0;">
-    <div style="position: relative;">
-        <span style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #999;">🔍</span>
-        <input type="text" id="input-recherche" placeholder="Chercher un ingrédient (ex: Piles, Lait...)" 
-               style="width: 100%; padding: 12px 12px 12px 40px; border: 2px solid #ddd; border-radius: 25px; font-size: 16px; outline: none; transition: border-color 0.3s;"
-               onkeyup="filtrerMaListe()">
-    </div>
-</div>
+<input type="text" id="input-recherche" oninput="filtrerMaListe()" placeholder="Rechercher...">
 											<div class="card" style="padding:15px; border: 1px solid #ddd; margin-top:15px;">
 												<b style="font-size:14px;">➕ AJOUT MANUEL</b>
 												<div style="display:flex; flex-direction:column; gap:8px; margin-top:10px;">
@@ -1098,25 +1091,27 @@ async function modifierPlanning(jour, moment, idExistant) {
 											}
 										}	
 function filtrerMaListe() {
-    // 1. On récupère ce que l'utilisateur tape (en minuscules pour ne pas être gêné par les majuscules)
+    // 1. On récupère ce que tu tapes dans l'input
     const saisie = document.getElementById('input-recherche').value.toLowerCase();
     
-    // 2. On récupère toutes les "cartes" ou lignes de ta liste
-    // Remplace '.carte-produit' par la classe réelle que tu utilises pour tes lignes de produits
-    const articles = document.querySelectorAll('.carte-produit'); 
+    // 2. On cible TOUS tes articles (ceux qui ont class="item")
+    const articles = document.querySelectorAll('.item'); 
+    
+    // Petit check dans la console pour être sûr qu'on les voit
+    console.log(articles.length + " articles trouvés pour le filtrage");
 
     articles.forEach(article => {
-        // On récupère le nom du produit à l'intérieur de la carte
-        const nomProduit = article.querySelector('.nom-aliment').innerText.toLowerCase();
+        // 3. On récupère le texte à l'intérieur de l'article (le nom du produit)
+        const nomProduit = article.innerText.toLowerCase();
         
-        // 3. Si le nom contient la saisie, on affiche, sinon on cache
+        // 4. Si le nom contient ce que tu as tapé, on affiche, sinon on cache
         if (nomProduit.includes(saisie)) {
-            article.style.display = "flex"; // ou "block" selon ton design
+            article.style.display = "flex"; // On remet en flex car c'est ton style d'origine
         } else {
             article.style.display = "none";
         }
     });
-}										
+}
 										</script>
 										</body>
 										</html>
