@@ -1097,24 +1097,23 @@ async function modifierPlanning(jour, moment, idExistant) {
 											}
 										}	
 										
-
 function rechercherArticle() {
-    console.log("⚡ La fonction recherche est bien appelée !"); // AJOUTE CETTE LIGNE
+    console.log("⌨️ Détection de frappe !"); 
     
-    const barre = document.getElementById('mon-filtre-texte');
-    if (!barre) return;
-    const motCle = barre.value.toLowerCase();
-    
-    const tousLesItems = document.querySelectorAll('.item');
-    tousLesItems.forEach(ligne => {
-        const texteLigne = ligne.innerText.toLowerCase();
-        if (texteLigne.includes(motCle)) {
-            ligne.style.display = "flex";
+    const saisie = document.getElementById('mon-filtre-texte').value.toLowerCase();
+    const articles = document.querySelectorAll('.item');
+
+    articles.forEach(article => {
+        const texte = article.innerText.toLowerCase();
+        // On force l'affichage en flex si ça correspond, sinon on cache
+        if (texte.includes(saisie)) {
+            article.style.setProperty('display', 'flex', 'important');
         } else {
-            ligne.style.display = "none";
+            article.style.setProperty('display', 'none', 'important');
         }
     });
 }
+
 										</script>
 										</body>
 										</html>
