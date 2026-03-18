@@ -1099,23 +1099,22 @@ async function modifierPlanning(jour, moment, idExistant) {
 										
 function rechercherArticle() {
     const barre = document.getElementById('mon-filtre-texte');
-    if (!barre) return;
-
-    const motCle = barre.value.toLowerCase().trim(); // On enlève les espaces inutiles
+    const motCle = barre.value.toLowerCase().trim();
+    
+    // On récupère TOUT ce qui pourrait être un article
     const tousLesItems = document.querySelectorAll('.item');
 
-    console.log("🔍 Filtrage de " + tousLesItems.length + " éléments pour : " + motCle);
+    console.log("On tente de filtrer " + tousLesItems.length + " éléments.");
 
-    tousLesItems.forEach(ligne => {
-        // On récupère le texte à l'intérieur de la ligne
+    tousLesItems.forEach((ligne, index) => {
         const texteLigne = ligne.innerText.toLowerCase();
         
         if (texteLigne.includes(motCle)) {
-            // ON FORCE L'AFFICHAGE (important pour écraser les autres styles)
-            ligne.style.setProperty('display', 'flex', 'important');
+            // FORCE L'AFFICHAGE
+            ligne.style.cssText = "display: flex !important; background: #fff5f5; padding: 10px; border-radius: 10px; border: 1px solid #fed7d7; margin-bottom: 8px; justify-content: space-between; align-items: center;";
         } else {
-            // ON FORCE LA DISPARITION
-            ligne.style.setProperty('display', 'none', 'important');
+            // FORCE LA DISPARITION TOTALE
+            ligne.style.cssText = "display: none !important;";
         }
     });
 }
