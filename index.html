@@ -50,14 +50,13 @@
 												<div id="recette-zone" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;"></div>
 											</div>
 											
-<div id="recherche-container" style="margin-bottom: 15px; position: sticky; top: 0; z-index: 100; background: #f8f9fa; padding: 10px 0;">
-    <div style="position: relative;">
-        <span style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #999;">🔍</span>
-        <input type="text" id="input-recherche" placeholder="Chercher un ingrédient (ex: Piles, Lait...)" 
-               style="width: 100%; padding: 12px 12px 12px 40px; border: 2px solid #ddd; border-radius: 25px; font-size: 16px; outline: none; transition: border-color 0.3s;"
-               onkeyup="filtrerMaListe()">
-    </div>
+<div id="recherche-container" style="margin: 10px 0; position: sticky; top: 0; background: white; z-index: 1000; padding: 10px;">
+    <input type="text" id="mon-filtre-texte" 
+           oninput="rechercherArticle()" 
+           placeholder="🔍 Rechercher dans les 189 articles..." 
+           style="width: 100%; padding: 12px; border: 2px solid #ed8936; border-radius: 8px; font-size: 16px;">
 </div>
+
 											<div class="card" style="padding:15px; border: 1px solid #ddd; margin-top:15px;">
 												<b style="font-size:14px;">➕ AJOUT MANUEL</b>
 												<div style="display:flex; flex-direction:column; gap:8px; margin-top:10px;">
@@ -1098,26 +1097,25 @@ async function modifierPlanning(jour, moment, idExistant) {
 											}
 										}	
 										
-										// --- FONCTION DE RECHERCHE ---
-function filtrerMaListe() {
-    const input = document.getElementById('input-recherche');
-    if (!input) return; // Si l'input n'est pas trouvé, on arrête
 
-    const saisie = input.value.toLowerCase();
+function rechercherArticle() {
+    // 1. On récupère la saisie de l'utilisateur
+    const barre = document.getElementById('mon-filtre-texte');
+    if (!barre) return;
+    const motCle = barre.value.toLowerCase();
     
-    // On cible tous les éléments qui ont la classe "item" 
-    // (celle que tu utilises dans ton innerHTML pour la liste de courses)
-    const articles = document.querySelectorAll('.item'); 
+    // 2. On cible tous tes éléments qui ont la classe "item"
+    const tousLesItems = document.querySelectorAll('.item');
 
-    articles.forEach(article => {
-        // On récupère tout le texte de la ligne (Nom, bouton, etc.)
-        const texteComplet = article.innerText.toLowerCase();
+    tousLesItems.forEach(ligne => {
+        // 3. On récupère le texte visible dans la ligne (le nom de l'aliment)
+        const texteLigne = ligne.innerText.toLowerCase();
         
-        // Si le texte contient ce qu'on a tapé
-        if (texteComplet.includes(saisie)) {
-            article.style.display = "flex"; // On affiche
+        // 4. On affiche si le mot-clé est présent, sinon on cache
+        if (texteLigne.includes(motCle)) {
+            ligne.style.display = "flex"; // "flex" car c'est ton style d'origine
         } else {
-            article.style.display = "none"; // On cache
+            ligne.style.display = "none";
         }
     });
 }
