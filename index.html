@@ -52,9 +52,12 @@
 											
 <div id="recherche-container" style="margin: 10px 0; position: sticky; top: 0; background: white; z-index: 1000; padding: 10px;">
     <input type="text" id="mon-filtre-texte" 
+           list="liste-suggestions" 
            oninput="rechercherArticle()" 
-           placeholder="🔍 Rechercher dans les 189 articles..." 
-           style="width: 100%; padding: 12px; border: 2px solid #ed8936; border-radius: 8px; font-size: 16px;">
+           placeholder="🔍 Tapez le nom d'un article..." 
+           style="width: 100%; padding: 12px; border: 2px solid #ed8936; border-radius: 25px; font-size: 16px;">
+    
+    <datalist id="liste-suggestions"></datalist>
 </div>
 
 											<div class="card" style="padding:15px; border: 1px solid #ddd; margin-top:15px;">
@@ -634,61 +637,67 @@ const d = await resp.json();
 }
 
 										// --- FONCTION DE CHARGEMENT PRINCIPALE ---
-										async function chargerTout() {
-											// 1. Récupération des données depuis Supabase
-											const { data: items, error } = await monSupabase.from('inventaire2').select('*').order('nom');
-											
-											if (error) {
-												console.error("Erreur de chargement:", error);
-												return;
-											}
+async function chargerTout() {
+    // 1. Récupération des données depuis Supabase
+    const { data: items, error } = await monSupabase.from('inventaire2').select('*').order('nom');
+    
+    if (error) {
+        console.error("Erreur de chargement:", error);
+        return;
+    }
 
-											// 2. Mapping des emplacements vers les IDs HTML
-											const mapping = { 
-												'FRIGO': 'list-Frigo', 
-												'CONGELATEUR': 'list-Congélateur', 
-												'PLACARD': 'list-Placard', 
-												'ANIMAUX': 'list-Animaux', 
-												'HORS_CUISINE': 'list-Maison', 
-												'SALLE_DE_BAIN': 'list-SalleBain', 
-												'AUTRES': 'list-Autres',
-												'TUP': 'listeTups'
-											};
-											
-											// 3. Reset (vidage) de toutes les listes avant affichage
-											Object.values(mapping).forEach(id => { 
-												const el = document.getElementById(id);
-												if(el) el.innerHTML = ""; 
-											});
-											
-											const sl = document.getElementById('shoppingList'); 
-											if(sl) sl.innerHTML = "";
+    // 2. Mapping des emplacements vers les IDs HTML
+    const mapping = { 
+        'FRIGO': 'list-Frigo', 
+        'CONGELATEUR': 'list-Congélateur', 
+        'PLACARD': 'list-Placard', 
+        'ANIMAUX': 'list-Animaux', 
+        'HORS_CUISINE': 'list-Maison', 
+        'SALLE_DE_BAIN': 'list-SalleBain', 
+        'AUTRES': 'list-Autres',
+        'TUP': 'listeTups'
+    };
+    
+    // 3. Reset (vidage) de toutes les listes
+    Object.values(mapping).forEach(id => { 
+        const el = document.getElementById(id);
+        if(el) el.innerHTML = ""; 
+    });
+    
+    const sl = document.getElementById('shoppingList'); 
+    if(sl) sl.innerHTML = "";
 
-											const lt = document.getElementById('listeTups');
-											if(lt) lt.innerHTML = "";
-											
-											let nbDanger = 0; // Compteur pour le badge rouge Anti-Gaspi
+    const lt = document.getElementById('listeTups');
+    if(lt) lt.innerHTML = "";
+    
+    if(!items) return;
 
-											if(!items) return;
+    // 4. Boucle sur chaque article pour l'affichage
+    items.forEach(item => {
+        // ... (Ici ton code actuel qui remplit sl.innerHTML, etc.) ...
+        
+        // --- CAS A : LISTE DE COURSES ---
+        if (item.etat === 'Vide') {
+            if(sl) {
+                sl.innerHTML += `
+                <div class="item" style="background:#fff5f5; padding:10px; border-radius:10px; border:1px solid #fed7d7; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+                    <span style="font-weight:600; color:#c53030;">🛒 ${item.nom}</span>
+                    <div style="display:flex; gap:10px; align-items:center;">
+                        <button onclick="copierNom('${item.nom.replace(/'/g, "\\'")}', this)" 
+                                style="background:#4a5568; color:white; border:none; border-radius:6px; padding:6px 12px; cursor:pointer; font-size:13px;">Copier</button>
+                        <button onclick="supprimerDefinitif(${item.id})" 
+                                style="background:none; border:none; color:#9b2c2c; cursor:pointer; font-size:20px;">🗑️</button>
+                    </div>
+                </div>`;
+            }
+        }
+        // ... (Reste de tes conditions : Plein, Alerte, etc.) ...
+    });
 
-											// 4. Boucle sur chaque article
-											items.forEach(item => {
-												
-												// --- CAS A : LISTE DE COURSES ---
-												if (item.etat === 'Vide') {
-													if(sl) {
-														sl.innerHTML += `
-														<div class="item" style="background:#fff5f5; padding:10px; border-radius:10px; border:1px solid #fed7d7; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
-															<span style="font-weight:600; color:#c53030;">🛒 ${item.nom}</span>
-															<div style="display:flex; gap:10px; align-items:center;">
-																<button onclick="copierNom('${item.nom.replace(/'/g, "\\'")}', this)" 
-																		style="background:#4a5568; color:white; border:none; border-radius:6px; padding:6px 12px; cursor:pointer; font-size:13px;">Copier</button>
-																<button onclick="supprimerDefinitif(${item.id})" 
-																		style="background:none; border:none; color:#9b2c2c; cursor:pointer; font-size:20px;">🗑️</button>
-															</div>
-														</div>`;
-													}
-												} 
+    // ✨ LA TOUCHE FINALE : ON REMPLIT LES SUGGESTIONS UNE FOIS QUE TOUT EST AFFICHÉ
+    remplirSuggestions(); 
+    console.log("✅ 189 suggestions chargées dans la barre de recherche !");
+}
 												
 												// --- CAS B : TUPPERWARE (ANTI-GASPI) ---
 												else if (item.etat === 'Tup') {
@@ -1099,23 +1108,43 @@ async function modifierPlanning(jour, moment, idExistant) {
 										
 function rechercherArticle() {
     const barre = document.getElementById('mon-filtre-texte');
-    const motCle = barre.value.toLowerCase().trim();
+    if (!barre) return;
     
-    // On récupère TOUT ce qui pourrait être un article
+    const motCle = barre.value.toLowerCase().trim();
     const tousLesItems = document.querySelectorAll('.item');
 
-    console.log("On tente de filtrer " + tousLesItems.length + " éléments.");
-
-    tousLesItems.forEach((ligne, index) => {
+    tousLesItems.forEach(ligne => {
         const texteLigne = ligne.innerText.toLowerCase();
-        
         if (texteLigne.includes(motCle)) {
-            // FORCE L'AFFICHAGE
-            ligne.style.cssText = "display: flex !important; background: #fff5f5; padding: 10px; border-radius: 10px; border: 1px solid #fed7d7; margin-bottom: 8px; justify-content: space-between; align-items: center;";
+            ligne.style.setProperty('display', 'flex', 'important');
         } else {
-            // FORCE LA DISPARITION TOTALE
-            ligne.style.cssText = "display: none !important;";
+            ligne.style.setProperty('display', 'none', 'important');
         }
+    });
+}
+
+
+// ==========================================
+// 3. LA FONCTION SUGGESTIONS (Indépendante)
+// ==========================================
+function remplirSuggestions() {
+    const datalist = document.getElementById('liste-suggestions');
+    const tousLesItems = document.querySelectorAll('.item');
+    if (!datalist) return;
+
+    datalist.innerHTML = ""; 
+    const nomsUniques = new Set();
+
+    tousLesItems.forEach(item => {
+        // On prend la première ligne de texte et on nettoie les emojis
+        let nom = item.innerText.split('\n')[0].replace(/[🛒🗑️✅⚠️]/g, '').trim();
+        if (nom) nomsUniques.add(nom);
+    });
+
+    nomsUniques.forEach(nom => {
+        const option = document.createElement('option');
+        option.value = nom;
+        datalist.appendChild(option);
     });
 }
 
