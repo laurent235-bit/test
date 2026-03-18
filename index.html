@@ -49,7 +49,15 @@
 												</div>
 												<div id="recette-zone" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;"></div>
 											</div>
-
+											
+<div id="recherche-container" style="margin-bottom: 15px; position: sticky; top: 0; z-index: 100; background: #f8f9fa; padding: 10px 0;">
+    <div style="position: relative;">
+        <span style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #999;">🔍</span>
+        <input type="text" id="input-recherche" placeholder="Chercher un ingrédient (ex: Piles, Lait...)" 
+               style="width: 100%; padding: 12px 12px 12px 40px; border: 2px solid #ddd; border-radius: 25px; font-size: 16px; outline: none; transition: border-color 0.3s;"
+               onkeyup="filtrerMaListe()">
+    </div>
+</div>
 											<div class="card" style="padding:15px; border: 1px solid #ddd; margin-top:15px;">
 												<b style="font-size:14px;">➕ AJOUT MANUEL</b>
 												<div style="display:flex; flex-direction:column; gap:8px; margin-top:10px;">
@@ -142,12 +150,7 @@
             </div>
     </div>
 </div>
-											<div id="section-config" style="background: white; padding: 15px; border-radius: 12px; margin-bottom: 15px; border: 2px solid #ea4335;">
-    <label style="display:block; font-size:12px; font-weight:bold; margin-bottom:5px; color:#ea4335;">🔑 CLÉ GEMINI (MÉMOIRE LOCALE)</label>
-    <div style="display:flex; gap:8px;">
-        <input id="gKey" type="password" placeholder="xxxxxxxxxxxxxxxxx" 
-               style="flex-grow:1; padding:10px; border:1px solid #ddd; border-radius:8px;">
-        
+											
 
     <input id="sUrl" type="hidden" value="https://ylguhodjcgistealluzy.supabase.co">
     <input id="sKey" type="hidden" value="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsZ3Vob2RqY2dpc3RlYWxsdXp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA2MjcxMDAsImV4cCI6MjA4NjIwMzEwMH0.0czapM1DeFs7T3pTrExUMUKUcyUHi3w-p_jKj6XkTUM">
@@ -1093,7 +1096,27 @@ async function modifierPlanning(jour, moment, idExistant) {
 												// On ne supprime pas encore, on attend le "Oui" pour basculer
 												faireParlerIA("C'était le dernier " + p.nom + ". Veux-tu que je le rajoute à ta liste de courses ?");
 											}
-										}		
+										}	
+function filtrerMaListe() {
+    // 1. On récupère ce que l'utilisateur tape (en minuscules pour ne pas être gêné par les majuscules)
+    const saisie = document.getElementById('input-recherche').value.toLowerCase();
+    
+    // 2. On récupère toutes les "cartes" ou lignes de ta liste
+    // Remplace '.carte-produit' par la classe réelle que tu utilises pour tes lignes de produits
+    const articles = document.querySelectorAll('.carte-produit'); 
+
+    articles.forEach(article => {
+        // On récupère le nom du produit à l'intérieur de la carte
+        const nomProduit = article.querySelector('.nom-aliment').innerText.toLowerCase();
+        
+        // 3. Si le nom contient la saisie, on affiche, sinon on cache
+        if (nomProduit.includes(saisie)) {
+            article.style.display = "flex"; // ou "block" selon ton design
+        } else {
+            article.style.display = "none";
+        }
+    });
+}										
 										</script>
 										</body>
 										</html>
