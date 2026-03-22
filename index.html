@@ -763,31 +763,108 @@ async function chargerTout() {
 
 } // <--- FIN DE LA FONCTION CHARGERTOUT
 
-										async function basculerEtat(id, etatActuel) {
-											const nouvelEtat = (etatActuel === 'Plein') ? 'Entamé' : 'Plein';
-											await monSupabase.from('inventaire2').update({ etat: nouvelEtat }).eq('id', id);
-											chargerTout();
-										}
-										async function modifierQuantite(id, qte, delta) {
-											const nv = qte + delta;
-											if (nv <= 0) {
-												const r = prompt("1-Courses, 2-Supprimer", "1");
-												if (r === "1") await monSupabase.from('inventaire2').update({ etat: 'Vide', quantite: 0 }).eq('id', id);
-												else if (r === "2") await monSupabase.from('inventaire2').delete().eq('id', id);
-											} else { await monSupabase.from('inventaire2').update({ quantite: nv, etat: 'Plein' }).eq('id', id); }
-											chargerTout();
-										}
+// ==========================================
+// 1. AJOUT MANUEL (Version "Anti-Doublon" & "Anti-Casse")
+// ==========================================
+async function ajouterManuel() {
+    const n = document.getElementById('add-nom').value.trim();
+    const e = document.getElementById('add-emplacement').value;
+    const q = parseInt(document.getElementById('add-qte').value) || 1;
 
-										async function supprimerDefinitif(id) { if(confirm("Supprimer ?")) { await monSupabase.from('inventaire2').delete().eq('id', id); chargerTout(); } }
+    if (!n) return;
 
-										async function ajouterManuel() {
-											const n = document.getElementById('add-nom').value;
-											const e = document.getElementById('add-emplacement').value;
-											const q = parseInt(document.getElementById('add-qte').value);
-											if(!n) return;
-											await monSupabase.from('inventaire2').insert([{ nom: n, emplacement: e, quantite: q, etat: 'Plein' }]);
-											document.getElementById('add-nom').value = ""; chargerTout();
-										}
+    // 🔍 Recherche insensible à la casse (ilike)
+    const { data: existant } = await monSupabase
+        .from('inventaire2')
+        .select('*')
+        .ilike('nom', n) 
+        .eq('emplacement', e)
+        .neq('etat', 'Vide')
+        .maybeSingle();
+
+    if (existant) {
+        // 📈 On additionne au stock existant
+        const nouvelleQte = (existant.quantite || 0) + q;
+        await monSupabase
+            .from('inventaire2')
+            .update({ quantite: nouvelleQte, etat: 'Plein' })
+            .eq('id', existant.id);
+    } else {
+        // 🆕 Nouvel article
+        await monSupabase
+            .from('inventaire2')
+            .insert([{ nom: n, emplacement: e, quantite: q, etat: 'Plein' }]);
+    }
+
+    document.getElementById('add-nom').value = "";
+    chargerTout();
+}
+
+// ==========================================
+// 2. RETOUR GEMINI (Version "Scan Intelligent")
+// ==========================================
+async function traiterRetourGemini(text) {
+    try {
+        const debut = text.indexOf('[');
+        const fin = text.lastIndexOf(']') + 1;
+        const articles = JSON.parse(text.substring(debut, fin));
+
+        for (let a of articles) {
+            const nomNettoye = a.nom.trim();
+            const qteScan = parseInt(a.quantite) || 1;
+
+            // 🔍 Recherche insensible à la casse (ilike)
+            const { data: existant } = await monSupabase
+                .from('inventaire2')
+                .select('*')
+                .ilike('nom', nomNettoye)
+                .eq('emplacement', a.emplacement)
+                .neq('etat', 'Vide')
+                .maybeSingle();
+
+            if (existant) {
+                // 📈 Fusion des quantités
+                const nouvelleQte = (existant.quantite || 0) + qteScan;
+                await monSupabase
+                    .from('inventaire2')
+                    .update({ quantite: nouvelleQte, etat: 'Plein' })
+                    .eq('id', existant.id);
+            } else {
+                // 🆕 Insertion classique
+                await monSupabase
+                    .from('inventaire2')
+                    .insert([{ 
+                        nom: nomNettoye, 
+                        quantite: qteScan, 
+                        emplacement: a.emplacement, 
+                        etat: 'Plein' 
+                    }]);
+            }
+        }
+
+        document.getElementById('statut-scan').innerText = "✅ " + articles.length + " articles traités !";
+        chargerTout();
+
+    } catch(e) { 
+        console.error("Erreur JSON Gemini :", e);
+        document.getElementById('statut-scan').innerText = "❌ Format invalide."; 
+    }
+}
+
+// --- 3. SUPPRIMER DÉFINITIF ---
+async function supprimerDefinitif(id) { 
+    if(confirm("Supprimer cet article de la base ?")) { 
+        await monSupabase.from('inventaire2').delete().eq('id', id); 
+        chargerTout(); 
+    } 
+}
+
+// --- 4. BASCULER ÉTAT (Plein / Entamé) ---
+async function basculerEtat(id, etatActuel) {
+    const nouvelEtat = (etatActuel === 'Plein') ? 'Entamé' : 'Plein';
+    await monSupabase.from('inventaire2').update({ etat: nouvelEtat }).eq('id', id);
+    chargerTout();
+}
 
 										// --- FONCTIONS GRIMOIRE (VERSION UNIQUE ET NETTOYÉE) ---
 										function filtrerGrimoire() {
