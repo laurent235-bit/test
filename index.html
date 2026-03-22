@@ -636,7 +636,6 @@ const d = await resp.json();
     }
 }
 
-										// --- FONCTION DE CHARGEMENT PRINCIPALE ---
 async function chargerTout() {
     // 1. Récupération des données depuis Supabase
     const { data: items, error } = await monSupabase.from('inventaire2').select('*').order('nom');
@@ -658,7 +657,7 @@ async function chargerTout() {
         'TUP': 'listeTups'
     };
 
-    // 3. Reset (vidage) de toutes les listes avant affichage
+    // 3. Reset (vidage) de toutes les listes
     Object.values(mapping).forEach(id => { 
         const el = document.getElementById(id);
         if(el) el.innerHTML = ""; 
@@ -670,7 +669,7 @@ async function chargerTout() {
     const lt = document.getElementById('listeTups');
     if(lt) lt.innerHTML = "";
 
-    let nbDanger = 0; // Compteur pour le badge rouge Anti-Gaspi
+    let nbDanger = 0; 
 
     if(!items) return;
 
@@ -699,7 +698,7 @@ async function chargerTout() {
                 const aujourdhui = new Date();
                 const joursPasses = Math.floor((aujourdhui - dateEnregistree) / (1000 * 60 * 60 * 24));
 
-                let couleur = "#48bb78"; // Vert
+                let couleur = "#48bb78";
                 let msg = "Frais";
                 if (joursPasses >= 3) { couleur = "#ed8936"; msg = "À consommer"; } 
                 if (joursPasses >= 5) { 
@@ -721,18 +720,27 @@ async function chargerTout() {
                 </div>`;
             }
         }
-        // --- CAS C : STOCK CLASSIQUE (FRIGO, PLACARD...) ---
+        // --- CAS C : STOCK CLASSIQUE (MODIFIÉ AVEC LE SELECT) ---
         else {
             const container = document.getElementById(mapping[item.emplacement] || 'list-Placard');
             if(container) {
                 const couleurEtat = item.etat === 'Entamé' ? '#ef6c00' : '#333';
                 const labelEtat = item.etat === 'Entamé' ? '⚠️ Entamé' : '📦 Plein';
+                
+                // Liste des destinations possibles
+                const destinations = ['FRIGO', 'CONGELATEUR', 'PLACARD', 'ANIMAUX', 'HORS_CUISINE', 'SALLE_DE_BAIN', 'AUTRES'];
+                const optionsHtml = destinations.map(d => `<option value="${d}" ${d === item.emplacement ? 'selected' : ''}>${d}</option>`).join('');
 
                 container.innerHTML += `
                 <div class="item" style="border-left: 4px solid ${item.etat === 'Entamé' ? '#ef6c00' : '#4a5568'}; padding-left:10px; display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; background:white; padding:10px; border-radius:10px;">
                     <div style="flex:1">
                         <b style="color:${couleurEtat}">${item.nom}</b><br>
-                        <small style="cursor:pointer; color:gray;" onclick="basculerEtat(${item.id}, '${item.etat}')">${labelEtat}</small>
+                        <div style="display:flex; align-items:center; gap:8px; margin-top:4px;">
+                            <select onchange="changerEmplacement(${item.id}, this.value)" style="font-size:10px; border:1px solid #ddd; border-radius:4px; background:#f7fafc; color:#4a5568; cursor:pointer;">
+                                ${optionsHtml}
+                            </select>
+                            <small style="cursor:pointer; color:gray;" onclick="basculerEtat(${item.id}, '${item.etat}')">${labelEtat}</small>
+                        </div>
                     </div>
                     <div style="display:flex; align-items:center; gap:5px;">
                         <button class="qte-btn" onclick="modifierQuantite(${item.id},${item.quantite},-1)">-</button>
@@ -758,23 +766,27 @@ async function chargerTout() {
         }
     }
 
-    // 6. ✨ REMPLISSAGE DES SUGGESTIONS (Pour ta barre de recherche)
+    // 6. ✨ REMPLISSAGE DES SUGGESTIONS
     remplirSuggestions();
-
-} // <--- FIN DE LA FONCTION CHARGERTOUT
+}
 
 // ==========================================
 // 1. AJOUT MANUEL (Version "Anti-Doublon" & "Anti-Casse")
 // ==========================================
 async function ajouterManuel() {
-    const n = document.getElementById('add-nom').value.trim();
+    // 1. On récupère et on nettoie DIRECTEMENT la saisie
+    // .replace(/\s+/g, ' ') remplace les doubles/triples espaces par un seul espace
+    const nRaw = document.getElementById('add-nom').value;
+    const n = nRaw.trim().replace(/\s+/g, ' '); 
+    
     const e = document.getElementById('add-emplacement').value;
-    const q = parseInt(document.getElementById('add-qte').value) || 1;
+    const qInput = document.getElementById('add-qte').value;
+    const q = parseInt(qInput) || 1;
 
     if (!n) return;
 
-    // 🔍 Recherche insensible à la casse (ilike)
-    const { data: existant } = await monSupabase
+    // 2. Recherche insensible à la casse et flexible
+    const { data: existant, error } = await monSupabase
         .from('inventaire2')
         .select('*')
         .ilike('nom', n) 
@@ -782,27 +794,43 @@ async function ajouterManuel() {
         .neq('etat', 'Vide')
         .maybeSingle();
 
-    if (existant) {
-        // 📈 On additionne au stock existant
-        const nouvelleQte = (existant.quantite || 0) + q;
-        await monSupabase
-            .from('inventaire2')
-            .update({ quantite: nouvelleQte, etat: 'Plein' })
-            .eq('id', existant.id);
-    } else {
-        // 🆕 Nouvel article
-        await monSupabase
-            .from('inventaire2')
-            .insert([{ nom: n, emplacement: e, quantite: q, etat: 'Plein' }]);
+    if (error) {
+        console.error("Erreur de recherche:", error);
     }
 
+    if (existant) {
+        // 3. CAS EXISTANT : Addition des quantités
+        const nouvelleQte = (parseInt(existant.quantite) || 0) + q;
+        
+        await monSupabase
+            .from('inventaire2')
+            .update({ 
+                quantite: nouvelleQte, 
+                etat: 'Plein' // On repasse en plein si on remet du stock
+            })
+            .eq('id', existant.id);
+            
+        console.log(`📈 Fusion réussie pour : ${n} (Nouvelle qté: ${nouvelleQte})`);
+    } else {
+        // 4. CAS NOUVEAU : Création
+        await monSupabase
+            .from('inventaire2')
+            .insert([{ 
+                nom: n, 
+                emplacement: e, 
+                quantite: q, 
+                etat: 'Plein' 
+            }]);
+            
+        console.log(`🆕 Nouvel article créé : ${n}`);
+    }
+
+    // 5. Reset du formulaire et rafraîchissement
     document.getElementById('add-nom').value = "";
+    document.getElementById('add-qte').value = "1"; // Reset la quantité à 1 par défaut
     chargerTout();
 }
 
-// ==========================================
-// 2. RETOUR GEMINI (Version "Scan Intelligent")
-// ==========================================
 async function traiterRetourGemini(text) {
     try {
         const debut = text.indexOf('[');
@@ -810,27 +838,33 @@ async function traiterRetourGemini(text) {
         const articles = JSON.parse(text.substring(debut, fin));
 
         for (let a of articles) {
-            const nomNettoye = a.nom.trim();
+            // ✨ NETTOYAGE CRUCIAL : trim() enlève les bords, replace() gère les doubles espaces
+            const nomNettoye = a.nom.trim().replace(/\s+/g, ' ');
             const qteScan = parseInt(a.quantite) || 1;
 
-            // 🔍 Recherche insensible à la casse (ilike)
+            // 🔍 RECHERCHE ULTRA-FLEXIBLE
             const { data: existant } = await monSupabase
                 .from('inventaire2')
                 .select('*')
-                .ilike('nom', nomNettoye)
-                .eq('emplacement', a.emplacement)
-                .neq('etat', 'Vide')
+                .ilike('nom', nomNettoye) // Ignore MAJ/min
+                .eq('emplacement', a.emplacement) // Même endroit
+                .neq('etat', 'Vide') // Pas dans les courses
                 .maybeSingle();
 
             if (existant) {
-                // 📈 Fusion des quantités
-                const nouvelleQte = (existant.quantite || 0) + qteScan;
+                // 📈 FUSION : On additionne le ticket au stock
+                const nouvelleQte = (parseInt(existant.quantite) || 0) + qteScan;
                 await monSupabase
                     .from('inventaire2')
-                    .update({ quantite: nouvelleQte, etat: 'Plein' })
+                    .update({ 
+                        quantite: nouvelleQte, 
+                        etat: 'Plein' 
+                    })
                     .eq('id', existant.id);
+                
+                console.log(`✅ Fusion Scan : ${nomNettoye} (+${qteScan})`);
             } else {
-                // 🆕 Insertion classique
+                // 🆕 CRÉATION : Nouvel article détecté sur le ticket
                 await monSupabase
                     .from('inventaire2')
                     .insert([{ 
@@ -839,6 +873,8 @@ async function traiterRetourGemini(text) {
                         emplacement: a.emplacement, 
                         etat: 'Plein' 
                     }]);
+                
+                console.log(`🆕 Nouveau Scan : ${nomNettoye}`);
             }
         }
 
@@ -850,7 +886,6 @@ async function traiterRetourGemini(text) {
         document.getElementById('statut-scan').innerText = "❌ Format invalide."; 
     }
 }
-
 // --- 3. SUPPRIMER DÉFINITIF ---
 async function supprimerDefinitif(id) { 
     if(confirm("Supprimer cet article de la base ?")) { 
@@ -1219,6 +1254,48 @@ function remplirSuggestions() {
         option.value = nom;
         datalist.appendChild(option);
     });
+}
+// --- FONCTION DE MODIFICATION DES QUANTITÉS (Boutons + et -) ---
+async function modifierQuantite(id, qte, delta) {
+    const nv = qte + delta;
+    
+    if (nv <= 0) {
+        // Si la quantité tombe à 0, on demande quoi faire
+        const r = prompt("Article épuisé ! \n1 - Envoyer dans la Liste de Courses \n2 - Supprimer définitivement", "1");
+        
+        if (r === "1") {
+            // On le bascule en état 'Vide' (il apparaîtra dans les courses)
+            await monSupabase.from('inventaire2')
+                .update({ etat: 'Vide', quantite: 0 })
+                .eq('id', id);
+        } else if (r === "2") {
+            // On le supprime pour de bon
+            await monSupabase.from('inventaire2')
+                .delete()
+                .eq('id', id);
+        }
+    } else {
+        // Sinon, on met simplement à jour la quantité et on s'assure qu'il est marqué 'Plein'
+        await monSupabase.from('inventaire2')
+            .update({ quantite: nv, etat: 'Plein' })
+            .eq('id', id);
+    }
+    
+    // On rafraîchit l'affichage pour voir le changement
+    chargerTout();
+}
+async function changerEmplacement(id, nouvelEmplacement) {
+    const { error } = await monSupabase
+        .from('inventaire2')
+        .update({ emplacement: nouvelEmplacement })
+        .eq('id', id);
+
+    if (!error) {
+        console.log(`🚚 Article ${id} déplacé vers ${nouvelEmplacement}`);
+        chargerTout(); // On rafraîchit pour que l'article change de colonne immédiatement
+    } else {
+        alert("Erreur lors du déplacement de l'article");
+    }
 }
 
 										</script>
