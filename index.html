@@ -551,55 +551,55 @@ async function demanderAuChef() {
     const ing = stock ? stock.map(s => s.nom).join(', ') : "Rien de spécial";
 
     try {
-		const promptExpert = `
-Tu es un Chef cuisinier créatif et étoilé. 
-DEMANDE UTILISATEUR : "${pU}"
-STOCK DISPONIBLE : ${ing}
+        const promptExpert = `
+        Tu es un Chef cuisinier créatif et étoilé. 
+        DEMANDE UTILISATEUR : "${pU}"
+        STOCK DISPONIBLE : ${ing}
 
-CONSIGNES DE VARIÉTÉ :
-1. Propose 3 idées de plats TOTALEMENT différentes les unes des autres.
-2. ÉVITE les recettes trop basiques ou répétitives (ne propose pas toujours des pâtes ou des salades).
-3. Change de style culinaire pour chaque proposition (ex: une recette française, une épicée, une originale).
-4. Utilise intelligemment le stock, mais n'hésite pas à suggérer une association de saveurs audacieuse.
-5. Si l'utilisateur demande "autre chose", sois radicalement différent des propositions précédentes.
+        CONSIGNES DE VARIÉTÉ :
+        1. Propose 3 idées de plats TOTALEMENT différentes les unes des autres.
+        2. ÉVITE les recettes trop basiques ou répétitives (ne propose pas toujours des pâtes ou des salades).
+        3. Change de style culinaire pour chaque proposition (ex: une recette française, une épicée, une originale).
+        4. Utilise intelligemment le stock, mais n'hésite pas à suggérer une association de saveurs audacieuse.
+        5. Si l'utilisateur demande "autre chose", sois radicalement différent des propositions précédentes.
 
-RÉPONDS UNIQUEMENT AU FORMAT JSON STRICT (tableau d'objets) : 
-[{"titre":"Nom du plat original", "contenu":"Recette courte en 3 étapes"}]`;
+        RÉPONDS UNIQUEMENT AU FORMAT JSON STRICT (tableau d'objets) : 
+        [{"titre":"Nom du plat original", "contenu":"Recette courte en 3 étapes"}]`;
 
-       // 2. Appel au Relais Cloudflare (Le Coffre-fort !)
-  // ⚠️ TRÈS IMPORTANT : Remplace l'adresse ci-dessous par TON vrai lien Cloudflare
-  const urlRelais = "https://gemini-relais.laurent235.workers.dev"; 
+        // 2. Appel au Relais Cloudflare
+        const urlRelais = "https://gemini-relais.laurent235.workers.dev"; 
 
-  const resp = await fetch(urlRelais, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' }, 
-      // On envoie juste la question au relais, il s'occupe du reste !
-      body: JSON.stringify({ 
-    prompt: promptExpert,
-    temperature: 0.8  // <--- On demande à l'IA d'être plus "chaude" et variée
-  })
+        const resp = await fetch(urlRelais, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({ 
+                prompt: promptExpert,
+                temperature: 0.8 
+            }) // <-- Fermeture du JSON.stringify
+        }); // <-- Fermeture du fetch (C'est ici que ça bloquait !)
 
-if (!resp.ok) {
-    const err = await resp.json();
-    throw new Error(`Erreur API Google (${resp.status}): ${err.error?.message || 'Inconnue'}`);
-}
+        if (!resp.ok) {
+            const err = await resp.json();
+            throw new Error(`Erreur API Google (${resp.status}): ${err.error?.message || 'Inconnue'}`);
+        }
 
-const d = await resp.json();
+        const d = await resp.json();
         
         // 3. Extraction et Nettoyage du JSON
         if (!d.candidates || !d.candidates[0].content) throw new Error("Réponse vide du Chef");
         
         let t = d.candidates[0].content.parts[0].text;
         
-        // On nettoie les balises Markdown éventuelles (```json ... ```)
+        // Nettoyage des balises Markdown
         t = t.replace(/```json/g, '').replace(/```/g, '').trim();
         
-        // On cherche le début [ et la fin ] pour être sûr d'avoir le tableau
+        // Extraction du tableau JSON
         const jsonStart = t.indexOf('[');
         const jsonEnd = t.lastIndexOf(']');
         
         if (jsonStart === -1 || jsonEnd === -1) throw new Error("Le format JSON reçu est invalide.");
         
+        // On stocke les recettes pour la fonction de sauvegarde
         recettesTemporaires = JSON.parse(t.substring(jsonStart, jsonEnd + 1));
         
         // 4. Affichage
