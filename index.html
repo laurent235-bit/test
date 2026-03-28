@@ -577,7 +577,7 @@ RÉPONDS UNIQUEMENT AU FORMAT JSON STRICT (tableau d'objets) :
       body: JSON.stringify({ 
     prompt: promptExpert,
     temperature: 0.8  // <--- On demande à l'IA d'être plus "chaude" et variée
-  });
+  })
 
 if (!resp.ok) {
     const err = await resp.json();
