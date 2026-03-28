@@ -551,18 +551,20 @@ async function demanderAuChef() {
     const ing = stock ? stock.map(s => s.nom).join(', ') : "Rien de spécial";
 
     try {
-        const promptExpert = `
-        Tu es un Chef cuisinier expert et pragmatique.
-        DEMANDE UTILISATEUR : "${pU}"
-        STOCK DISPONIBLE : ${ing}
+		const promptExpert = `
+Tu es un Chef cuisinier créatif et étoilé. 
+DEMANDE UTILISATEUR : "${pU}"
+STOCK DISPONIBLE : ${ing}
 
-        CONSIGNES STRICTES :
-        1. Ne propose que des plats réalisables AVEC le stock.
-        2. Si l'utilisateur demande un plat précis (ex: "des frites"), respecte la technique.
-        3. Sois bref et précis.
-        
-        RÉPONDS UNIQUEMENT AU FORMAT JSON STRICT (tableau d'objets) : 
-        [{"titre":"Nom du plat", "contenu":"Recette courte en 3 étapes"}]`;
+CONSIGNES DE VARIÉTÉ :
+1. Propose 3 idées de plats TOTALEMENT différentes les unes des autres.
+2. ÉVITE les recettes trop basiques ou répétitives (ne propose pas toujours des pâtes ou des salades).
+3. Change de style culinaire pour chaque proposition (ex: une recette française, une épicée, une originale).
+4. Utilise intelligemment le stock, mais n'hésite pas à suggérer une association de saveurs audacieuse.
+5. Si l'utilisateur demande "autre chose", sois radicalement différent des propositions précédentes.
+
+RÉPONDS UNIQUEMENT AU FORMAT JSON STRICT (tableau d'objets) : 
+[{"titre":"Nom du plat original", "contenu":"Recette courte en 3 étapes"}]`;
 
        // 2. Appel au Relais Cloudflare (Le Coffre-fort !)
   // ⚠️ TRÈS IMPORTANT : Remplace l'adresse ci-dessous par TON vrai lien Cloudflare
@@ -572,7 +574,9 @@ async function demanderAuChef() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' }, 
       // On envoie juste la question au relais, il s'occupe du reste !
-      body: JSON.stringify({ prompt: promptExpert }) 
+      body: JSON.stringify({ 
+    prompt: promptExpert,
+    temperature: 0.8  // <--- On demande à l'IA d'être plus "chaude" et variée
   });
 
 if (!resp.ok) {
