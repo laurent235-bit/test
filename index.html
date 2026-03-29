@@ -734,65 +734,22 @@ async function chargerTout() {
                 </div>`;
             }
         }
-       // --- CAS C : STOCK CLASSIQUE ---
+// --- CAS C : TEST RADICAL ---
         else {
             const container = document.getElementById(mapping[item.emplacement] || 'list-Placard');
             
             if (container) {
-                const couleurEtat = item.etat === 'Entamé' ? '#ef6c00' : '#333';
-                const labelEtat = item.etat === 'Entamé' ? '⚠️ Entamé' : '📦 Plein';
-                
-                // 1. CALCUL DE LA DATE
-                let alerteHtml = "";
-                // On vérifie bien la présence de la date et l'emplacement
-                if (item.date_peremption && item.emplacement === 'FRIGO') {
-                    try {
-                        const hoy = new Date();
-                        hoy.setHours(0,0,0,0);
-                        const exp = new Date(item.date_peremption);
-                        exp.setHours(0,0,0,0);
-                        
-                        const diff = Math.round((exp - hoy) / (1000 * 60 * 60 * 24));
-                        let icone = "🟢";
-                        if (diff <= 1) icone = "🔴";
-                        else if (diff <= 3) icone = "🟠";
-
-                        alerteHtml = `
-                            <div style="margin: 4px 0; display: flex; align-items: center; gap: 5px; background: #f0f4f8; padding: 2px 6px; border-radius: 4px; width: fit-content;">
-                                <span>${icone}</span>
-                                <small style="color: #4a5568; font-size: 11px; font-weight: bold;">Exp: ${item.date_peremption}</small>
-                                <button onclick="prolongerDate(${item.id}, '${item.date_peremption}')" style="font-size: 9px; margin-left: 5px; cursor: pointer;">+2j</button>
-                            </div>`;
-                    } catch (e) {
-                        console.error("Erreur date sur:", item.nom, e);
-                    }
+                // TEST 1 : On force un texte pour TOUS les articles
+                let debugDate = "Pas de date";
+                if (item.date_peremption) {
+                    debugDate = "DATE TROUVÉE : " + item.date_peremption;
                 }
 
-                const destinations = ['FRIGO', 'CONGELATEUR', 'PLACARD', 'ANIMAUX', 'HORS_CUISINE', 'SALLE_DE_BAIN', 'AUTRES'];
-                const optionsHtml = destinations.map(d => `<option value="${d}" ${d === item.emplacement ? 'selected' : ''}>${d}</option>`).join('');
-
                 container.innerHTML += `
-                <div class="item" style="border-left: 4px solid ${item.etat === 'Entamé' ? '#ef6c00' : '#4a5568'}; padding: 10px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; background: white; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                    <div style="flex: 1;">
-                        <b style="color: ${couleurEtat}; font-size: 14px; display: block; margin-bottom: 2px;">${item.nom}</b>
-                        
-                        <div class="date-container">${alerteHtml}</div>
-
-                        <div style="display: flex; align-items: center; gap: 8px; margin-top: 5px;">
-                            <select onchange="changerEmplacement(${item.id}, this.value)" style="font-size: 10px; border: 1px solid #ddd; border-radius: 4px; background: #f7fafc;">
-                                ${optionsHtml}
-                            </select>
-                            <small style="cursor: pointer; color: gray;" onclick="basculerEtat(${item.id}, '${item.etat}')">${labelEtat}</small>
-                        </div>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 5px;">
-                        <button class="qte-btn" onclick="modifierQuantite(${item.id}, ${item.quantite}, -1)">-</button>
-                        <b style="width: 25px; text-align: center;">${item.quantite}</b>
-                        <button class="qte-btn" onclick="modifierQuantite(${item.id}, ${item.quantite}, 1)">+</button>
-                        <button onclick="basculerEtat(${item.id}, '${item.etat}')" style="background: none; border: none; font-size: 20px; cursor: pointer;">
-                            ${item.etat === 'Entamé' ? '🍴' : '🍽️'}
-                        </button>
-                    </div>
+                <div class="item" style="border: 2px solid black; margin-bottom: 5px; padding: 10px; background: white;">
+                    <b style="color: red;">${item.nom}</b><br>
+                    <i style="color: blue; font-size: 12px;">${debugDate}</i><br>
+                    <small>ID: ${item.id} | Emp: ${item.emplacement}</small>
                 </div>`;
             }
         }
