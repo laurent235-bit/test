@@ -584,7 +584,7 @@ async function demanderAuChef() {
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ 
                 prompt: promptExpert,
-                temperature: 0.8 
+                temperature: 0.5 
             }) // <-- Fermeture du JSON.stringify
         }); // <-- Fermeture du fetch (C'est ici que ça bloquait !)
 
@@ -742,17 +742,26 @@ async function chargerTout() {
                 const labelEtat = item.etat === 'Entamé' ? '⚠️ Entamé' : '📦 Plein';
                 
                 // --- LOGIQUE INDICATEUR FRAÎCHEUR (FRIGO) ---
-               // --- TEST DE DIAGNOSTIC ---
-let alerteHtml = "";
-if (item.date_peremption) {
-    // On ignore l'emplacement "FRIGO" pour ce test et on simplifie le calcul
-    const diff = Math.floor((new Date(item.date_peremption) - new Date()) / (1000 * 60 * 60 * 24));
-    
-    // On crée un affichage ultra-basique sans conditions complexes
-    alerteHtml = `<div style="background:yellow; color:black; font-size:10px; padding:2px;">
-                    🎯 TEST DATE: ${item.date_peremption} (J${diff})
-                  </div>`;
-}
+                let alerteHtml = "";
+                if (item.date_peremption && item.emplacement === 'FRIGO') {
+                    const aujourdhui = new Date();
+                    const datePerim = new Date(item.date_peremption);
+                    const diff = Math.ceil((datePerim - aujourdhui) / (1000 * 60 * 60 * 24));
+
+                    let icone = "🟢"; 
+                    if (diff <= 1) icone = "🔴"; 
+                    else if (diff <= 3) icone = "🟠"; 
+
+                    alerteHtml = `
+                        <div style="display:flex; align-items:center; gap:5px; margin-top:2px;">
+                            <span title="Date estimée">${icone}</span>
+                            <small style="font-size:10px; color:#718096;">Exp: ${item.date_peremption}</small>
+                            <button onclick="prolongerDate(${item.id}, '${item.date_peremption}')" 
+                                    style="font-size:9px; background:#edf2f7; border:1px solid #cbd5e0; border-radius:3px; padding:0 4px; cursor:pointer; color:#4a5568;">
+                                +2j
+                            </button>
+                        </div>`;
+                }
 
                 const destinations = ['FRIGO', 'CONGELATEUR', 'PLACARD', 'ANIMAUX', 'HORS_CUISINE', 'SALLE_DE_BAIN', 'AUTRES'];
                 const optionsHtml = destinations.map(d => `<option value="${d}" ${d === item.emplacement ? 'selected' : ''}>${d}</option>`).join('');
