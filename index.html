@@ -723,21 +723,43 @@ async function chargerTout() {
                 </div>`;
             }
         }
-        // --- CAS C : STOCK CLASSIQUE (MODIFIÉ AVEC LE SELECT) ---
+        // --- CAS C : STOCK CLASSIQUE ---
         else {
             const container = document.getElementById(mapping[item.emplacement] || 'list-Placard');
             if(container) {
                 const couleurEtat = item.etat === 'Entamé' ? '#ef6c00' : '#333';
                 const labelEtat = item.etat === 'Entamé' ? '⚠️ Entamé' : '📦 Plein';
                 
-                // Liste des destinations possibles
+                // --- LOGIQUE INDICATEUR FRAÎCHEUR (FRIGO) ---
+                let alerteHtml = "";
+                if (item.date_peremption && item.emplacement === 'FRIGO') {
+                    const aujourdhui = new Date();
+                    const datePerim = new Date(item.date_peremption);
+                    const diff = Math.ceil((datePerim - aujourdhui) / (1000 * 60 * 60 * 24));
+
+                    let icone = "🟢"; 
+                    if (diff <= 1) icone = "🔴"; 
+                    else if (diff <= 3) icone = "🟠"; 
+
+                    alerteHtml = `
+                        <div style="display:flex; align-items:center; gap:5px; margin-top:2px;">
+                            <span title="Date estimée">${icone}</span>
+                            <small style="font-size:10px; color:#718096;">Exp: ${item.date_peremption}</small>
+                            <button onclick="prolongerDate(${item.id}, '${item.date_peremption}')" 
+                                    style="font-size:9px; background:#edf2f7; border:1px solid #cbd5e0; border-radius:3px; padding:0 4px; cursor:pointer; color:#4a5568;">
+                                +2j
+                            </button>
+                        </div>`;
+                }
+
                 const destinations = ['FRIGO', 'CONGELATEUR', 'PLACARD', 'ANIMAUX', 'HORS_CUISINE', 'SALLE_DE_BAIN', 'AUTRES'];
                 const optionsHtml = destinations.map(d => `<option value="${d}" ${d === item.emplacement ? 'selected' : ''}>${d}</option>`).join('');
 
                 container.innerHTML += `
                 <div class="item" style="border-left: 4px solid ${item.etat === 'Entamé' ? '#ef6c00' : '#4a5568'}; padding-left:10px; display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; background:white; padding:10px; border-radius:10px;">
                     <div style="flex:1">
-                        <b style="color:${couleurEtat}">${item.nom}</b><br>
+                        <b style="color:${couleurEtat}">${item.nom}</b>
+                        ${alerteHtml}
                         <div style="display:flex; align-items:center; gap:8px; margin-top:4px;">
                             <select onchange="changerEmplacement(${item.id}, this.value)" style="font-size:10px; border:1px solid #ddd; border-radius:4px; background:#f7fafc; color:#4a5568; cursor:pointer;">
                                 ${optionsHtml}
@@ -841,43 +863,48 @@ async function traiterRetourGemini(text) {
         const articles = JSON.parse(text.substring(debut, fin));
 
         for (let a of articles) {
-            // ✨ NETTOYAGE CRUCIAL : trim() enlève les bords, replace() gère les doubles espaces
+            // ✨ NETTOYAGE : trim() et gestion des espaces
             const nomNettoye = a.nom.trim().replace(/\s+/g, ' ');
             const qteScan = parseInt(a.quantite) || 1;
+            
+            // On récupère la date de péremption si elle existe dans le JSON de Gemini
+            const datePerim = a.peremption || null;
 
             // 🔍 RECHERCHE ULTRA-FLEXIBLE
             const { data: existant } = await monSupabase
                 .from('inventaire2')
                 .select('*')
-                .ilike('nom', nomNettoye) // Ignore MAJ/min
-                .eq('emplacement', a.emplacement) // Même endroit
-                .neq('etat', 'Vide') // Pas dans les courses
+                .ilike('nom', nomNettoye) 
+                .eq('emplacement', a.emplacement) 
+                .neq('etat', 'Vide') 
                 .maybeSingle();
 
             if (existant) {
-                // 📈 FUSION : On additionne le ticket au stock
+                // 📈 FUSION : On additionne et on met à jour la date
                 const nouvelleQte = (parseInt(existant.quantite) || 0) + qteScan;
                 await monSupabase
                     .from('inventaire2')
                     .update({ 
                         quantite: nouvelleQte, 
-                        etat: 'Plein' 
+                        etat: 'Plein',
+                        date_peremption: datePerim // Mise à jour de la date estimée
                     })
                     .eq('id', existant.id);
                 
-                console.log(`✅ Fusion Scan : ${nomNettoye} (+${qteScan})`);
+                console.log(`✅ Fusion Scan : ${nomNettoye} (+${qteScan}) avec date : ${datePerim}`);
             } else {
-                // 🆕 CRÉATION : Nouvel article détecté sur le ticket
+                // 🆕 CRÉATION : Nouvel article déduit du ticket
                 await monSupabase
                     .from('inventaire2')
                     .insert([{ 
                         nom: nomNettoye, 
                         quantite: qteScan, 
                         emplacement: a.emplacement, 
-                        etat: 'Plein' 
+                        etat: 'Plein',
+                        date_peremption: datePerim // Enregistrement de la date estimée
                     }]);
                 
-                console.log(`🆕 Nouveau Scan : ${nomNettoye}`);
+                console.log(`🆕 Nouveau Scan : ${nomNettoye} avec date : ${datePerim}`);
             }
         }
 
@@ -1300,6 +1327,25 @@ async function changerEmplacement(id, nouvelEmplacement) {
         chargerTout(); // On rafraîchit pour que l'article change de colonne immédiatement
     } else {
         alert("Erreur lors du déplacement de l'article");
+    }
+}
+async function prolongerDate(id, dateActuelle) {
+    // On prend la date actuelle de l'article ou celle d'aujourd'hui
+    let base = dateActuelle ? new Date(dateActuelle) : new Date();
+    
+    // On ajoute 2 jours
+    base.setDate(base.getDate() + 2);
+    const nouvelleDate = base.toISOString().split('T')[0];
+
+    // Mise à jour Supabase
+    const { error } = await monSupabase
+        .from('inventaire2')
+        .update({ date_peremption: nouvelleDate })
+        .eq('id', id);
+
+    if (!error) {
+        console.log(`⏳ Date prolongée au ${nouvelleDate}`);
+        chargerTout(); // On rafraîchit pour voir la couleur changer
     }
 }
 
