@@ -688,6 +688,7 @@ async function chargerTout() {
 
     // 4. Boucle sur chaque article
     items.forEach(item => {
+	if(item.emplacement === 'FRIGO') console.log("Check Frigo:", item.nom, "Date:", item.date_peremption);
 
         // --- CAS A : LISTE DE COURSES ---
         if (item.etat === 'Vide') {
