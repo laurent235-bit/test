@@ -688,7 +688,6 @@ async function chargerTout() {
 
     // 4. Boucle sur chaque article
     items.forEach(item => {
-	if(item.emplacement === 'FRIGO') console.log("Check Frigo:", item.nom, "Date:", item.date_peremption);
 
         // --- CAS A : LISTE DE COURSES ---
         if (item.etat === 'Vide') {
@@ -734,33 +733,32 @@ async function chargerTout() {
                 </div>`;
             }
         }
-// --- CAS C : LE FIX FINAL ---
+        // --- CAS C : STOCK CLASSIQUE ---
         else {
             const container = document.getElementById(mapping[item.emplacement] || 'list-Placard');
-            
-            if (container) {
-                // 1. On récupère la date de manière ultra-sécurisée
-                // On utilise ['date_peremption'] au cas où le point poserait problème
-                const maDate = item['date_peremption'] || item.date_peremption;
+            if(container) {
+                const couleurEtat = item.etat === 'Entamé' ? '#ef6c00' : '#333';
+                const labelEtat = item.etat === 'Entamé' ? '⚠️ Entamé' : '📦 Plein';
                 
+                // --- LOGIQUE INDICATEUR FRAÎCHEUR (FRIGO) ---
                 let alerteHtml = "";
-                
-                // 2. On simplifie la condition au maximum
-                if (maDate && maDate !== null) {
-                    const hoy = new Date();
-                    hoy.setHours(0,0,0,0);
-                    const exp = new Date(maDate);
-                    exp.setHours(0,0,0,0);
-                    
-                    const diff = Math.round((exp - hoy) / (1000 * 60 * 60 * 24));
-                    let icone = "🟢";
-                    if (diff <= 1) icone = "🔴";
-                    else if (diff <= 3) icone = "🟠";
+                if (item.date_peremption && item.emplacement === 'FRIGO') {
+                    const aujourdhui = new Date();
+                    const datePerim = new Date(item.date_peremption);
+                    const diff = Math.ceil((datePerim - aujourdhui) / (1000 * 60 * 60 * 24));
+
+                    let icone = "🟢"; 
+                    if (diff <= 1) icone = "🔴"; 
+                    else if (diff <= 3) icone = "🟠"; 
 
                     alerteHtml = `
-                        <div style="margin: 4px 0; display: flex; align-items: center; gap: 5px; background: #fff5f5; border: 1px solid #feb2b2; padding: 2px 6px; border-radius: 4px; width: fit-content;">
-                            <span>${icone}</span>
-                            <small style="color: #c53030; font-size: 11px; font-weight: bold;">Périme le : ${maDate}</small>
+                        <div style="display:flex; align-items:center; gap:5px; margin-top:2px;">
+                            <span title="Date estimée">${icone}</span>
+                            <small style="font-size:10px; color:#718096;">Exp: ${item.date_peremption}</small>
+                            <button onclick="prolongerDate(${item.id}, '${item.date_peremption}')" 
+                                    style="font-size:9px; background:#edf2f7; border:1px solid #cbd5e0; border-radius:3px; padding:0 4px; cursor:pointer; color:#4a5568;">
+                                +2j
+                            </button>
                         </div>`;
                 }
 
@@ -768,23 +766,24 @@ async function chargerTout() {
                 const optionsHtml = destinations.map(d => `<option value="${d}" ${d === item.emplacement ? 'selected' : ''}>${d}</option>`).join('');
 
                 container.innerHTML += `
-                <div class="item" style="border-left: 4px solid ${item.etat === 'Entamé' ? '#ef6c00' : '#4a5568'}; padding: 10px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; background: white; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                    <div style="flex: 1;">
-                        <b style="font-size: 14px;">${item.nom}</b>
-                        
-                        ${alerteHtml} 
-
-                        <div style="display: flex; align-items: center; gap: 8px; margin-top: 5px;">
-                            <select onchange="changerEmplacement(${item.id}, this.value)" style="font-size: 10px;">
+                <div class="item" style="border-left: 4px solid ${item.etat === 'Entamé' ? '#ef6c00' : '#4a5568'}; padding-left:10px; display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; background:white; padding:10px; border-radius:10px;">
+                    <div style="flex:1">
+                        <b style="color:${couleurEtat}">${item.nom}</b>
+                        ${alerteHtml}
+                        <div style="display:flex; align-items:center; gap:8px; margin-top:4px;">
+                            <select onchange="changerEmplacement(${item.id}, this.value)" style="font-size:10px; border:1px solid #ddd; border-radius:4px; background:#f7fafc; color:#4a5568; cursor:pointer;">
                                 ${optionsHtml}
                             </select>
-                            <small style="cursor: pointer; color: gray;" onclick="basculerEtat(${item.id}, '${item.etat}')">📦 ${item.etat}</small>
+                            <small style="cursor:pointer; color:gray;" onclick="basculerEtat(${item.id}, '${item.etat}')">${labelEtat}</small>
                         </div>
                     </div>
-                    <div style="display: flex; align-items: center; gap: 5px;">
-                        <button class="qte-btn" onclick="modifierQuantite(${item.id}, ${item.quantite}, -1)">-</button>
-                        <b style="width: 20px; text-align: center;">${item.quantite}</b>
-                        <button class="qte-btn" onclick="modifierQuantite(${item.id}, ${item.quantite}, 1)">+</button>
+                    <div style="display:flex; align-items:center; gap:5px;">
+                        <button class="qte-btn" onclick="modifierQuantite(${item.id},${item.quantite},-1)">-</button>
+                        <b style="width:25px; text-align:center;">${item.quantite}</b>
+                        <button class="qte-btn" onclick="modifierQuantite(${item.id},${item.quantite},1)">+</button>
+                        <button onclick="basculerEtat(${item.id}, '${item.etat}')" style="background:none; border:none; font-size:20px; cursor:pointer;">
+                            ${item.etat === 'Entamé' ? '🍴' : '🍽️'}
+                        </button>
                     </div>
                 </div>`;
             }
