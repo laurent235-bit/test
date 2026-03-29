@@ -496,19 +496,29 @@ async function scannerTicket(input) {
     reader.onload = async () => {
         try {
             const base64Data = reader.result.split(',')[1];
+            
+            // 1. On récupère la date d'aujourd'hui pour donner un repère à l'IA
+            const aujourdhui = new Date().toISOString().split('T')[0];
 
-            // ON REPREND LE FORMAT EXACT QUI FONCTIONNAIT AVANT
+            // 2. ON MET À JOUR LE PROMPT POUR DEMANDER LES DATES
             const payload = {
                 contents: [{
                     parts: [
-                        { text: "Tu es un expert en ticket de caisse. Extrais les articles. Nettoie les noms pour qu'ils soient naturels. Emplacements : FRIGO, PLACARD, CONGELATEUR, ANIMAUX, HORS_CUISINE. Réponds UNIQUEMENT le JSON : [{\"nom\":\"...\",\"quantite\":1,\"emplacement\":\"...\"}]" },
+                        { text: `Tu es un expert en ticket de caisse. Extrais les articles. 
+                        Nettoie les noms pour qu'ils soient naturels. 
+                        Emplacements : FRIGO, PLACARD, CONGELATEUR, ANIMAUX, HORS_CUISINE. 
+                        
+                        CONSIGNE SPÉCIALE : 
+                        Pour chaque article du FRIGO, estime une date de péremption (format YYYY-MM-DD) basée sur aujourd'hui (${aujourdhui}).
+                        Exemple : Viande/Poisson +3j, Yaourt +15j, Fromage +30j, Fruits/Légumes +7j.
+                        
+                        Réponds UNIQUEMENT le JSON : [{"nom":"...","quantite":1,"emplacement":"...","peremption":"YYYY-MM-DD"}]` },
                         { inline_data: { mime_type: file.type, data: base64Data } }
                     ]
                 }],
-                generationConfig: { temperature: 0.1 }
+                generationConfig: { temperature: 0.1 } // On garde 0.1 pour être précis sur les noms
             };
 
-            // On envoie le payload complet à appelGemini
             const text = await appelGemini(payload);
             traiterRetourGemini(text);
             
