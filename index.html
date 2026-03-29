@@ -1258,33 +1258,35 @@ function remplirSuggestions() {
         datalist.appendChild(option);
     });
 }
-// --- FONCTION DE MODIFICATION DES QUANTITÉS (Boutons + et -) ---
+// --- FONCTION DE MODIFICATION DES QUANTITÉS (Version Ergonomique) ---
 async function modifierQuantite(id, qte, delta) {
     const nv = qte + delta;
     
     if (nv <= 0) {
-        // Si la quantité tombe à 0, on demande quoi faire
-        const r = prompt("Article épuisé ! \n1 - Envoyer dans la Liste de Courses \n2 - Supprimer définitivement", "1");
+        // confirm() renvoie true si on clique sur OK, false si on clique sur ANNULER
+        const ajouterAuxCourses = confirm("Article épuisé !\nVoulez-vous l'ajouter à la LISTE DE COURSES ?\n\n(OK = Liste de courses / ANNULER = Supprimer définitivement)");
         
-        if (r === "1") {
-            // On le bascule en état 'Vide' (il apparaîtra dans les courses)
+        if (ajouterAuxCourses) {
+            // Cas OUI (OK) : On le bascule en état 'Vide'
             await monSupabase.from('inventaire2')
                 .update({ etat: 'Vide', quantite: 0 })
                 .eq('id', id);
-        } else if (r === "2") {
-            // On le supprime pour de bon
+            console.log("🛒 Article envoyé en liste de courses");
+        } else {
+            // Cas NON (ANNULER) : On le supprime pour de bon
             await monSupabase.from('inventaire2')
                 .delete()
                 .eq('id', id);
+            console.log("🗑️ Article supprimé définitivement");
         }
     } else {
-        // Sinon, on met simplement à jour la quantité et on s'assure qu'il est marqué 'Plein'
+        // Sinon, mise à jour classique de la quantité
         await monSupabase.from('inventaire2')
             .update({ quantite: nv, etat: 'Plein' })
             .eq('id', id);
     }
     
-    // On rafraîchit l'affichage pour voir le changement
+    // Rafraîchissement de l'interface
     chargerTout();
 }
 async function changerEmplacement(id, nouvelEmplacement) {
