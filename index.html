@@ -742,38 +742,43 @@ async function chargerTout() {
                 const couleurEtat = item.etat === 'Entamé' ? '#ef6c00' : '#333';
                 const labelEtat = item.etat === 'Entamé' ? '⚠️ Entamé' : '📦 Plein';
                 
-                // 1. CALCUL DE LA DATE (On le fait AVANT de créer le HTML de l'article)
+                // 1. CALCUL DE LA DATE
                 let alerteHtml = "";
+                // On vérifie bien la présence de la date et l'emplacement
                 if (item.date_peremption && item.emplacement === 'FRIGO') {
-                    const hoy = new Date();
-                    hoy.setHours(0,0,0,0);
-                    const exp = new Date(item.date_peremption);
-                    exp.setHours(0,0,0,0);
-                    
-                    const diff = Math.round((exp - hoy) / (1000 * 60 * 60 * 24));
-                    let icone = "🟢";
-                    if (diff <= 1) icone = "🔴";
-                    else if (diff <= 3) icone = "🟠";
+                    try {
+                        const hoy = new Date();
+                        hoy.setHours(0,0,0,0);
+                        const exp = new Date(item.date_peremption);
+                        exp.setHours(0,0,0,0);
+                        
+                        const diff = Math.round((exp - hoy) / (1000 * 60 * 60 * 24));
+                        let icone = "🟢";
+                        if (diff <= 1) icone = "🔴";
+                        else if (diff <= 3) icone = "🟠";
 
-                    alerteHtml = `
-                        <div style="margin: 4px 0; display: flex; align-items: center; gap: 5px;">
-                            <span>${icone}</span>
-                            <small style="color: #718096; font-size: 11px; font-weight: bold;">Exp: ${item.date_peremption}</small>
-                            <button onclick="prolongerDate(${item.id}, '${item.date_peremption}')" style="font-size: 9px; padding: 0 4px; cursor: pointer;">+2j</button>
-                        </div>`;
+                        alerteHtml = `
+                            <div style="margin: 4px 0; display: flex; align-items: center; gap: 5px; background: #f0f4f8; padding: 2px 6px; border-radius: 4px; width: fit-content;">
+                                <span>${icone}</span>
+                                <small style="color: #4a5568; font-size: 11px; font-weight: bold;">Exp: ${item.date_peremption}</small>
+                                <button onclick="prolongerDate(${item.id}, '${item.date_peremption}')" style="font-size: 9px; margin-left: 5px; cursor: pointer;">+2j</button>
+                            </div>`;
+                    } catch (e) {
+                        console.error("Erreur date sur:", item.nom, e);
+                    }
                 }
 
-                // 2. GÉNÉRATION DES OPTIONS DU SELECT
                 const destinations = ['FRIGO', 'CONGELATEUR', 'PLACARD', 'ANIMAUX', 'HORS_CUISINE', 'SALLE_DE_BAIN', 'AUTRES'];
                 const optionsHtml = destinations.map(d => `<option value="${d}" ${d === item.emplacement ? 'selected' : ''}>${d}</option>`).join('');
 
-                // 3. INJECTION FINALE (Vérifie bien que ${alerteHtml} est entre le nom et le select)
                 container.innerHTML += `
                 <div class="item" style="border-left: 4px solid ${item.etat === 'Entamé' ? '#ef6c00' : '#4a5568'}; padding: 10px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; background: white; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
                     <div style="flex: 1;">
-                        <b style="color: ${couleurEtat}; font-size: 14px;">${item.nom}</b>
+                        <b style="color: ${couleurEtat}; font-size: 14px; display: block; margin-bottom: 2px;">${item.nom}</b>
                         
-                        ${alerteHtml} <div style="display: flex; align-items: center; gap: 8px; margin-top: 5px;">
+                        <div class="date-container">${alerteHtml}</div>
+
+                        <div style="display: flex; align-items: center; gap: 8px; margin-top: 5px;">
                             <select onchange="changerEmplacement(${item.id}, this.value)" style="font-size: 10px; border: 1px solid #ddd; border-radius: 4px; background: #f7fafc;">
                                 ${optionsHtml}
                             </select>
