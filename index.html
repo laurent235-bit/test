@@ -24,9 +24,10 @@
 											<div class="scan-zone">
 												<b style="color:var(--accent)">🧾 ENTRÉE DE COURSES</b>
 												<div style="display: flex; gap: 10px; margin-top: 10px;">
-													<button onclick="document.getElementById('input-photo').click()" class="btn btn-accent" style="flex:1">📸 SCAN TICKET</button>
-													<button onclick="ouvrirEticket()" class="btn btn-accent" style="flex:1">📧 E-TICKET</button>
-												</div>
+    <button onclick="document.getElementById('input-photo').click()" class="btn btn-accent" style="flex:1">
+        📸 SCANNER UN TICKET
+    </button>
+</div>
 												<input type="file" id="input-photo" accept="image/*,application/pdf" capture="environment" style="display:none" onchange="scannerTicket(this)">
 												<div id="statut-scan" style="margin-top: 10px; font-size: 13px; font-weight: bold; text-align: center;"></div>
 											</div>
@@ -529,21 +530,7 @@ async function scannerTicket(input) {
     };
     reader.readAsDataURL(file);
 }
-										function ouvrirEticket() {
-											const texte = prompt("Collez le ticket :");
-											if(texte) appelGemini({ contents: [{ parts: [{ text: `Ticket: ${texte}. Liste articles, qté, emplacements. JSON STRICT: [{\"nom\":\"...\",\"quantite\":1,\"emplacement\":\"...\"}]` }] }] }).then(traiterRetourGemini).catch(()=>alert("Erreur E-ticket"));
-										}
-
-										async function traiterRetourGemini(text) {
-											try {
-												const articles = JSON.parse(text.substring(text.indexOf('['), text.lastIndexOf(']') + 1));
-												for (let a of articles) {
-													await monSupabase.from('inventaire2').insert([{ nom: a.nom, quantite: a.quantite, emplacement: a.emplacement, etat: 'Plein' }]);
-												}
-												document.getElementById('statut-scan').innerText = "✅ " + articles.length + " articles ajoutés !";
-												chargerTout();
-											} catch(e) { document.getElementById('statut-scan').innerText = "❌ Format invalide."; }
-										}
+										
 
 										// CHEF (VERSION CORRIGÉE & STABLE)
 async function demanderAuChef() {
@@ -552,26 +539,31 @@ async function demanderAuChef() {
     
     if(!pU) return;
     
-    z.innerHTML = "<p style='grid-column:1/3; text-align:center;'>👨‍🍳 Chef Gemini 1.5 examine votre stock...</p>";
+    z.innerHTML = "<p style='grid-column:1/3; text-align:center;'>👨‍🍳 Le Chef examine votre stock...</p>";
     
     // 1. Récupération du stock depuis Supabase
     const { data: stock } = await monSupabase.from('inventaire2').select('nom').neq('etat', 'Vide');
     
-    // Petite sécurité si la base est vide ou inaccessible
     const ing = stock ? stock.map(s => s.nom).join(', ') : "Rien de spécial";
 
     try {
+        // --- ON RÉPARE LE PROMPT ICI ---
         const promptExpert = `
-        Tu es un Chef cuisinier créatif et étoilé. 
+        Tu es un Chef cuisinier créatif qui sait s'adapter parfaitement aux besoins.
+        
         DEMANDE UTILISATEUR : "${pU}"
         STOCK DISPONIBLE : ${ing}
 
+        CONSIGNES DE STYLE :
+        1. RESPECTE l'intention de l'utilisateur : s'il demande "simple", "rapide" ou "peu d'ingrédients", propose des recettes épurées et efficaces (max 5-6 ingrédients).
+        2. Propose 3 idées de plats aux styles culinaires variés (ex: un terroir, un du monde, un moderne).
+        3. Si la demande est vague, sois créatif, mais si la demande est précise (ex: "recette simple"), ne sois pas trop sophistiqué.
+        4. Utilise intelligemment le stock disponible en priorité.
+        5. Présente chaque recette de façon concise : Nom du plat + liste courte d'ingrédients + étape clé.
+
         CONSIGNES DE VARIÉTÉ :
-        1. Propose 3 idées de plats TOTALEMENT différentes les unes des autres.
-        2. ÉVITE les recettes trop basiques ou répétitives (ne propose pas toujours des pâtes ou des salades).
-        3. Change de style culinaire pour chaque proposition (ex: une recette française, une épicée, une originale).
-        4. Utilise intelligemment le stock, mais n'hésite pas à suggérer une association de saveurs audacieuse.
-        5. Si l'utilisateur demande "autre chose", sois radicalement différent des propositions précédentes.
+        - ÉVITE de proposer toujours la même base (alterne féculents, légumes, protéines).
+        - Si l'utilisateur dit "autre chose", change radicalement de direction par rapport aux idées précédentes.
 
         RÉPONDS UNIQUEMENT AU FORMAT JSON STRICT (tableau d'objets) : 
         [{"titre":"Nom du plat original", "contenu":"Recette courte en 3 étapes"}]`;
@@ -584,9 +576,9 @@ async function demanderAuChef() {
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ 
                 prompt: promptExpert,
-                temperature: 0.5 
-            }) // <-- Fermeture du JSON.stringify
-        }); // <-- Fermeture du fetch (C'est ici que ça bloquait !)
+                temperature: 0.4 
+            }) 
+        });
 
         if (!resp.ok) {
             const err = await resp.json();
@@ -625,7 +617,6 @@ async function demanderAuChef() {
         z.innerHTML = `<p style="color:red; text-align:center;">❌ Oups : ${e.message}</p>`; 
     }
 }
-
 										async function sauverRecetteDirect(i) {
     const r = recettesTemporaires[i];
     
