@@ -881,16 +881,14 @@ async function traiterRetourGemini(text) {
             const qteScan = parseInt(a.quantite) || 1;
             const datePerim = a.peremption || null;
 
-            // 🔍 RECHERCHE UNIQUE : Même nom, même emplacement, même date ET même propriétaire
             let query = monSupabase
                 .from('inventaire2')
                 .select('*')
                 .ilike('nom', nomNettoye)
                 .eq('emplacement', a.emplacement)
-                .eq('proprietaire', utilisateurActuel) // Filtre utilisateur
+                .eq('proprietaire', utilisateurActuel)
                 .neq('etat', 'Vide');
 
-            // Gestion précise de la date pour éviter les doublons inutiles
             if (datePerim) {
                 query = query.eq('date_peremption', datePerim);
             } else {
@@ -900,19 +898,13 @@ async function traiterRetourGemini(text) {
             const { data: existant } = await query.maybeSingle();
 
             if (existant) {
-                // 📈 FUSION : On ajoute la quantité à l'article existant de CET utilisateur
                 const nouvelleQte = (parseInt(existant.quantite) || 0) + qteScan;
                 await monSupabase
                     .from('inventaire2')
-                    .update({ 
-                        quantite: nouvelleQte, 
-                        etat: 'Plein' 
-                    })
+                    .update({ quantite: nouvelleQte, etat: 'Plein' })
                     .eq('id', existant.id);
-                
-                console.log(`✅ Fusion : ${nomNettoye} chez ${utilisateurActuel}`);
+                console.log(`✅ Fusion : ${nomNettoye}`);
             } else {
-                // 🆕 CRÉATION : Nouvel article ou date différente
                 await monSupabase
                     .from('inventaire2')
                     .insert([{ 
@@ -921,12 +913,11 @@ async function traiterRetourGemini(text) {
                         emplacement: a.emplacement, 
                         etat: 'Plein',
                         date_peremption: datePerim,
-                        proprietaire: utilisateurActuel // On marque le nouveau proprio
+                        proprietaire: utilisateurActuel 
                     }]);
-                
-                console.log(`🆕 Nouveau : ${nomNettoye} créé pour ${utilisateurActuel}`);
+                console.log(`🆕 Nouveau : ${nomNettoye}`);
             }
-        } // Fin de la boucle for
+        }
 
         document.getElementById('statut-scan').innerText = "✅ " + articles.length + " articles traités !";
         chargerTout();
@@ -936,6 +927,7 @@ async function traiterRetourGemini(text) {
         document.getElementById('statut-scan').innerText = "❌ Erreur de traitement."; 
     }
 }
+
 // --- 3. SUPPRIMER DÉFINITIF ---
 async function supprimerDefinitif(id) { 
     if(confirm("Supprimer cet article de la base ?")) { 
@@ -950,23 +942,6 @@ async function basculerEtat(id, etatActuel) {
     await monSupabase.from('inventaire2').update({ etat: nouvelEtat }).eq('id', id);
     chargerTout();
 }
-
-										// --- FONCTIONS GRIMOIRE (VERSION UNIQUE ET NETTOYÉE) ---
-										function filtrerGrimoire() {
-											const input = document.getElementById('search-grimoire').value.toLowerCase();
-											const zone = document.getElementById('grimoire-zone');
-											// On récupère les blocs de recettes (ce sont les divs directes dans grimoire-zone)
-											const items = zone.children;
-											
-											for (let i = 0; i < items.length; i++) {
-												const titre = items[i].getElementsByTagName('b')[0];
-												if (titre) {
-													const txt = titre.textContent || titre.innerText;
-													// Si le titre contient le texte tapé, on affiche, sinon on cache
-													items[i].style.display = txt.toLowerCase().indexOf(input) > -1 ? "" : "none";
-												}
-											}
-										}
 
 										async function chargerGrimoire() {
 											const { data, error } = await monSupabase.from('recettes_sauvees').select('*').order('created_at', {ascending: false});
