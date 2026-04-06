@@ -160,6 +160,14 @@
 </div>
 
   <script>
+  let utilisateurActuel = localStorage.getItem('monFrigo_User');
+
+if (!utilisateurActuel) {
+    utilisateurActuel = prompt("Bienvenue ! Entre ton nom ou un pseudo pour créer ton inventaire perso :");
+    if (utilisateurActuel) {
+        localStorage.setItem('monFrigo_User', utilisateurActuel);
+    }
+}
     // --- VARIABLES GLOBALES ---
     let monSupabase;
     let recettesTemporaires = [];
@@ -641,11 +649,16 @@ async function demanderAuChef() {
 }
 
 async function chargerTout() {
-    // 1. Récupération des données depuis Supabase
-    const { data: items, error } = await monSupabase.from('inventaire2').select('*').order('nom');
+    async function chargerTout() {
+    // 1. On filtre par propriétaire
+    const { data: items, error } = await monSupabase
+        .from('inventaire2')
+        .select('*')
+        .eq('proprietaire', utilisateurActuel) // 👈 LA MAGIE EST ICI
+        .order('nom');
 
     if (error) {
-        console.error("Erreur de chargement:", error);
+        console.error("Erreur:", error);
         return;
     }
 
@@ -858,43 +871,39 @@ async function ajouterManuel() {
 }
 
 async function traiterRetourGemini(text) {
-    try {
-        const debut = text.indexOf('[');
-        const fin = text.lastIndexOf(']') + 1;
-        const articles = JSON.parse(text.substring(debut, fin));
-
-        for (let a of articles) {
-            // ✨ NETTOYAGE : trim() et gestion des espaces
+    for (let a of articles) {
             const nomNettoye = a.nom.trim().replace(/\s+/g, ' ');
             const qteScan = parseInt(a.quantite) || 1;
-            
-            // On récupère la date de péremption si elle existe dans le JSON de Gemini
             const datePerim = a.peremption || null;
 
-            // 🔍 RECHERCHE ULTRA-FLEXIBLE
-            const { data: existant } = await monSupabase
+            // 🔍 RECHERCHE CIBLÉE : 
+            // On cherche le produit seulement chez l'utilisateur actuel
+            const query = monSupabase
                 .from('inventaire2')
                 .select('*')
                 .ilike('nom', nomNettoye) 
                 .eq('emplacement', a.emplacement) 
-                .neq('etat', 'Vide') 
-                .maybeSingle();
+                .eq('proprietaire', utilisateurActuel) // 👈 IMPORTANT : Ne pas toucher au frigo des autres
+                .neq('etat', 'Vide');
+
+            if (datePerim) {
+                query.eq('date_peremption', datePerim);
+            }
+
+            const { data: existant } = await query.maybeSingle();
 
             if (existant) {
-                // 📈 FUSION : On additionne et on met à jour la date
+                // 📈 MISE À JOUR : On ajoute à l'existant de CET utilisateur
                 const nouvelleQte = (parseInt(existant.quantite) || 0) + qteScan;
                 await monSupabase
                     .from('inventaire2')
                     .update({ 
                         quantite: nouvelleQte, 
-                        etat: 'Plein',
-                        date_peremption: datePerim // Mise à jour de la date estimée
+                        etat: 'Plein'
                     })
                     .eq('id', existant.id);
-                
-                console.log(`✅ Fusion Scan : ${nomNettoye} (+${qteScan}) avec date : ${datePerim}`);
             } else {
-                // 🆕 CRÉATION : Nouvel article déduit du ticket
+                // 🆕 CRÉATION : On crée une nouvelle ligne marquée pour cet utilisateur
                 await monSupabase
                     .from('inventaire2')
                     .insert([{ 
@@ -902,10 +911,58 @@ async function traiterRetourGemini(text) {
                         quantite: qteScan, 
                         emplacement: a.emplacement, 
                         etat: 'Plein',
-                        date_peremption: datePerim // Enregistrement de la date estimée
+                        date_peremption: datePerim,
+                        proprietaire: utilisateurActuel // 👈 L'étiquette de ton ami
+                    }]);
+            }
+        }
+        // ... fin de la fonction (statut-scan et chargerTout)
+
+            // 🔍 RECHERCHE PLUS PRÉCISE : 
+            // On cherche le même nom ET la même date !
+            const query = monSupabase
+                .from('inventaire2')
+                .select('*')
+                .ilike('nom', nomNettoye) 
+                .eq('emplacement', a.emplacement) 
+                .neq('etat', 'Vide');
+
+            // Si Gemini a donné une date, on l'ajoute à la recherche
+            if (datePerim) {
+                query.eq('date_peremption', datePerim);
+            } else {
+                query.is('date_peremption', null);
+            }
+
+            const { data: existant } = await query.maybeSingle();
+
+            if (existant) {
+                // 📈 FUSION : Même produit, même date -> On additionne juste
+                const nouvelleQte = (parseInt(existant.quantite) || 0) + qteScan;
+                await monSupabase
+                    .from('inventaire2')
+                    .update({ 
+                        quantite: nouvelleQte, 
+                        etat: 'Plein'
+                        // On ne touche pas à la date, c'est déjà la même
+                    })
+                    .eq('id', existant.id);
+                
+                console.log(`✅ Addition : ${nomNettoye} (+${qteScan}) - Date identique : ${datePerim}`);
+            } else {
+                // 🆕 CRÉATION : Soit c'est un nouveau produit, 
+                // soit c'est le même mais avec une date différente (donc une nouvelle ligne)
+                await monSupabase
+                    .from('inventaire2')
+                    .insert([{ 
+                        nom: nomNettoye, 
+                        quantite: qteScan, 
+                        emplacement: a.emplacement, 
+                        etat: 'Plein',
+                        date_peremption: datePerim 
                     }]);
                 
-                console.log(`🆕 Nouveau Scan : ${nomNettoye} avec date : ${datePerim}`);
+                console.log(`🆕 Nouvelle ligne : ${nomNettoye} avec date : ${datePerim}`);
             }
         }
 
