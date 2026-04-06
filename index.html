@@ -871,39 +871,48 @@ async function ajouterManuel() {
 }
 
 async function traiterRetourGemini(text) {
-    for (let a of articles) {
+    try {
+        const debut = text.indexOf('[');
+        const fin = text.lastIndexOf(']') + 1;
+        const articles = JSON.parse(text.substring(debut, fin));
+
+        for (let a of articles) {
             const nomNettoye = a.nom.trim().replace(/\s+/g, ' ');
             const qteScan = parseInt(a.quantite) || 1;
             const datePerim = a.peremption || null;
 
-            // 🔍 RECHERCHE CIBLÉE : 
-            // On cherche le produit seulement chez l'utilisateur actuel
-            const query = monSupabase
+            // 🔍 RECHERCHE UNIQUE : Même nom, même emplacement, même date ET même propriétaire
+            let query = monSupabase
                 .from('inventaire2')
                 .select('*')
-                .ilike('nom', nomNettoye) 
-                .eq('emplacement', a.emplacement) 
-                .eq('proprietaire', utilisateurActuel) // 👈 IMPORTANT : Ne pas toucher au frigo des autres
+                .ilike('nom', nomNettoye)
+                .eq('emplacement', a.emplacement)
+                .eq('proprietaire', utilisateurActuel) // Filtre utilisateur
                 .neq('etat', 'Vide');
 
+            // Gestion précise de la date pour éviter les doublons inutiles
             if (datePerim) {
-                query.eq('date_peremption', datePerim);
+                query = query.eq('date_peremption', datePerim);
+            } else {
+                query = query.is('date_peremption', null);
             }
 
             const { data: existant } = await query.maybeSingle();
 
             if (existant) {
-                // 📈 MISE À JOUR : On ajoute à l'existant de CET utilisateur
+                // 📈 FUSION : On ajoute la quantité à l'article existant de CET utilisateur
                 const nouvelleQte = (parseInt(existant.quantite) || 0) + qteScan;
                 await monSupabase
                     .from('inventaire2')
                     .update({ 
                         quantite: nouvelleQte, 
-                        etat: 'Plein'
+                        etat: 'Plein' 
                     })
                     .eq('id', existant.id);
+                
+                console.log(`✅ Fusion : ${nomNettoye} chez ${utilisateurActuel}`);
             } else {
-                // 🆕 CRÉATION : On crée une nouvelle ligne marquée pour cet utilisateur
+                // 🆕 CRÉATION : Nouvel article ou date différente
                 await monSupabase
                     .from('inventaire2')
                     .insert([{ 
@@ -912,66 +921,19 @@ async function traiterRetourGemini(text) {
                         emplacement: a.emplacement, 
                         etat: 'Plein',
                         date_peremption: datePerim,
-                        proprietaire: utilisateurActuel // 👈 L'étiquette de ton ami
-                    }]);
-            }
-        }
-        // ... fin de la fonction (statut-scan et chargerTout)
-
-            // 🔍 RECHERCHE PLUS PRÉCISE : 
-            // On cherche le même nom ET la même date !
-            const query = monSupabase
-                .from('inventaire2')
-                .select('*')
-                .ilike('nom', nomNettoye) 
-                .eq('emplacement', a.emplacement) 
-                .neq('etat', 'Vide');
-
-            // Si Gemini a donné une date, on l'ajoute à la recherche
-            if (datePerim) {
-                query.eq('date_peremption', datePerim);
-            } else {
-                query.is('date_peremption', null);
-            }
-
-            const { data: existant } = await query.maybeSingle();
-
-            if (existant) {
-                // 📈 FUSION : Même produit, même date -> On additionne juste
-                const nouvelleQte = (parseInt(existant.quantite) || 0) + qteScan;
-                await monSupabase
-                    .from('inventaire2')
-                    .update({ 
-                        quantite: nouvelleQte, 
-                        etat: 'Plein'
-                        // On ne touche pas à la date, c'est déjà la même
-                    })
-                    .eq('id', existant.id);
-                
-                console.log(`✅ Addition : ${nomNettoye} (+${qteScan}) - Date identique : ${datePerim}`);
-            } else {
-                // 🆕 CRÉATION : Soit c'est un nouveau produit, 
-                // soit c'est le même mais avec une date différente (donc une nouvelle ligne)
-                await monSupabase
-                    .from('inventaire2')
-                    .insert([{ 
-                        nom: nomNettoye, 
-                        quantite: qteScan, 
-                        emplacement: a.emplacement, 
-                        etat: 'Plein',
-                        date_peremption: datePerim 
+                        proprietaire: utilisateurActuel // On marque le nouveau proprio
                     }]);
                 
-                console.log(`🆕 Nouvelle ligne : ${nomNettoye} avec date : ${datePerim}`);
+                console.log(`🆕 Nouveau : ${nomNettoye} créé pour ${utilisateurActuel}`);
             }
-        }
+        } // Fin de la boucle for
 
         document.getElementById('statut-scan').innerText = "✅ " + articles.length + " articles traités !";
         chargerTout();
 
     } catch(e) { 
-        console.error("Erreur JSON Gemini :", e);
-        document.getElementById('statut-scan').innerText = "❌ Format invalide."; 
+        console.error("Erreur dans traiterRetourGemini :", e);
+        document.getElementById('statut-scan').innerText = "❌ Erreur de traitement."; 
     }
 }
 // --- 3. SUPPRIMER DÉFINITIF ---
