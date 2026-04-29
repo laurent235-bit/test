@@ -160,24 +160,32 @@
 </div>
 
   <script>
-  let utilisateurActuel = localStorage.getItem('monFrigo_User');
+  // --- 0. GESTION DE L'IDENTITÉ (Version Robuste) ---
+let utilisateurActuel = localStorage.getItem('monFrigo_User');
 
-if (!utilisateurActuel) {
-    utilisateurActuel = prompt("Bienvenue ! Entre ton nom ou un pseudo pour créer ton inventaire perso :");
-    if (utilisateurActuel) {
-        localStorage.setItem('monFrigo_User', utilisateurActuel);
+// Si l'utilisateur n'est pas dans le localStorage, on boucle tant qu'on n'a pas de nom
+while (!utilisateurActuel || utilisateurActuel.trim() === "") {
+    utilisateurActuel = prompt("Bienvenue ! Entre ton nom ou un pseudo pour accéder à ton inventaire :");
+    
+    if (utilisateurActuel && utilisateurActuel.trim() !== "") {
+        localStorage.setItem('monFrigo_User', utilisateurActuel.trim());
+    } else {
+        alert("Tu dois obligatoirement entrer un nom pour utiliser l'application.");
     }
 }
-    // --- VARIABLES GLOBALES ---
-    let monSupabase;
-    let recettesTemporaires = [];
-    let modeVocalActuel = ""; 
-    const MODEL_25 = "gemini-2.5-flash"; 
 
-   // --- 1. LE CERVEAU AU DÉMARRAGE (NETTOYÉ) ---
+// --- VARIABLES GLOBALES ---
+let monSupabase;
+let recettesTemporaires = [];
+let modeVocalActuel = ""; 
+const MODEL_25 = "gemini-2.5-flash"; 
+
+// --- 1. LE CERVEAU AU DÉMARRAGE ---
 window.onload = () => {
     try {
-        // A. Initialisation de Supabase (Indispensable pour le stock)
+        console.log("👤 Utilisateur détecté :", utilisateurActuel);
+
+        // A. Initialisation de Supabase
         const elUrl = document.getElementById('sUrl');
         const elKey = document.getElementById('sKey');
         
@@ -185,26 +193,28 @@ window.onload = () => {
             monSupabase = window.supabase.createClient(elUrl.value, elKey.value);
             console.log("✅ Supabase connecté.");
         } else {
-            console.warn("⚠️ Attention : Supabase n'est pas configuré (URL ou Clé manquante).");
+            console.error("❌ ERREUR : Supabase n'est pas configuré. Vérifie tes clés.");
+            return; // On arrête tout si Supabase n'est pas là
         }
 
-        // B. Lancement du micro et des données
-        // On vérifie que les fonctions existent avant de les lancer
+        // B. Lancement des données (seulement si Supabase est prêt)
         if (typeof setupVocal === "function") setupVocal();
-        if (typeof chargerTout === "function") chargerTout();
-        if (typeof chargerGrimoire === "function") chargerGrimoire();
-        if (typeof chargerPlanning === "function") chargerPlanning();
         
-        // C. Initialisation du design
+        // On attend un tout petit peu pour s'assurer que la connexion est stable
+        setTimeout(() => {
+            if (typeof chargerTout === "function") chargerTout();
+            if (typeof chargerGrimoire === "function") chargerGrimoire();
+            if (typeof chargerPlanning === "function") chargerPlanning();
+        }, 500);
+        
         if (typeof setupCollapsibles === "function") setupCollapsibles();
 
-        console.log("🚀 Système prêt !");
+        console.log("🚀 Système prêt pour " + utilisateurActuel + " !");
 
     } catch (err) {
         console.error("Erreur critique au démarrage :", err);
     }
 };
-
    function setupCollapsibles() {
     const coll = document.getElementsByClassName("collapsible");
     for (let i = 0; i < coll.length; i++) {
@@ -259,14 +269,26 @@ async function appelGemini(message) {
     if (data.error) throw new Error(data.error.message || "Erreur API");
     return data.candidates[0].content.parts[0].text;
 }
-// --- 2. GESTION DU RÉSULTAT VOCAL ---
+
+// --- 2. GESTION DU RÉSULTAT VOCAL (Fusionné et Sécurisé) ---
 recognition.onresult = async (e) => { 
+    // A. Récupération de la phrase
     const phrase = e.results[0][0].transcript.toLowerCase();
     const statut = document.getElementById('statut-vocal');
+    
     if (statut) statut.innerText = "💬 J'ai entendu : " + phrase;
     console.log("🎤 Phrase captée :", phrase);
 
-    // --- SÉCURITÉ STOP ---
+    // B. SÉCURITÉ : Vérification de l'utilisateur
+    if (!utilisateurActuel) {
+        console.error("Action vocale impossible : utilisateurActuel est absent.");
+        if (typeof faireParlerIA === "function") {
+            faireParlerIA("Je ne peux pas répondre car je ne sais pas qui tu es. Reconnecte-toi.");
+        }
+        return; 
+    }
+
+    // C. SÉCURITÉ STOP / ANNULE
     if (phrase.includes("stop") || phrase.includes("annule")) {
         window.speechSynthesis.cancel();
         window.attenteChoixRecette = false;
@@ -276,125 +298,140 @@ recognition.onresult = async (e) => {
 
 
     // --- 2. SI ON ATTEND TON CHOIX (Écriture de la recette) ---
-    if (window.attenteChoixRecette) {
-        try {
-            // 🛑 2a. LE DÉTECTEUR DE REFUS
-            if (phrase.includes("autre") || phrase.includes("aucun") || phrase.includes("bof") || phrase.includes("non") || phrase.includes("pas ça")) {
-                if (statut) statut.innerText = "🤔 Le Chef cherche de nouvelles idées...";
-                const { data: produits } = await monSupabase.from('inventaire2').select('*').neq('etat', 'Vide');
-                let liste = produits ? produits.map(p => p.nom).join(", ") : "";
+if (window.attenteChoixRecette) {
+    try {
+        // 🛑 2a. LE DÉTECTEUR DE REFUS
+        if (phrase.includes("autre") || phrase.includes("aucun") || phrase.includes("bof") || phrase.includes("non") || phrase.includes("pas ça")) {
+            if (statut) statut.innerText = "🤔 Le Chef cherche de nouvelles idées...";
+            
+            // SÉCURITÉ : On ne récupère que tes produits pour les nouvelles idées
+            const { data: produits } = await monSupabase
+                .from('inventaire2')
+                .select('*')
+                .eq('proprietaire', utilisateurActuel) // <--- FILTRE PROPRIO
+                .neq('etat', 'Vide');
 
-                const promptNouvellesIdees = `Tu es un Chef cuisinier. L'utilisateur n'a pas aimé tes idées précédentes et te dit : "${phrase}".
+            let liste = produits ? produits.map(p => p.nom).join(", ") : "";
+
+            const promptNouvellesIdees = `Tu es un Chef cuisinier. L'utilisateur n'a pas aimé tes idées précédentes et te dit : "${phrase}".
             STOCK DISPONIBLE : ${liste}
             Propose 3 NOUVELLES idées de plats, TOTALEMENT DIFFÉRENTES de ce que tu as déjà proposé.
             Ne donne pas la recette, formule juste une phrase naturelle à l'oral avec 3 noms courts.
             Termine obligatoirement ta réponse par : "Lequel te tente cette fois ?"`;
 
+            const reponseChef = await appelGemini(promptNouvellesIdees);
+            window.dernieresPropositions = reponseChef; 
+            faireParlerIA(reponseChef);
+            return;
+        }
 
-                // Correction de l'appel (on envoie juste le texte comme prévu par le Worker)
-                const reponseChef = await appelGemini(promptNouvellesIdees);
-                window.dernieresPropositions = reponseChef; 
-                faireParlerIA(reponseChef);
-                return;
-            }
-
-            // 🍳 2b. LA RÉDACTION DE LA RECETTE (Si choix validé)
-            if (statut) statut.innerText = "✍️ Le Chef rédige la recette...";
-            const promptRecette = `L'utilisateur a choisi : "${phrase}" parmi tes idées : ${window.dernieresPropositions}. 
+        // 🍳 2b. LA RÉDACTION DE LA RECETTE (Si choix validé)
+        if (statut) statut.innerText = "✍️ Le Chef rédige la recette...";
+        const promptRecette = `L'utilisateur a choisi : "${phrase}" parmi tes idées : ${window.dernieresPropositions}. 
         Écris la recette détaillée. 
         RÉPONDS UNIQUEMENT AU FORMAT JSON STRICTEMENT COMME CECI : 
         [{"titre":"Nom du plat", "contenu":"Liste des ingrédients\\n\\n1. Étape 1\\n2. Étape 2..."}]`;
             
-            const resultatBrut = await appelGemini(promptRecette);
-            const jsonStr = resultatBrut.substring(resultatBrut.indexOf('['), resultatBrut.lastIndexOf(']') + 1);
-            recettesTemporaires = JSON.parse(jsonStr);
+        const resultatBrut = await appelGemini(promptRecette);
+        const jsonStr = resultatBrut.substring(resultatBrut.indexOf('['), resultatBrut.lastIndexOf(']') + 1);
+        recettesTemporaires = JSON.parse(jsonStr);
             
-            const zone = document.getElementById('zone-recette');
-            if (zone) {
-                zone.innerHTML = recettesTemporaires.map((r, i) => `
-                    <div style="background:white; padding:12px; border-radius:12px; border:1px solid #ddd; margin-top: 15px;">
-                        <b style="color:var(--chef);">${r.titre}</b>
-                        <p style="white-space: pre-wrap;">${r.contenu}</p>
-                        <button onclick="sauverRecetteDirect(${i})" style="width:100%; background:var(--mur); color:white; padding:8px; border-radius:8px;">💾 SAUVER</button>
-                    </div>`).join('');
-                zone.style.display = "block";
-            }
-            window.attenteChoixRecette = false;
-            faireParlerIA("C'est prêt ! Je t'ai affiché la recette.");
-        } catch (err) { 
-            console.error("Erreur recette :", err);
-            faireParlerIA("Mince, j'ai eu un souci pour formater la recette.");
+        const zone = document.getElementById('zone-recette');
+        if (zone) {
+            zone.innerHTML = recettesTemporaires.map((r, i) => `
+                <div style="background:white; padding:12px; border-radius:12px; border:1px solid #ddd; margin-top: 15px;">
+                    <b style="color:var(--chef);">${r.titre}</b>
+                    <p style="white-space: pre-wrap;">${r.contenu}</p>
+                    <button onclick="sauverRecetteDirect(${i})" style="width:100%; background:var(--mur); color:white; padding:8px; border-radius:8px;">💾 SAUVER</button>
+                </div>`).join('');
+            zone.style.display = "block";
         }
-        return;
+        window.attenteChoixRecette = false;
+        faireParlerIA("C'est prêt ! Je t'ai affiché la recette.");
+    } catch (err) { 
+        console.error("Erreur recette :", err);
+        faireParlerIA("Mince, j'ai eu un souci pour formater la recette.");
     }
+    return;
+}
 
     // --- 3. SI TU DEMANDES DES IDÉES (Lancement Chef) ---
-    if (phrase.includes("chef") || phrase.includes("propose") || phrase.includes("recette") || phrase.includes("mange") || phrase.includes("idées")) {
-        try {
-            if (statut) statut.innerText = "👨‍🍳 Le Chef réfléchit...";
-            const { data: produits } = await monSupabase.from('inventaire2').select('nom').neq('etat', 'Vide');
-            const liste = produits.map(p => p.nom).join(', ');
+if (phrase.includes("chef") || phrase.includes("propose") || phrase.includes("recette") || phrase.includes("mange") || phrase.includes("idées")) {
+    try {
+        if (statut) statut.innerText = "👨‍🍳 Le Chef réfléchit...";
+        
+        // CORRECTION : On ne récupère que TES produits pour que le Chef ne délire pas
+        const { data: produits } = await monSupabase
+            .from('inventaire2')
+            .select('nom')
+            .eq('proprietaire', utilisateurActuel) // <--- FILTRE ICI
+            .neq('etat', 'Vide');
 
-            const promptChef = `
-				Tu es un Chef cuisinier expert et pragmatique.
-				DEMANDE UTILISATEUR : "${phrase}"
-				STOCK DISPONIBLE : ${liste}
+        const liste = produits ? produits.map(p => p.nom).join(', ') : "";
 
-				CONSIGNES STRICTES :
-				1. Ne propose que des plats réalisables AVEC le stock en l'associant intelligemment.
-				2. Si l'utilisateur demande un plat précis (ex: "des frites"), respecte la technique (friture) et n'invente pas un substitut (ex: purée) sauf si l'ingrédient principal manque.
-				3. C'est l'étape de proposition : NE DONNE SURTOUT PAS la recette, ni les étapes, ni la liste des ingrédients.
-				4. Formule une phrase naturelle à l'oral pour proposer exactement 3 noms de plats courts et précis.
-				5. Termine OBLIGATOIREMENT ta réponse par : "Lequel te tente ?"`;
-            const idees = await appelGemini(promptChef);
+        const promptChef = `
+            Tu es un Chef cuisinier expert et pragmatique.
+            DEMANDE UTILISATEUR : "${phrase}"
+            STOCK DISPONIBLE : ${liste}
+
+            CONSIGNES STRICTES :
+            1. Ne propose que des plats réalisables AVEC le stock en l'associant intelligemment.
+            2. Si l'utilisateur demande un plat précis (ex: "des frites"), respecte la technique (friture) et n'invente pas un substitut (ex: purée) sauf si l'ingrédient principal manque.
+            3. C'est l'étape de proposition : NE DONNE SURTOUT PAS la recette, ni les étapes, ni la liste des ingrédients.
+            4. Formule une phrase naturelle à l'oral pour proposer exactement 3 noms de plats courts et précis.
+            5. Termine OBLIGATOIREMENT ta réponse par : "Lequel te tente ?"`;
             
-            window.dernieresPropositions = idees;
-            window.attenteChoixRecette = true;
-            faireParlerIA(idees);
-        } catch (err) { console.error("Erreur Chef :", err); }
-        return;
+        const idees = await appelGemini(promptChef);
+        
+        window.dernieresPropositions = idees;
+        window.attenteChoixRecette = true;
+        faireParlerIA(idees);
+    } catch (err) { 
+        console.error("Erreur Chef :", err); 
     }
+    return;
+}
 // --- 4. CHOIX PRÉCIS PRODUIT (Affinement si doublon) ---
 if (window.attenteChoixProduit) {
     try {
-        // On prépare le prompt avec tes consignes d'origine
         const promptAffinement = `L'utilisateur a dit : "${phrase}". Parmi cette liste : ${JSON.stringify(window.produitsPossibles)}, lequel est le bon ? Réponds uniquement l'ID numérique.`;
         
-        // CORRECTION : On envoie juste le prompt (texte simple)
         const textID = await appelGemini(promptAffinement);
         
-        // On nettoie la réponse pour n'avoir que le chiffre
         const idTrouve = parseInt(textID.trim().replace(/[^0-9]/g, ''));
         
         if (idTrouve > 0) {
             const p = window.produitsPossibles.find(x => x.id === idTrouve);
-            if (p) {
+            // SÉCURITÉ : On vérifie que le produit trouvé appartient bien à l'utilisateur
+            if (p && p.proprietaire === utilisateurActuel) {
                 window.attenteChoixProduit = false;
-                // On appelle ta fonction de suppression
                 await executerLogiqueSuppression(p); 
+            } else {
+                console.warn("Tentative d'accès à un produit non autorisé ou inexistant.");
+                window.attenteChoixProduit = false;
             }
         }
     } catch (err) { 
         console.error("Erreur affinement produit :", err); 
     }
-    return; // On arrête là pour ne pas déclencher d'autres fonctions
+    return; 
 }
 
 // --- 5. OUI/NON COURSES (Confirmation finale) ---
 if (window.attenteReponseIA) {
-    // Pas besoin d'IA ici, c'est une détection directe dans la phrase
     if (phrase.includes("oui") || phrase.includes("ajoute") || phrase.includes("vas-y") || phrase.includes("d'accord")) {
         const p = window.dernierProduitSupprime;
-        if (p) {
+        // SÉCURITÉ : On vérifie que p existe ET appartient à l'utilisateur
+        if (p && p.proprietaire === utilisateurActuel) {
             try {
-                // Mise à jour Supabase
+                // Mise à jour Supabase SÉCURISÉE par ID + PROPRIÉTAIRE
                 await monSupabase.from('inventaire2')
                     .update({ etat: 'Vide', quantite: 0 })
-                    .eq('id', p.id);
+                    .eq('id', p.id)
+                    .eq('proprietaire', utilisateurActuel); // <--- FILTRE CRUCIAL
                 
                 faireParlerIA("C'est fait, je l'ai ajouté à ta liste de courses.");
                 
-                // Rafraîchissement de l'affichage si la fonction existe
                 if (typeof chargerTout === 'function') await chargerTout();
             } catch (err) {
                 console.error("Erreur Supabase courses :", err);
@@ -403,32 +440,34 @@ if (window.attenteReponseIA) {
     } else {
         faireParlerIA("D'accord, je ne l'ajoute pas.");
     }
-    // On referme le mode attente
     window.attenteReponseIA = false;
     return;
 }
-    // --- 4. AJOUT D'UN RESTE AU FRIGO ---
+   // --- 4. AJOUT D'UN RESTE AU FRIGO ---
     if (phrase.includes("frigo") && (phrase.includes("mis") || phrase.includes("ajoute") || phrase.includes("rangé"))) {
         try {
             const promptAjout = `Tu es un assistant qui note les restes dans un frigo.
-							Voici la phrase : "${phrase}".
-							Mission : Extraire UNIQUEMENT le nom du plat ajouté.
-							1. Enlève "j'ai mis", "ajoute", "rangé", "au frigo", "dans le frigo".
-							2. Enlève les articles (le, la, les, un, une, des).
-							3. Ne réponds QUE le nom pur, avec une majuscule.
-							Ex: "j'ai mis des pâtes au frigo" -> Pâtes`;
+                            Voici la phrase : "${phrase}".
+                            Mission : Extraire UNIQUEMENT le nom du plat ajouté.
+                            1. Enlève "j'ai mis", "ajoute", "rangé", "au frigo", "dans le frigo".
+                            2. Enlève les articles (le, la, les, un, une, des).
+                            3. Ne réponds QUE le nom pur, avec une majuscule.
+                            Ex: "j'ai mis des pâtes au frigo" -> Pâtes`;
+            
             const nomAliment = await appelGemini(promptAjout);
-            if (nomAliment.trim().length > 1) {
+            
+            // SÉCURITÉ : On vérifie qu'on a bien un nom et qu'on sait à qui l'attribuer
+            if (nomAliment && nomAliment.trim().length > 1 && utilisateurActuel) {
                 await ajouterAuFrigoVocal(nomAliment.trim());
             }
-        } catch (err) { console.error(err); }
+        } catch (err) { console.error("Erreur ajout vocal :", err); }
         return;
     }
 
     // --- 5. SUPPRESSION INTELLIGENTE ---
     if (phrase.includes("supprime") || phrase.includes("retire") || phrase.includes("enlève")) {
         try {
-           const promptNettoyage = `Tu es un expert en extraction de mots-clés pour une base de données d'inventaire. 
+            const promptNettoyage = `Tu es un expert en extraction de mots-clés pour une base de données d'inventaire. 
         Voici la commande vocale de l'utilisateur : "${phrase}".
         
         Ta mission : Extraire UNIQUEMENT la "racine" distinctive du produit (la marque ou l'ingrédient principal) pour maximiser les chances de le trouver.
@@ -438,78 +477,117 @@ if (window.attenteReponseIA) {
         2. Supprime les mots génériques de catégorie ou d'emballage (yaourt, brassé, nature, bouteille, boîte, paquet, tranche, pot, brique).
         3. Mets le mot au SINGULIER.
         4. Garde UNIQUEMENT l'identifiant fort, la marque ou l'ingrédient central.
-        5. NE RÉPONDS QUE LE RÉSULTAT, sans aucune phrase autour.
-        
-        Exemples :
-        - "supprime le yaourt perle de lait" -> perle de lait
-        - "enlève un yaourt brassé perle de lait framboise" -> perle de lait
-        - "retire les bouteilles de coca cola" -> coca cola
-        - "supprime une boîte de haricots verts" -> haricot vert
-        - "enlève les bananes" -> banane`;
+        5. NE RÉPONDS QUE LE RÉSULTAT, sans aucune phrase autour.`;
+
             const motCleParfait = await appelGemini(promptNettoyage);
-            await supprimerProduitVocal(motCleParfait.trim().toLowerCase());
-        } catch (err) { console.error(err); }
+            
+            // SÉCURITÉ : On ne lance la suppression que si on a un mot-clé et un utilisateur
+            if (motCleParfait && motCleParfait.trim() !== "" && utilisateurActuel) {
+                await supprimerProduitVocal(motCleParfait.trim().toLowerCase());
+            }
+        } catch (err) { console.error("Erreur suppression vocale :", err); }
         return;
     }
-};
+}; // Fin du recognition.onresult
 
-			// --- GESTION DES BOUTONS ---
-			const btnVocal = document.getElementById('btn-vocal');
-			if (btnVocal) {
-				btnVocal.onclick = () => { 
-					try { recognition.start(); } catch(e) { console.log("Déjà actif"); } 
-				};
-			}
+// --- GESTION DES BOUTONS (Hors de la fonction onresult) ---
+const btnVocal = document.getElementById('btn-vocal');
+if (btnVocal) {
+    btnVocal.onclick = () => { 
+        if (!utilisateurActuel) {
+            alert("Identifie-toi d'abord !");
+            return;
+        }
+        try { recognition.start(); } catch(e) { console.log("Micro déjà actif"); } 
+    };
+}
 
-			const btnChef = document.getElementById('btn-chef');
-			if (btnChef) {
-				btnChef.onclick = () => {
-					const statut = document.getElementById('statut-vocal');
-					if (statut) statut.innerText = "🎤 Le Chef t'écoute...";
-					window.attenteChoixRecette = false; 
-					try { recognition.start(); } catch(e) { console.log("Déjà actif"); }
-				};
-			}
+const btnChef = document.getElementById('btn-chef');
+if (btnChef) {
+    btnChef.onclick = () => {
+        if (!utilisateurActuel) {
+            alert("Identifie-toi d'abord !");
+            return;
+        }
+        const statut = document.getElementById('statut-vocal');
+        if (statut) statut.innerText = "🎤 Le Chef t'écoute...";
+        window.attenteChoixRecette = false; 
+        try { recognition.start(); } catch(e) { console.log("Micro déjà actif"); }
+    };
+}
 								// ==========================================================
 								// 4. FONCTION LOGIQUE DU CHEF
-								// ==========================================================
-								async function lancerLeChef() {
-									const statut = document.getElementById('statut-vocal');
-									if (statut) statut.innerText = "👨‍🍳 Le Chef regarde tes restes...";
-									try {
-										const { data: produits } = await monSupabase.from('inventaire2').select('*').neq('etat', 'Vide');
-										const listeProduits = produits.map(p => `${p.nom} (Qté: ${p.quantite})`).join(', ');
-										const promptChef = `Regarde mon stock : ${listeProduits}. Propose 3 idées de plats rapides. Juste les noms. Demande : "Lequel te tente ?"`;
-										const reponse = await appelGemini({ contents: [{ parts: [{ text: promptChef }] }] });
-										
-										window.attenteChoixRecette = true;
-										window.dernieresPropositions = reponse; 
-										faireParlerIA(reponse);
-										
-										setTimeout(() => { 
-											if (statut) statut.innerText = "🎤 Chef à l'écoute...";
-											try { recognition.start(); } catch(e) {}
-										}, 4500); 
-									} catch (err) { console.error(err); }
-								}; // Ferme btnChef.onclick
+// ==========================================================
+async function lancerLeChef() {
+    // SÉCURITÉ : On vérifie l'utilisateur avant de déranger le Chef
+    if (!utilisateurActuel) {
+        alert("Je ne sais pas qui tu es ! Reconnecte-toi.");
+        return;
+    }
+
+    const statut = document.getElementById('statut-vocal');
+    if (statut) statut.innerText = "👨‍🍳 Le Chef regarde tes restes...";
+
+    try {
+        // CORRECTION : On ne récupère que TES produits
+        const { data: produits, error } = await monSupabase
+            .from('inventaire2')
+            .select('*')
+            .eq('proprietaire', utilisateurActuel) // <--- FILTRE CRUCIAL
+            .neq('etat', 'Vide');
+
+        if (error) throw error;
+
+        // On prépare la liste pour Gemini
+        const listeProduits = produits && produits.length > 0 
+            ? produits.map(p => `${p.nom} (Qté: ${p.quantite})`).join(', ')
+            : "Le frigo est vide !";
+
+        const promptChef = `Tu es un Chef cuisinier. Regarde mon stock : ${listeProduits}. 
+                            Propose 3 idées de plats rapides. Juste les noms. 
+                            Termine par : "Lequel te tente ?"`;
+
+        // Appel à l'IA
+        const reponse = await appelGemini({ contents: [{ parts: [{ text: promptChef }] }] });
+        
+        window.attenteChoixRecette = true;
+        window.dernieresPropositions = reponse; 
+        faireParlerIA(reponse);
+        
+        // On attend que l'IA finisse de parler avant de rouvrir le micro
+        setTimeout(() => { 
+            if (statut) statut.innerText = "🎤 Chef à l'écoute...";
+            try { recognition.start(); } catch(e) { console.log("Micro déjà actif"); }
+        }, 5000); 
+
+    } catch (err) { 
+        console.error("Erreur Chef :", err);
+        if (statut) statut.innerText = "❌ Le Chef a eu un problème.";
+    }
+}
 						
 							
 async function scannerTicket(input) {
+    // 1. VERIFICATION : Si pas d'utilisateur, on ne lance même pas l'IA
+    if (!utilisateurActuel) {
+        alert("⚠️ Tu dois être connecté pour scanner un ticket !");
+        console.error("Scan impossible : utilisateurActuel est vide.");
+        return;
+    }
+
     const file = input.files[0];
     if(!file) return;
 
     const statut = document.getElementById('statut-scan');
-    if (statut) statut.innerText = "⏳ Analyse en cours avec Gemini 2.5...";
+    if (statut) statut.innerText = "⏳ Analyse en cours avec Gemini...";
 
     const reader = new FileReader();
     reader.onload = async () => {
         try {
             const base64Data = reader.result.split(',')[1];
             
-            // 1. On récupère la date d'aujourd'hui pour donner un repère à l'IA
             const aujourdhui = new Date().toISOString().split('T')[0];
 
-            // 2. ON MET À JOUR LE PROMPT POUR DEMANDER LES DATES
             const payload = {
                 contents: [{
                     parts: [
@@ -525,14 +603,14 @@ async function scannerTicket(input) {
                         { inline_data: { mime_type: file.type, data: base64Data } }
                     ]
                 }],
-                generationConfig: { temperature: 0.1 } // On garde 0.1 pour être précis sur les noms
+                generationConfig: { temperature: 0.1 }
             };
 
             const text = await appelGemini(payload);
-            traiterRetourGemini(text);
+            traiterRetourGemini(text); // <--- Note : il faudra aussi vérifier cette fonction !
             
         } catch(e) {
-            console.error("Erreur Gemini 2.5:", e);
+            console.error("Erreur Gemini:", e);
             if (statut) statut.innerText = "❌ Erreur lors de l'analyse.";
         }
     };
@@ -542,6 +620,12 @@ async function scannerTicket(input) {
 
 										// CHEF (VERSION CORRIGÉE & STABLE)
 async function demanderAuChef() {
+    // 1. SÉCURITÉ : On vérifie si l'utilisateur est identifié
+    if (!utilisateurActuel) {
+        alert("Session expirée. Reconnecte-toi pour interroger le Chef !");
+        return;
+    }
+
     const pU = document.getElementById('chef-prompt').value;
     const z = document.getElementById('recette-zone');
     
@@ -549,13 +633,22 @@ async function demanderAuChef() {
     
     z.innerHTML = "<p style='grid-column:1/3; text-align:center;'>👨‍🍳 Le Chef examine votre stock...</p>";
     
-    // 1. Récupération du stock depuis Supabase
-    const { data: stock } = await monSupabase.from('inventaire2').select('nom').neq('etat', 'Vide');
+    // 2. Récupération du stock SÉCURISÉE (Uniquement TES produits)
+    const { data: stock, error: dbError } = await monSupabase
+        .from('inventaire2')
+        .select('nom')
+        .eq('proprietaire', utilisateurActuel) // <--- SÉCURITÉ
+        .neq('etat', 'Vide');
     
-    const ing = stock ? stock.map(s => s.nom).join(', ') : "Rien de spécial";
+    if (dbError) {
+        console.error("Erreur base de données :", dbError);
+        z.innerHTML = "<p style='color:red;'>❌ Erreur lors de la lecture du stock.</p>";
+        return;
+    }
+    
+    const ing = stock && stock.length > 0 ? stock.map(s => s.nom).join(', ') : "Rien de spécial";
 
     try {
-        // --- ON RÉPARE LE PROMPT ICI ---
         const promptExpert = `
         Tu es un Chef cuisinier créatif qui sait s'adapter parfaitement aux besoins.
         
@@ -563,11 +656,10 @@ async function demanderAuChef() {
         STOCK DISPONIBLE : ${ing}
 
         CONSIGNES DE STYLE :
-        1. RESPECTE l'intention de l'utilisateur : s'il demande "simple", "rapide" ou "peu d'ingrédients", propose des recettes épurées et efficaces (max 5-6 ingrédients).
-        2. Propose 3 idées de plats aux styles culinaires variés (ex: un terroir, un du monde, un moderne).
-        3. Si la demande est vague, sois créatif, mais si la demande est précise (ex: "recette simple"), ne sois pas trop sophistiqué.
-        4. Utilise intelligemment le stock disponible en priorité.
-        5. Présente chaque recette de façon concise : Nom du plat + liste courte d'ingrédients + étape clé.
+        1. RESPECTE l'intention de l'utilisateur (simple, rapide, etc.).
+        2. Propose 3 idées de plats aux styles variés.
+        3. Utilise intelligemment le stock disponible en priorité.
+        4. Présente chaque recette de façon concise : Nom + ingrédients + étape clé.
 
         CONSIGNES DE VARIÉTÉ :
         - ÉVITE de proposer toujours la même base (alterne féculents, légumes, protéines).
@@ -576,7 +668,6 @@ async function demanderAuChef() {
         RÉPONDS UNIQUEMENT AU FORMAT JSON STRICT (tableau d'objets) : 
         [{"titre":"Nom du plat original", "contenu":"Recette courte en 3 étapes"}]`;
 
-        // 2. Appel au Relais Cloudflare
         const urlRelais = "https://gemini-relais.laurent235.workers.dev"; 
 
         const resp = await fetch(urlRelais, {
@@ -584,39 +675,27 @@ async function demanderAuChef() {
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ 
                 prompt: promptExpert,
-                temperature: 0.4 
+                temperature: 0.6 // On monte un peu la température pour plus de variété
             }) 
         });
 
-        if (!resp.ok) {
-            const err = await resp.json();
-            throw new Error(`Erreur API Google (${resp.status}): ${err.error?.message || 'Inconnue'}`);
-        }
+        if (!resp.ok) throw new Error("Erreur API Gemini");
 
         const d = await resp.json();
-        
-        // 3. Extraction et Nettoyage du JSON
-        if (!d.candidates || !d.candidates[0].content) throw new Error("Réponse vide du Chef");
-        
         let t = d.candidates[0].content.parts[0].text;
         
-        // Nettoyage des balises Markdown
         t = t.replace(/```json/g, '').replace(/```/g, '').trim();
-        
-        // Extraction du tableau JSON
         const jsonStart = t.indexOf('[');
         const jsonEnd = t.lastIndexOf(']');
         
-        if (jsonStart === -1 || jsonEnd === -1) throw new Error("Le format JSON reçu est invalide.");
+        if (jsonStart === -1 || jsonEnd === -1) throw new Error("Format JSON invalide.");
         
-        // On stocke les recettes pour la fonction de sauvegarde
         recettesTemporaires = JSON.parse(t.substring(jsonStart, jsonEnd + 1));
         
-        // 4. Affichage
         z.innerHTML = recettesTemporaires.map((r, i) => `
             <div style="background:white; padding:12px; border-radius:12px; border:1px solid #ddd; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom:10px;">
                 <b style="color:var(--chef); font-size:14px;">${r.titre}</b>
-                <p style="font-size:12px; margin:10px 0; color:#555;">${r.contenu}</p>
+                <p style="font-size:12px; margin:10px 0; color:#555; white-space: pre-wrap;">${r.contenu}</p>
                 <button onclick="sauverRecetteDirect(${i})" style="width:100%; background:var(--mur); color:white; border:none; padding:8px; border-radius:8px; cursor:pointer; font-weight:bold;">💾 SAUVER</button>
             </div>`).join('');
 
@@ -626,28 +705,47 @@ async function demanderAuChef() {
     }
 }
 										async function sauverRecetteDirect(i) {
+    // SÉCURITÉ : On vérifie l'identité avant de sauver
+    if (!utilisateurActuel) {
+        alert("Session perdue. Reconnecte-toi pour sauver cette recette !");
+        return;
+    }
+
     const r = recettesTemporaires[i];
+    if (!r) return;
     
-    // 1. On sauvegarde dans Supabase
-    await monSupabase.from('recettes_sauvees').insert([{ titre: r.titre, contenu: r.contenu }]);
-    alert("Sauvegardé dans le Grimoire !"); 
+    // 1. On sauvegarde dans Supabase avec la SIGNATURE
+    const { error } = await monSupabase
+        .from('recettes_sauvees')
+        .insert([{ 
+            titre: r.titre, 
+            contenu: r.contenu,
+            proprietaire: utilisateurActuel // <--- INDISPENSABLE
+        }]);
+
+    if (error) {
+        console.error("Erreur sauvegarde grimoire:", error.message);
+        alert("Zut, la sauvegarde a échoué.");
+        return;
+    }
+
+    alert("Sauvegardé dans ton Grimoire !"); 
     
     // 2. On met à jour l'affichage du Grimoire
-    chargerGrimoire();
+    if (typeof chargerGrimoire === "function") chargerGrimoire();
 
-    // 3. NOUVEAUTÉ : On efface la recette de l'écran du Chef
+    // 3. Nettoyage de l'écran
     const zoneVocale = document.getElementById('zone-recette');
     if (zoneVocale) {
         zoneVocale.innerHTML = ""; 
-        zoneVocale.style.display = "none"; // On cache la zone
+        zoneVocale.style.display = "none";
     }
     
     const zoneTexte = document.getElementById('recette-zone');
     if (zoneTexte) {
-        zoneTexte.innerHTML = ""; // On vide aussi la zone du Chef écrit au cas où
+        zoneTexte.innerHTML = ""; 
     }
 }
-
 
    async function chargerTout() {
     // 1. SECURITÉ : Si on ne sait pas qui est l'utilisateur, on ne charge rien
@@ -896,6 +994,12 @@ async function ajouterManuel() {
 }
 
 async function traiterRetourGemini(text) {
+    // 1. SÉCURITÉ : On vérifie si l'utilisateur est connu
+    if (!utilisateurActuel) {
+        document.getElementById('statut-scan').innerText = "❌ Session expirée.";
+        return;
+    }
+
     try {
         const debut = text.indexOf('[');
         const fin = text.lastIndexOf(']') + 1;
@@ -906,6 +1010,7 @@ async function traiterRetourGemini(text) {
             const qteScan = parseInt(a.quantite) || 1;
             const datePerim = a.peremption || null;
 
+            // RECHERCHE : On filtre bien par le propriétaire actuel
             let query = monSupabase
                 .from('inventaire2')
                 .select('*')
@@ -923,6 +1028,7 @@ async function traiterRetourGemini(text) {
             const { data: existant } = await query.maybeSingle();
 
             if (existant) {
+                // CAS EXISTANT : Update
                 const nouvelleQte = (parseInt(existant.quantite) || 0) + qteScan;
                 await monSupabase
                     .from('inventaire2')
@@ -930,6 +1036,7 @@ async function traiterRetourGemini(text) {
                     .eq('id', existant.id);
                 console.log(`✅ Fusion : ${nomNettoye}`);
             } else {
+                // CAS NOUVEAU : Insert avec signature du propriétaire
                 await monSupabase
                     .from('inventaire2')
                     .insert([{ 
@@ -955,63 +1062,99 @@ async function traiterRetourGemini(text) {
 
 // --- 3. SUPPRIMER DÉFINITIF ---
 async function supprimerDefinitif(id) { 
+    if (!utilisateurActuel) return; // Sécurité
+
     if(confirm("Supprimer cet article de la base ?")) { 
-        await monSupabase.from('inventaire2').delete().eq('id', id); 
+        await monSupabase
+            .from('inventaire2')
+            .delete()
+            .eq('id', id)
+            .eq('proprietaire', utilisateurActuel); // Sécurité double : ne peut supprimer que SES articles
+        
         chargerTout(); 
     } 
 }
 
 // --- 4. BASCULER ÉTAT (Plein / Entamé) ---
 async function basculerEtat(id, etatActuel) {
+    if (!utilisateurActuel) return; // Sécurité
+
     const nouvelEtat = (etatActuel === 'Plein') ? 'Entamé' : 'Plein';
-    await monSupabase.from('inventaire2').update({ etat: nouvelEtat }).eq('id', id);
+    await monSupabase
+        .from('inventaire2')
+        .update({ etat: nouvelEtat })
+        .eq('id', id)
+        .eq('proprietaire', utilisateurActuel); // Sécurité double
+        
     chargerTout();
 }
 
 										async function chargerGrimoire() {
-											const { data, error } = await monSupabase.from('recettes_sauvees').select('*').order('created_at', {ascending: false});
-											const g = document.getElementById('grimoire-zone');
-											
-											if (error) return console.error("Erreur Grimoire:", error);
+    // SÉCURITÉ : On ne charge rien si l'utilisateur est inconnu
+    if (!utilisateurActuel) return;
 
-											if(data) {
-												g.innerHTML = data.map(r => `
-													<div style="background: white; padding: 15px; border-radius: 10px; margin-bottom: 10px; border: 1px solid #ddd; position: relative;">
-														<button onclick="supprimerRecette(${r.id})" 
-																style="position: absolute; top: 10px; right: 10px; background: #ea4335; color: white; border: none; border-radius: 5px; cursor: pointer; padding: 5px 10px; font-weight: bold; font-size: 11px;">
-															🗑️
-														</button>
-														<div style="padding-right: 40px;">
-															<b style="color:var(--chef); display: block; margin-bottom: 5px;">${r.titre}</b>
-															<p style="font-size: 12px; margin: 0; white-space: pre-wrap; color: #555;">${r.contenu}</p>
-														</div>
-													</div>`).join('');
-											}
-										}
+    const { data, error } = await monSupabase
+        .from('recettes_sauvees')
+        .select('*')
+        .eq('proprietaire', utilisateurActuel) // 👈 SÉCURITÉ : Uniquement mes recettes
+        .order('created_at', {ascending: false});
 
-										// N'oublie pas sa petite soeur pour que le bouton fonctionne
+    const g = document.getElementById('grimoire-zone');
+    if (!g) return;
+    
+    if (error) return console.error("Erreur Grimoire:", error.message);
+
+    if (data) {
+        g.innerHTML = data.map(r => `
+            <div style="background: white; padding: 15px; border-radius: 10px; margin-bottom: 10px; border: 1px solid #ddd; position: relative;">
+                <button onclick="supprimerRecette(${r.id})" 
+                        style="position: absolute; top: 10px; right: 10px; background: #ea4335; color: white; border: none; border-radius: 5px; cursor: pointer; padding: 5px 10px; font-weight: bold; font-size: 11px;">
+                    🗑️
+                </button>
+                <div style="padding-right: 40px;">
+                    <b style="color:var(--chef); display: block; margin-bottom: 5px;">${r.titre}</b>
+                    <p style="font-size: 12px; margin: 0; white-space: pre-wrap; color: #555;">${r.contenu}</p>
+                </div>
+            </div>`).join('');
+    }
+}
+
 										async function supprimerRecette(id) {
-											if(confirm("Supprimer cette recette ?")) {
-												await monSupabase.from('recettes_sauvees').delete().eq('id', id);
-												chargerGrimoire();
-											}
-										}
+    if (!utilisateurActuel) return;
+
+    if (confirm("Supprimer cette recette ?")) {
+        const { error } = await monSupabase
+            .from('recettes_sauvees')
+            .delete()
+            .eq('id', id)
+            .eq('proprietaire', utilisateurActuel); // 👈 SÉCURITÉ : Empêche de supprimer la recette d'un ami
+
+        if (error) {
+            console.error("Erreur suppression:", error.message);
+        } else {
+            chargerGrimoire();
+        }
+    }
+}
 
 										async function viderTouteLaListe() {
-											if (confirm("Voulez-vous vraiment vider toute votre liste de courses ?")) {
-												const { error } = await monSupabase
-													.from('inventaire2')
-													.delete()
-													.eq('etat', 'Vide');
+    if (!utilisateurActuel) return;
 
-												if (error) {
-													console.error("Erreur lors du vidage :", error);
-													alert("Erreur lors de la suppression.");
-												} else {
-													chargerTout(); // On rafraîchit l'affichage
-												}
-											}
-										}
+    if (confirm("Voulez-vous vraiment vider TOUTE VOTRE liste de courses ?")) {
+        const { error } = await monSupabase
+            .from('inventaire2')
+            .delete()
+            .eq('etat', 'Vide')
+            .eq('proprietaire', utilisateurActuel); // 👈 SÉCURITÉ : Ne vide QUE MA liste
+
+        if (error) {
+            console.error("Erreur lors du vidage :", error.message);
+            alert("Erreur lors de la suppression.");
+        } else {
+            chargerTout(); 
+        }
+    }
+}
 
 										function copierNom(nom, btn) {
 											// 1. On copie le texte dans le presse-papier
@@ -1073,39 +1216,61 @@ async function basculerEtat(id, etatActuel) {
 										});
 
 										async function ajouterTup() {
-											const input = document.getElementById('nomTup');
-											const nomBase = input.value.trim();
-											if (nomBase === "") return;
+    const input = document.getElementById('nomTup');
+    const nomBase = input.value.trim();
 
-											// On stocke la date ISO pour pouvoir faire des calculs après (ex: 2026-02-24)
-											const dateAujourdhui = new Date().toISOString().split('T')[0];
-											
-											const { error } = await monSupabase
-												.from('inventaire2')
-												.insert([{ 
-													nom: nomBase, 
-													etat: 'Tup', // On utilise un état spécial "Tup"
-													emplacement: dateAujourdhui, // On détourne 'emplacement' pour stocker la date brute
-													quantite: 1 
-												}]);
+    // 1. SÉCURITÉ : On vérifie l'utilisateur avant tout
+    if (!utilisateurActuel) {
+        alert("Session expirée. Reconnecte-toi pour ajouter un Tupperware.");
+        console.error("Ajout Tup impossible : utilisateurActuel est vide.");
+        return;
+    }
 
-											if (!error) {
-												input.value = "";
-												chargerTout();
-											}
-										}
+    if (nomBase === "") return;
+
+    // 2. Préparation de la date
+    const dateAujourdhui = new Date().toISOString().split('T')[0];
+    
+    // 3. Envoi à Supabase avec la "signature" du propriétaire
+    const { error } = await monSupabase
+        .from('inventaire2')
+        .insert([{ 
+            nom: nomBase, 
+            etat: 'Tup', 
+            emplacement: dateAujourdhui, 
+            quantite: 1,
+            proprietaire: utilisateurActuel // <--- INDISPENSABLE pour qu'il apparaisse dans ta liste
+        }]);
+
+    if (!error) {
+        input.value = "";
+        chargerTout();
+    } else {
+        console.error("Erreur ajout Tup :", error.message);
+        alert("Erreur lors de l'enregistrement.");
+    }
+}
 										// ==========================================================
-// 5. FONCTIONS DU PLANNING DE LA SEMAINE
-// ==========================================================
-const joursDeLaSemaine = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
-
 async function chargerPlanning() {
     const grid = document.getElementById('planning-grid');
     if (!grid) return;
 
-    // 1. On récupère le planning depuis Supabase
-    const { data, error } = await monSupabase.from('planning').select('*');
-    if (error) { console.error("Erreur planning :", error); return; }
+    // SÉCURITÉ : On vérifie l'identité
+    if (!utilisateurActuel) {
+        console.warn("Chargement planning annulé : pas d'utilisateur.");
+        return;
+    }
+
+    // 1. On récupère UNIQUEMENT mon planning
+    const { data, error } = await monSupabase
+        .from('planning')
+        .select('*')
+        .eq('proprietaire', utilisateurActuel); // 👈 SÉCURITÉ
+
+    if (error) { 
+        console.error("Erreur planning :", error.message); 
+        return; 
+    }
 
     // 2. On construit l'affichage jour par jour
     let html = '';
@@ -1122,89 +1287,106 @@ async function chargerPlanning() {
     grid.innerHTML = html;
 }
 
-function genererCasePlanning(dataPlanning, jour, moment) {
-    // On cherche si un repas est déjà enregistré pour ce jour/moment
-    const repas = dataPlanning.find(r => r.jour === jour && r.moment === moment);
-    
-    const nomPlat = repas ? repas.plat : "+ Ajouter";
-    const bgCouleur = repas ? "#e6fffa" : "#f7fafc"; // Vert pastel si rempli, gris clair si vide
-    const texteCouleur = repas ? "#285e61" : "#a0aec0";
-
-    return `
-    <div onclick="modifierPlanning('${jour}', '${moment}', '${repas ? repas.id : ''}')" 
-         style="flex: 1; background: ${bgCouleur}; padding: 15px 5px; border-radius: 8px; text-align: center; cursor: pointer; border: 1px dashed #cbd5e0; transition: 0.2s;">
-        <b style="font-size: 12px; color: #718096; text-transform: uppercase;">${moment}</b><br>
-        <span style="font-size: 14px; font-weight: bold; color: ${texteCouleur}; display: block; margin-top: 5px;">${nomPlat}</span>
-    </div>`;
-}
-
 async function modifierPlanning(jour, moment, idExistant) {
-    // On demande à l'utilisateur ce qu'il veut manger
+    // SÉCURITÉ : Vérification de l'utilisateur
+    if (!utilisateurActuel) {
+        alert("Session expirée. Reconnecte-toi pour modifier ton planning.");
+        return;
+    }
+
     const nouveauPlat = prompt(`Que veux-tu manger ${jour} ${moment} ?\n(Laisse vide pour effacer le repas)`);
     
-    // Si l'utilisateur clique sur "Annuler"
     if (nouveauPlat === null) return;
 
     if (nouveauPlat.trim() === "") {
-        // S'il efface le texte, on supprime de la base de données
+        // SUPPRESSION : On ajoute le filtre propriétaire
         if (idExistant) {
-            await monSupabase.from('planning').delete().eq('id', idExistant);
+            await monSupabase
+                .from('planning')
+                .delete()
+                .eq('id', idExistant)
+                .eq('proprietaire', utilisateurActuel); // <--- SÉCURITÉ
         }
     } else {
-        // Sinon, on met à jour ou on insère
         if (idExistant) {
-            await monSupabase.from('planning').update({ plat: nouveauPlat }).eq('id', idExistant);
+            // MISE À JOUR : Sécurisée par ID et PROPRIÉTAIRE
+            await monSupabase
+                .from('planning')
+                .update({ plat: nouveauPlat })
+                .eq('id', idExistant)
+                .eq('proprietaire', utilisateurActuel); // <--- SÉCURITÉ
         } else {
-            await monSupabase.from('planning').insert([{ jour: jour, moment: moment, plat: nouveauPlat }]);
+            // INSERTION : On ajoute la signature obligatoire
+            await monSupabase
+                .from('planning')
+                .insert([{ 
+                    jour: jour, 
+                    moment: moment, 
+                    plat: nouveauPlat, 
+                    proprietaire: utilisateurActuel // <--- SIGNATURE
+                }]);
         }
     }
     
-    // On rafraîchit l'affichage !
     chargerPlanning();
 }
 										function faireParlerIA(message) {
-						// 1. ON NETTOIE LE TEXTE POUR LA VOIX
-						// On enlève les étoiles (*), les dièses (#) et les tirets de liste
-						const textePropre = message.replace(/[*#]/g, '').replace(/-/g, ' ');
+    // 1. SÉCURITÉ : On arrête toute voix en cours avant de lancer la nouvelle
+    window.speechSynthesis.cancel();
 
-						const synthese = window.speechSynthesis;
-						// On donne le texte PROPRE à l'énoncé
-						const énoncé = new SpeechSynthesisUtterance(textePropre);
-						énoncé.lang = 'fr-FR';
-						
-						énoncé.onend = function() {
-							console.log("L'IA a fini de parler. Relance du micro...");
-							if (window.attenteChoixRecette || window.attenteChoixProduit || window.attenteReponseIA) {
-								try {
-									recognition.start(); 
-								} catch(e) {
-									console.log("Le micro est déjà actif.");
-								}
-							}
-						};
+    // 2. NETTOYAGE DU TEXTE
+    const textePropre = message.replace(/[*#]/g, '').replace(/-/g, ' ');
 
-						synthese.speak(énoncé);
-					}
+    const synthese = window.speechSynthesis;
+    const énoncé = new SpeechSynthesisUtterance(textePropre);
+    énoncé.lang = 'fr-FR';
+    
+    // Optionnel : ajuster un peu la vitesse pour que ce soit plus naturel
+    énoncé.rate = 1.1; 
+
+    énoncé.onend = function() {
+        console.log("L'IA a fini de parler.");
+        // Relance du micro seulement si on attend une réponse et si l'utilisateur est là
+        if (utilisateurActuel && (window.attenteChoixRecette || window.attenteChoixProduit || window.attenteReponseIA)) {
+            try {
+                recognition.start(); 
+            } catch(e) {
+                console.log("Le micro est déjà actif.");
+            }
+        }
+    };
+
+    synthese.speak(énoncé);
+}
 										async function supprimerProduitVocal(nomRecherche) {
-    // On cherche UNIQUEMENT les produits qui sont en stock (pas les vides)
+    // SÉCURITÉ : On vérifie l'utilisateur avant de chercher
+    if (!utilisateurActuel) {
+        faireParlerIA("Je ne peux pas supprimer de produit car je ne sais pas qui tu es.");
+        return;
+    }
+
+    // On cherche UNIQUEMENT les produits de l'utilisateur qui sont en stock
     const { data: produits } = await monSupabase
         .from('inventaire2')
         .select('*')
-        .neq('etat', 'Vide') // <--- LA LIGNE MAGIQUE EST LÀ
+        .eq('proprietaire', utilisateurActuel) // 👈 SÉCURITÉ : Uniquement mes produits
+        .neq('etat', 'Vide') 
         .ilike('nom', `%${nomRecherche}%`);
 
     if (!produits || produits.length === 0) {
         faireParlerIA("Désolé, je n'ai pas trouvé de " + nomRecherche + " dans ton stock actuel.");
         window.attenteReponseIA = false;
+        window.attenteChoixProduit = false;
         return;
     }
 
-    // CAS 1 : On en trouve un seul
+    // CAS 1 : On en trouve un seul (parfait !)
     if (produits.length === 1) {
         const p = produits[0];
+        // On s'assure que la logique de suppression connaît l'utilisateur
         await executerLogiqueSuppression(p);
     } 
-    // CAS 2 : On en trouve plusieurs
+    // CAS 2 : On en trouve plusieurs (ambiguïté)
     else {
         window.produitsPossibles = produits;
         window.attenteChoixProduit = true; 
@@ -1247,40 +1429,59 @@ async function ajouterAuFrigoVocal(nomAliment) {
     }
 }
 										function gererReponseOuiNon(phrase) {
-											if (phrase.includes("oui") || phrase.includes("vas-y") || phrase.includes("ajoute")) {
-												const p = window.dernierProduitSupprime;
-												if (p) {
-													// On le marque comme 'Vide' pour qu'il apparaisse dans les courses
-													monSupabase.from('inventaire2').update({ etat: 'Vide' }).eq('id', p.id)
-														.then(() => {
-															faireParlerIA("C'est noté, je l'ai ajouté aux courses.");
-															if (typeof chargerTout === 'function') chargerTout();
-														});
-												}
-											} else {
-												faireParlerIA("Entendu, je ne l'ajoute pas.");
-											}
-											window.attenteReponseIA = false;
-											window.dernierProduitSupprime = null;
-										}
+    if (!utilisateurActuel) return;
+
+    if (phrase.includes("oui") || phrase.includes("vas-y") || phrase.includes("ajoute") || phrase.includes("d'accord")) {
+        const p = window.dernierProduitSupprime;
+        
+        // On vérifie que le produit appartient bien à l'utilisateur actuel
+        if (p && p.proprietaire === utilisateurActuel) {
+            monSupabase.from('inventaire2')
+                .update({ etat: 'Vide', quantite: 0 }) // On vide aussi la quantité
+                .eq('id', p.id)
+                .eq('proprietaire', utilisateurActuel) // 👈 SÉCURITÉ
+                .then(({ error }) => {
+                    if (!error) {
+                        faireParlerIA("C'est noté, je l'ai ajouté aux courses.");
+                        if (typeof chargerTout === 'function') chargerTout();
+                    }
+                });
+        }
+    } else {
+        faireParlerIA("Entendu, je ne l'ajoute pas.");
+    }
+    window.attenteReponseIA = false;
+    window.dernierProduitSupprime = null;
+}
 										async function executerLogiqueSuppression(p) {
-											if (p.quantite > 1) {
-												// Il en reste d'autres
-												const nouvelleQte = p.quantite - 1;
-												await monSupabase.from('inventaire2').update({ quantite: nouvelleQte }).eq('id', p.id);
-												if (typeof chargerTout === 'function') await chargerTout();
-												
-												window.attenteReponseIA = false;
-												faireParlerIA("C'est fait, il reste désormais " + nouvelleQte + " " + p.nom);
-											} else {
-												// CAS N°1 : C'était le dernier
-												window.dernierProduitSupprime = p;
-												window.attenteReponseIA = true; // On active le "Oui/Non"
-												
-												// On ne supprime pas encore, on attend le "Oui" pour basculer
-												faireParlerIA("C'était le dernier " + p.nom + ". Veux-tu que je le rajoute à ta liste de courses ?");
-											}
-										}	
+    if (!utilisateurActuel) return;
+
+    // Double vérification de sécurité
+    if (p.proprietaire !== utilisateurActuel) {
+        console.error("Tentative de suppression d'un produit non autorisé.");
+        return;
+    }
+
+    if (p.quantite > 1) {
+        const nouvelleQte = p.quantite - 1;
+        // On update avec l'ID et le PROPRIÉTAIRE
+        await monSupabase.from('inventaire2')
+            .update({ quantite: nouvelleQte })
+            .eq('id', p.id)
+            .eq('proprietaire', utilisateurActuel); // 👈 SÉCURITÉ
+
+        if (typeof chargerTout === 'function') await chargerTout();
+        
+        window.attenteReponseIA = false;
+        faireParlerIA("C'est fait, il reste désormais " + nouvelleQte + " " + p.nom);
+    } else {
+        // C'était le dernier
+        window.dernierProduitSupprime = p;
+        window.attenteReponseIA = true; 
+        
+        faireParlerIA("C'était le dernier " + p.nom + ". Veux-tu que je le rajoute à ta liste de courses ?");
+    }
+}
 										
 function rechercherArticle() {
     const barre = document.getElementById('mon-filtre-texte');
@@ -1323,67 +1524,66 @@ function remplirSuggestions() {
         datalist.appendChild(option);
     });
 }
-// --- FONCTION DE MODIFICATION DES QUANTITÉS (Version Ergonomique) ---
 async function modifierQuantite(id, qte, delta) {
+    if (!utilisateurActuel) return;
     const nv = qte + delta;
     
     if (nv <= 0) {
-        // confirm() renvoie true si on clique sur OK, false si on clique sur ANNULER
         const ajouterAuxCourses = confirm("Article épuisé !\nVoulez-vous l'ajouter à la LISTE DE COURSES ?\n\n(OK = Liste de courses / ANNULER = Supprimer définitivement)");
         
         if (ajouterAuxCourses) {
-            // Cas OUI (OK) : On le bascule en état 'Vide'
+            // Cas OUI : Basculement sécurisé
             await monSupabase.from('inventaire2')
                 .update({ etat: 'Vide', quantite: 0 })
-                .eq('id', id);
-            console.log("🛒 Article envoyé en liste de courses");
+                .eq('id', id)
+                .eq('proprietaire', utilisateurActuel); // 👈 SÉCURITÉ
         } else {
-            // Cas NON (ANNULER) : On le supprime pour de bon
+            // Cas NON : Suppression sécurisée
             await monSupabase.from('inventaire2')
                 .delete()
-                .eq('id', id);
-            console.log("🗑️ Article supprimé définitivement");
+                .eq('id', id)
+                .eq('proprietaire', utilisateurActuel); // 👈 SÉCURITÉ
         }
     } else {
-        // Sinon, mise à jour classique de la quantité
+        // Mise à jour classique sécurisée
         await monSupabase.from('inventaire2')
             .update({ quantite: nv, etat: 'Plein' })
-            .eq('id', id);
+            .eq('id', id)
+            .eq('proprietaire', utilisateurActuel); // 👈 SÉCURITÉ
     }
     
-    // Rafraîchissement de l'interface
     chargerTout();
 }
 async function changerEmplacement(id, nouvelEmplacement) {
+    if (!utilisateurActuel) return;
+
     const { error } = await monSupabase
         .from('inventaire2')
         .update({ emplacement: nouvelEmplacement })
-        .eq('id', id);
+        .eq('id', id)
+        .eq('proprietaire', utilisateurActuel); // 👈 SÉCURITÉ
 
     if (!error) {
-        console.log(`🚚 Article ${id} déplacé vers ${nouvelEmplacement}`);
-        chargerTout(); // On rafraîchit pour que l'article change de colonne immédiatement
+        chargerTout();
     } else {
         alert("Erreur lors du déplacement de l'article");
     }
 }
 async function prolongerDate(id, dateActuelle) {
-    // On prend la date actuelle de l'article ou celle d'aujourd'hui
+    if (!utilisateurActuel) return;
+
     let base = dateActuelle ? new Date(dateActuelle) : new Date();
-    
-    // On ajoute 2 jours
     base.setDate(base.getDate() + 2);
     const nouvelleDate = base.toISOString().split('T')[0];
 
-    // Mise à jour Supabase
     const { error } = await monSupabase
         .from('inventaire2')
         .update({ date_peremption: nouvelleDate })
-        .eq('id', id);
+        .eq('id', id)
+        .eq('proprietaire', utilisateurActuel); // 👈 SÉCURITÉ
 
     if (!error) {
-        console.log(`⏳ Date prolongée au ${nouvelleDate}`);
-        chargerTout(); // On rafraîchit pour voir la couleur changer
+        chargerTout();
     }
 }
 
