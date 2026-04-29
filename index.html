@@ -810,11 +810,9 @@ async function demanderAuChef() {
 }
 
 // ==========================================
-// 1. AJOUT MANUEL (Version "Anti-Doublon" & "Anti-Casse")
+// 1. AJOUT MANUEL (Version Corrigée Multi-Utilisateurs)
 // ==========================================
 async function ajouterManuel() {
-    // 1. On récupère et on nettoie DIRECTEMENT la saisie
-    // .replace(/\s+/g, ' ') remplace les doubles/triples espaces par un seul espace
     const nRaw = document.getElementById('add-nom').value;
     const n = nRaw.trim().replace(/\s+/g, ' '); 
     
@@ -824,12 +822,13 @@ async function ajouterManuel() {
 
     if (!n) return;
 
-    // 2. Recherche insensible à la casse et flexible
+    // --- CORRECTION 1 : On cherche si l'article existe DEJA POUR MOI ---
     const { data: existant, error } = await monSupabase
         .from('inventaire2')
         .select('*')
         .ilike('nom', n) 
         .eq('emplacement', e)
+        .eq('proprietaire', utilisateurActuel) // <--- CRUCIAL : seulement mes produits
         .neq('etat', 'Vide')
         .maybeSingle();
 
@@ -845,20 +844,21 @@ async function ajouterManuel() {
             .from('inventaire2')
             .update({ 
                 quantite: nouvelleQte, 
-                etat: 'Plein' // On repasse en plein si on remet du stock
+                etat: 'Plein' 
             })
             .eq('id', existant.id);
             
         console.log(`📈 Fusion réussie pour : ${n} (Nouvelle qté: ${nouvelleQte})`);
     } else {
-        // 4. CAS NOUVEAU : Création
+        // --- CORRECTION 2 : On crée le produit EN SIGNANT mon nom ---
         await monSupabase
             .from('inventaire2')
             .insert([{ 
                 nom: n, 
                 emplacement: e, 
                 quantite: q, 
-                etat: 'Plein' 
+                etat: 'Plein',
+                proprietaire: utilisateurActuel // <--- CRUCIAL : on marque le produit
             }]);
             
         console.log(`🆕 Nouvel article créé : ${n}`);
@@ -866,7 +866,7 @@ async function ajouterManuel() {
 
     // 5. Reset du formulaire et rafraîchissement
     document.getElementById('add-nom').value = "";
-    document.getElementById('add-qte').value = "1"; // Reset la quantité à 1 par défaut
+    document.getElementById('add-qte').value = "1";
     chargerTout();
 }
 
@@ -1008,29 +1008,30 @@ async function basculerEtat(id, etatActuel) {
 											});
 										}
 										async function ajouterAuMur() {
-											const input = document.getElementById('nouvelArticleFamille');
-											const nom = input.value.trim();
+    const input = document.getElementById('nouvelArticleFamille');
+    const nom = input.value.trim();
 
-											if (nom === "") return; // On n'ajoute pas de vide
+    if (nom === "") return; // On n'ajoute pas de vide
 
-											// On envoie à Supabase
-											const { error } = await monSupabase
-												.from('inventaire2')
-												.insert([{ 
-													nom: nom, 
-													etat: 'Vide', 
-													emplacement: 'PLACARD', // Par défaut
-													quantite: 1 
-												}]);
+    // On envoie à Supabase avec le propriétaire
+    const { error } = await monSupabase
+        .from('inventaire2')
+        .insert([{ 
+            nom: nom, 
+            etat: 'Vide', 
+            emplacement: 'PLACARD', // Par défaut
+            quantite: 1,
+            proprietaire: utilisateurActuel // <--- INDISPENSABLE pour l'afficher après
+        }]);
 
-											if (error) {
-												console.error("Erreur ajout famille:", error);
-												alert("Zut, ça n'a pas marché !");
-											} else {
-												input.value = ""; // On vide le champ
-												chargerTout();    // On rafraîchit la liste pour voir l'article
-											}
-										}
+    if (error) {
+        console.error("Erreur ajout famille:", error);
+        alert("Zut, ça n'a pas marché !");
+    } else {
+        input.value = ""; // On vide le champ
+        chargerTout();    // On rafraîchit la liste pour voir l'article
+    }
+}
 
 										// Optionnel : Permettre d'ajouter en appuyant sur "Entrée"
 										document.getElementById('nouvelArticleFamille')?.addEventListener('keypress', function (e) {
@@ -1179,30 +1180,31 @@ async function modifierPlanning(jour, moment, idExistant) {
         faireParlerIA("J'ai trouvé plusieurs correspondances : " + noms + ". Lequel veux-tu retirer ?");
     }
 }
-// --- FONCTION POUR AJOUTER UN ALIMENT AU FRIGO/TUP ---
-		async function ajouterAuFrigoVocal(nomAliment) {
-			try {
-				const { error } = await monSupabase
-					.from('inventaire2')
-					.insert([
-						{ 
-							nom: nomAliment, 
-							etat: 'Plein',
-							emplacement: 'TUP' // <--- LE CHEF SAIT MAINTENANT OÙ RANGER LE PLAT !
-						} 
-					]);
+// --- FONCTION POUR AJOUTER UN ALIMENT AU FRIGO/TUP (Version Multi-utilisateurs) ---
+async function ajouterAuFrigoVocal(nomAliment) {
+    try {
+        const { error } = await monSupabase
+            .from('inventaire2')
+            .insert([
+                { 
+                    nom: nomAliment, 
+                    etat: 'Plein',
+                    emplacement: 'TUP', 
+                    proprietaire: utilisateurActuel // <--- INDISPENSABLE : On signe le plat !
+                } 
+            ]);
 
-				if (!error) {
-					faireParlerIA("C'est noté ! J'ai ajouté " + nomAliment + " dans tes restes.");
-					if (typeof chargerTout === "function") chargerTout(); // Ça va rafraîchir et afficher ton plat !
-				} else {
-					console.error("Blocage Supabase :", error);
-					faireParlerIA("Mince, la base de données a refusé de l'enregistrer.");
-				}
-			} catch (err) {
-				console.error("Erreur globale ajout :", err);
-			}
-		}
+        if (!error) {
+            faireParlerIA("C'est noté ! J'ai ajouté " + nomAliment + " dans tes restes.");
+            if (typeof chargerTout === "function") chargerTout(); 
+        } else {
+            console.error("Blocage Supabase :", error);
+            faireParlerIA("Mince, la base de données a refusé de l'enregistrer.");
+        }
+    } catch (err) {
+        console.error("Erreur globale ajout :", err);
+    }
+}
 										function gererReponseOuiNon(phrase) {
 											if (phrase.includes("oui") || phrase.includes("vas-y") || phrase.includes("ajoute")) {
 												const p = window.dernierProduitSupprime;
