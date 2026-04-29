@@ -649,16 +649,24 @@ async function demanderAuChef() {
 }
 
 
-    async function chargerTout() {
-    // 1. On filtre par propriétaire
+   async function chargerTout() {
+    // 1. SECURITÉ : Si on ne sait pas qui est l'utilisateur, on ne charge rien
+    if (!utilisateurActuel) {
+        console.warn("Chargement annulé : utilisateurActuel est vide.");
+        // Optionnel : tu peux vider tes listes HTML ici pour plus de clarté
+        // document.getElementById('ma-liste').innerHTML = ""; 
+        return;
+    }
+
+    // 2. On filtre par propriétaire
     const { data: items, error } = await monSupabase
         .from('inventaire2')
         .select('*')
-        .eq('proprietaire', utilisateurActuel) // 👈 LA MAGIE EST ICI
+        .eq('proprietaire', utilisateurActuel) // 👈 SEULEMENT mes produits
         .order('nom');
 
     if (error) {
-        console.error("Erreur:", error);
+        console.error("Erreur de chargement Supabase:", error.message);
         return;
     }
 
@@ -1028,9 +1036,16 @@ async function basculerEtat(id, etatActuel) {
     const input = document.getElementById('nouvelArticleFamille');
     const nom = input.value.trim();
 
+    // 1. On vérifie si l'utilisateur est bien défini
+    if (!utilisateurActuel) {
+        console.error("Impossible d'ajouter : utilisateurActuel est vide.");
+        alert("Session expirée ou utilisateur inconnu. Reconnecte-toi !");
+        return;
+    }
+
     if (nom === "") return; // On n'ajoute pas de vide
 
-    // On envoie à Supabase avec le propriétaire
+    // 2. On envoie à Supabase avec le propriétaire
     const { error } = await monSupabase
         .from('inventaire2')
         .insert([{ 
@@ -1038,15 +1053,15 @@ async function basculerEtat(id, etatActuel) {
             etat: 'Vide', 
             emplacement: 'PLACARD', // Par défaut
             quantite: 1,
-            proprietaire: utilisateurActuel // <--- INDISPENSABLE pour l'afficher après
+            proprietaire: utilisateurActuel // <--- SIGNATURE
         }]);
 
     if (error) {
-        console.error("Erreur ajout famille:", error);
+        console.error("Erreur ajout famille:", error.message);
         alert("Zut, ça n'a pas marché !");
     } else {
         input.value = ""; // On vide le champ
-        chargerTout();    // On rafraîchit la liste pour voir l'article
+        chargerTout();    // On rafraîchit la liste
     }
 }
 
@@ -1199,6 +1214,13 @@ async function modifierPlanning(jour, moment, idExistant) {
 }
 // --- FONCTION POUR AJOUTER UN ALIMENT AU FRIGO/TUP (Version Multi-utilisateurs) ---
 async function ajouterAuFrigoVocal(nomAliment) {
+    // 1. On vérifie d'abord qu'on sait à qui appartient le plat
+    if (!utilisateurActuel) {
+        console.error("Session perdue : impossible d'ajouter l'article.");
+        faireParlerIA("Je ne peux pas l'ajouter car tu n'es plus connecté.");
+        return;
+    }
+
     try {
         const { error } = await monSupabase
             .from('inventaire2')
@@ -1207,16 +1229,18 @@ async function ajouterAuFrigoVocal(nomAliment) {
                     nom: nomAliment, 
                     etat: 'Plein',
                     emplacement: 'TUP', 
-                    proprietaire: utilisateurActuel // <--- INDISPENSABLE : On signe le plat !
+                    proprietaire: utilisateurActuel // <--- SIGNATURE
                 } 
             ]);
 
         if (!error) {
+            // Succès : L'IA confirme et on rafraîchit la liste
             faireParlerIA("C'est noté ! J'ai ajouté " + nomAliment + " dans tes restes.");
             if (typeof chargerTout === "function") chargerTout(); 
         } else {
-            console.error("Blocage Supabase :", error);
-            faireParlerIA("Mince, la base de données a refusé de l'enregistrer.");
+            // En cas de refus de la base (ex: problème réseau)
+            console.error("Erreur Supabase :", error);
+            faireParlerIA("Mince, je n'ai pas réussi à l'enregistrer.");
         }
     } catch (err) {
         console.error("Erreur globale ajout :", err);
