@@ -809,10 +809,17 @@ async function demanderAuChef() {
     remplirSuggestions();
 }
 
-// ==========================================
-// 1. AJOUT MANUEL (Version Corrigée Multi-Utilisateurs)
+// 1. AJOUT MANUEL (Version Blindée contre les sessions expirées)
 // ==========================================
 async function ajouterManuel() {
+    // --- VERIFICATION DE SÉCURITÉ ---
+    // Si l'utilisateur n'est pas identifié, on arrête tout de suite
+    if (!utilisateurActuel) {
+        alert("⚠️ Erreur : Tu n'es pas connecté ou ta session a expiré. Reconnecte-toi !");
+        console.error("Variable utilisateurActuel est vide.");
+        return;
+    }
+
     const nRaw = document.getElementById('add-nom').value;
     const n = nRaw.trim().replace(/\s+/g, ' '); 
     
@@ -822,25 +829,27 @@ async function ajouterManuel() {
 
     if (!n) return;
 
-    // --- CORRECTION 1 : On cherche si l'article existe DEJA POUR MOI ---
-    const { data: existant, error } = await monSupabase
+    // --- RECHERCHE ---
+    const { data: existant, error: searchError } = await monSupabase
         .from('inventaire2')
         .select('*')
         .ilike('nom', n) 
         .eq('emplacement', e)
-        .eq('proprietaire', utilisateurActuel) // <--- CRUCIAL : seulement mes produits
+        .eq('proprietaire', utilisateurActuel) 
         .neq('etat', 'Vide')
         .maybeSingle();
 
-    if (error) {
-        console.error("Erreur de recherche:", error);
+    if (searchError) {
+        console.error("Erreur de recherche:", searchError.message);
+        alert("Erreur de connexion à la base.");
+        return;
     }
 
     if (existant) {
-        // 3. CAS EXISTANT : Addition des quantités
+        // 3. CAS EXISTANT : Update
         const nouvelleQte = (parseInt(existant.quantite) || 0) + q;
         
-        await monSupabase
+        const { error: updateError } = await monSupabase
             .from('inventaire2')
             .update({ 
                 quantite: nouvelleQte, 
@@ -848,23 +857,31 @@ async function ajouterManuel() {
             })
             .eq('id', existant.id);
             
-        console.log(`📈 Fusion réussie pour : ${n} (Nouvelle qté: ${nouvelleQte})`);
+        if (updateError) {
+            alert("Erreur lors de la mise à jour : " + updateError.message);
+        } else {
+            console.log(`📈 Fusion réussie pour : ${n}`);
+        }
     } else {
-        // --- CORRECTION 2 : On crée le produit EN SIGNANT mon nom ---
-        await monSupabase
+        // 4. CAS NOUVEAU : Insert
+        const { error: insertError } = await monSupabase
             .from('inventaire2')
             .insert([{ 
                 nom: n, 
                 emplacement: e, 
                 quantite: q, 
                 etat: 'Plein',
-                proprietaire: utilisateurActuel // <--- CRUCIAL : on marque le produit
+                proprietaire: utilisateurActuel 
             }]);
             
-        console.log(`🆕 Nouvel article créé : ${n}`);
+        if (insertError) {
+            alert("Erreur lors de la création : " + insertError.message);
+        } else {
+            console.log(`🆕 Nouvel article créé : ${n}`);
+        }
     }
 
-    // 5. Reset du formulaire et rafraîchissement
+    // 5. Reset et Refresh
     document.getElementById('add-nom').value = "";
     document.getElementById('add-qte').value = "1";
     chargerTout();
