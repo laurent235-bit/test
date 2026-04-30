@@ -673,7 +673,32 @@ async function demanderAuChef() {
         if (!resp.ok) throw new Error("Le serveur du Chef ne répond pas.");
 
         const d = await resp.json();
+        console.log("DEBUG COMPLET DU CHEF :", d); // <--- Ouvre la console (F12) pour voir ça !
 
+        // Vérification de la structure de réponse Gemini
+        if (d.error) {
+            throw new Error("L'API Gemini dit : " + d.error.message);
+        }
+
+        let texteBrut = "";
+        try {
+            texteBrut = d.candidates[0].content.parts[0].text;
+        } catch (err) {
+            console.error("Structure reçue inattendue :", d);
+            throw new Error("Le Chef a reçu une réponse bizarre du serveur.");
+        }
+
+        // Nettoyage et extraction du JSON
+        const debutJSON = texteBrut.indexOf('[');
+        const finJSON = texteBrut.lastIndexOf(']');
+        
+        if (debutJSON === -1) {
+            console.log("Texte reçu sans JSON :", texteBrut);
+            throw new Error("Le Chef parle trop mais ne donne pas de recette.");
+        }
+
+        const jsonExtrait = texteBrut.substring(debutJSON, finJSON + 1);
+        recettesTemporaires = JSON.parse(jsonExtrait);
         // --- SÉCURITÉ ---
         if (!d.candidates || !d.candidates[0] || !d.candidates[0].content) {
             throw new Error("Le Chef est timide aujourd'hui, réessaie !");
