@@ -618,7 +618,6 @@ async function scannerTicket(input) {
 }
 										
 
-										// CHEF (VERSION CORRIGÉE & STABLE)
 async function demanderAuChef() {
     if (!utilisateurActuel) {
         alert("Session expirée. Reconnecte-toi pour interroger le Chef !");
@@ -644,21 +643,23 @@ async function demanderAuChef() {
         return;
     }
     
-    const ing = stock && stock.length > 0 ? stock.map(s => s.nom).join(', ') : "Rien de spécial";
+    // --- OPTIMISATION : On limite à 40 noms max pour la fiabilité ---
+    const ing = stock && stock.length > 0 
+        ? stock.slice(0, 40).map(s => s.nom).join(', ') 
+        : "Rien de spécial";
 
     try {
         const urlRelais = "https://gemini-relais.laurent235.workers.dev"; 
 
         const promptExpert = `
-        Tu es un Chef cuisinier créatif qui sait s'adapter parfaitement aux besoins.
+        Tu es un Chef cuisinier créatif.
         DEMANDE UTILISATEUR : "${pU}"
         STOCK DISPONIBLE : ${ing}
 
         CONSIGNES :
         1. Propose 3 idées de plats variés.
         2. Utilise le stock en priorité.
-        3. Présente concise : Nom + ingrédients + étape clé.
-        4. RÉPONDS UNIQUEMENT AU FORMAT JSON STRICT (tableau d'objets), sans texte avant ou après, sans balises markdown : 
+        3. RÉPONDS UNIQUEMENT AU FORMAT JSON STRICT (tableau d'objets) : 
         [{"titre":"Nom", "contenu":"Recette"}]`;
 
         const resp = await fetch(urlRelais, {
@@ -670,51 +671,36 @@ async function demanderAuChef() {
             }) 
         });
 
-        if (!resp.ok) throw new Error("Le serveur du Chef ne répond pas.");
+        if (!resp.ok) {
+            if (resp.status === 503) throw new Error("Le Chef est débordé (Google saturé). Réessaie dans 10 secondes !");
+            throw new Error("Le serveur du Chef ne répond pas.");
+        }
 
         const d = await resp.json();
-        console.log("DEBUG COMPLET DU CHEF :", d); // <--- Ouvre la console (F12) pour voir ça !
+        console.log("DEBUG DU CHEF :", d);
 
-        // Vérification de la structure de réponse Gemini
-        if (d.error) {
-            throw new Error("L'API Gemini dit : " + d.error.message);
-        }
+        if (d.error) throw new Error("Gemini : " + d.error.message);
 
-        let texteBrut = "";
+        // --- PARSING UNIQUE ET PROPRE ---
+        let texteGenere = "";
         try {
-            texteBrut = d.candidates[0].content.parts[0].text;
+            texteGenere = d.candidates[0].content.parts[0].text;
         } catch (err) {
-            console.error("Structure reçue inattendue :", d);
-            throw new Error("Le Chef a reçu une réponse bizarre du serveur.");
+            throw new Error("Le Chef a eu un bug de mémoire, réessaie.");
         }
 
-        // Nettoyage et extraction du JSON
-        const debutJSON = texteBrut.indexOf('[');
-        const finJSON = texteBrut.lastIndexOf(']');
+        // Nettoyage Markdown et extraction JSON
+        texteGenere = texteGenere.replace(/
+```json/g, '').replace(/```/g, '').trim();
+        const start = texteGenere.indexOf('[');
+        const end = texteGenere.lastIndexOf(']');
         
-        if (debutJSON === -1) {
-            console.log("Texte reçu sans JSON :", texteBrut);
-            throw new Error("Le Chef parle trop mais ne donne pas de recette.");
-        }
-
-        const jsonExtrait = texteBrut.substring(debutJSON, finJSON + 1);
-        recettesTemporaires = JSON.parse(jsonExtrait);
-        // --- SÉCURITÉ ---
-        if (!d.candidates || !d.candidates[0] || !d.candidates[0].content) {
-            throw new Error("Le Chef est timide aujourd'hui, réessaie !");
-        }
-
-        let t = d.candidates[0].content.parts[0].text;
+        if (start === -1 || end === -1) throw new Error("Le Chef a oublié le format JSON.");
         
-        // Nettoyage au cas où le modèle renvoie du Markdown malgré la consigne
-        t = t.replace(/```json/g, '').replace(/```/g, '').trim();
-        const jsonStart = t.indexOf('[');
-        const jsonEnd = t.lastIndexOf(']');
+        const jsonPropre = texteGenere.substring(start, end + 1);
+        recettesTemporaires = JSON.parse(jsonPropre);
         
-        if (jsonStart === -1 || jsonEnd === -1) throw new Error("Format JSON invalide.");
-        
-        recettesTemporaires = JSON.parse(t.substring(jsonStart, jsonEnd + 1));
-        
+        // Affichage
         z.innerHTML = recettesTemporaires.map((r, i) => `
             <div style="background:white; padding:12px; border-radius:12px; border:1px solid #ddd; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom:10px;">
                 <b style="color:var(--chef); font-size:14px;">${r.titre}</b>
