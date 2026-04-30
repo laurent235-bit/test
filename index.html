@@ -647,42 +647,26 @@ async function demanderAuChef() {
     const ing = stock && stock.length > 0 ? stock.map(s => s.nom).join(', ') : "Rien de spécial";
 
     try {
-        const promptExpert = `
-        Tu es un Chef cuisinier créatif.
-        DEMANDE UTILISATEUR : "${pU}"
-        STOCK DISPONIBLE : ${ing}
-        RÉPONDS UNIQUEMENT AU FORMAT JSON STRICT (tableau d'objets) : 
-        [{"titre":"Nom du plat", "contenu":"Recette courte"}]`;
-
         const urlRelais = "https://gemini-relais.laurent235.workers.dev"; 
 
         const promptExpert = `
-
         Tu es un Chef cuisinier créatif qui sait s'adapter parfaitement aux besoins.
         DEMANDE UTILISATEUR : "${pU}"
         STOCK DISPONIBLE : ${ing}
 
-        CONSIGNES DE STYLE :
-        1. RESPECTE l'intention de l'utilisateur (simple, rapide, etc.).
-        2. Propose 3 idées de plats aux styles variés.
-        3. Utilise intelligemment le stock disponible en priorité.
-        4. Présente chaque recette de façon concise : Nom + ingrédients + étape clé.
+        CONSIGNES :
+        1. Propose 3 idées de plats variés.
+        2. Utilise le stock en priorité.
+        3. Présente concise : Nom + ingrédients + étape clé.
+        4. RÉPONDS UNIQUEMENT AU FORMAT JSON STRICT (tableau d'objets), sans texte avant ou après, sans balises markdown : 
+        [{"titre":"Nom", "contenu":"Recette"}]`;
 
-        CONSIGNES DE VARIÉTÉ :
-        - ÉVITE de proposer toujours la même base (alterne féculents, légumes, protéines).
-        - Si l'utilisateur dit "autre chose", change radicalement de direction par rapport aux idées précédentes.
-
-        RÉPONDS UNIQUEMENT AU FORMAT JSON STRICT (tableau d'objets) : 
-        [{"titre":"Nom du plat original", "contenu":"Recette courte en 3 étapes"}]`;
-
-        const urlRelais = "https://gemini-relais.laurent235.workers.dev"; 
         const resp = await fetch(urlRelais, {
-
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ 
                 prompt: promptExpert,
-                temperature: 0.6 // On monte un peu la température pour plus de variété
+                temperature: 0.7 
             }) 
         });
 
@@ -690,19 +674,19 @@ async function demanderAuChef() {
 
         const d = await resp.json();
 
-        // --- SÉCURITÉ AJOUTÉE ICI ---
+        // --- SÉCURITÉ ---
         if (!d.candidates || !d.candidates[0] || !d.candidates[0].content) {
             throw new Error("Le Chef est timide aujourd'hui, réessaie !");
         }
 
         let t = d.candidates[0].content.parts[0].text;
-        // ---------------------------
         
+        // Nettoyage au cas où le modèle renvoie du Markdown malgré la consigne
         t = t.replace(/```json/g, '').replace(/```/g, '').trim();
         const jsonStart = t.indexOf('[');
         const jsonEnd = t.lastIndexOf(']');
         
-        if (jsonStart === -1 || jsonEnd === -1) throw new Error("Le Chef n'a pas répondu au bon format.");
+        if (jsonStart === -1 || jsonEnd === -1) throw new Error("Format JSON invalide.");
         
         recettesTemporaires = JSON.parse(t.substring(jsonStart, jsonEnd + 1));
         
@@ -715,7 +699,6 @@ async function demanderAuChef() {
 
     } catch(e) { 
         console.error("Erreur détaillée:", e);
-        // On affiche un message plus sympa pour l'utilisateur
         z.innerHTML = `<p style="color:red; text-align:center;">❌ ${e.message}</p>`; 
     }
 }
