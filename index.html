@@ -71,7 +71,6 @@
     <option value="PLACARD">Placard</option>
     <option value="CONGELATEUR">Congélo</option>
     <option value="ANIMAUX">Animaux</option>
-    <option value="HORS_CUISINE">Maison</option>
     <option value="SALLE_DE_BAIN">Salle de Bain</option>
     <option value="AUTRES">Autres</option>
 </select>
@@ -593,7 +592,7 @@ async function scannerTicket(input) {
                     parts: [
                         { text: `Tu es un expert en ticket de caisse. Extrais les articles. 
                         Nettoie les noms pour qu'ils soient naturels. 
-                        Emplacements : FRIGO, PLACARD, CONGELATEUR, ANIMAUX, HORS_CUISINE. 
+                        Emplacements : FRIGO, PLACARD, CONGELATEUR, ANIMAUX, SALLE DE BAIN. 
                         
                         CONSIGNE SPÉCIALE : 
                         Pour chaque article du FRIGO, estime une date de péremption (format YYYY-MM-DD) basée sur aujourd'hui (${aujourdhui}).
@@ -788,8 +787,7 @@ async function demanderAuChef() {
         'FRIGO': 'list-Frigo', 
         'CONGELATEUR': 'list-Congélateur', 
         'PLACARD': 'list-Placard', 
-        'ANIMAUX': 'list-Animaux', 
-        'HORS_CUISINE': 'list-Maison', 
+        'ANIMAUX': 'list-Animaux',  
         'SALLE_DE_BAIN': 'list-SalleBain', 
         'AUTRES': 'list-Autres',
         'TUP': 'listeTups'
