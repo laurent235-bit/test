@@ -1300,10 +1300,10 @@ async function basculerEtat(id, etatActuel) {
     }
 }
 										// ==========================================================
-/**
- * CHARGEMENT DU PLANNING
- * Gère l'affichage dynamique et la sécurité par utilisateur
- */
+ 5. FONCTIONS DU PLANNING DE LA SEMAINE
+// ==========================================================
+const joursDeLaSemaine = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+
 async function chargerPlanning() {
     const grid = document.getElementById('planning-grid');
     if (!grid) return;
