@@ -184,29 +184,17 @@ window.onload = () => {
     try {
         console.log("👤 Utilisateur détecté :", utilisateurActuel);
 
-       // A. Initialisation de Supabase
-const elUrl = document.getElementById('sUrl');
-const elKey = document.getElementById('sKey');
-
-if (elUrl && elKey && elUrl.value !== "" && elKey.value !== "") {
-    // 1. On l'assigne à window pour qu'il soit visible partout
-    window.monSupabase = window.supabase.createClient(elUrl.value, elKey.value);
-    
-    // 2. On met aussi à jour la variable locale au cas où
-    monSupabase = window.monSupabase; 
-    
-    console.log("✅ Supabase connecté et globalisé.");
-
-    // 3. UNE FOIS CONNECTÉ, on lance le planning
-    if (typeof chargerPlanning === "function") {
-        chargerPlanning();
-    }
-} else {
-    console.error("❌ ERREUR : Supabase n'est pas configuré. Vérifie tes clés.");
-    // Optionnel : afficher un message à l'écran pour toi
-    const grid = document.getElementById('planning-grid');
-    if (grid) grid.innerHTML = "Erreur de configuration des clés Supabase.";
-}
+        // A. Initialisation de Supabase
+        const elUrl = document.getElementById('sUrl');
+        const elKey = document.getElementById('sKey');
+        
+        if (elUrl && elKey && elUrl.value !== "" && elKey.value !== "") {
+            monSupabase = window.supabase.createClient(elUrl.value, elKey.value);
+            console.log("✅ Supabase connecté.");
+        } else {
+            console.error("❌ ERREUR : Supabase n'est pas configuré. Vérifie tes clés.");
+            return; // On arrête tout si Supabase n'est pas là
+        }
 
         // B. Lancement des données (seulement si Supabase est prêt)
         if (typeof setupVocal === "function") setupVocal();
@@ -1284,74 +1272,55 @@ async function chargerPlanning() {
     const grid = document.getElementById('planning-grid');
     if (!grid) return;
 
-    // 1. SÉCURITÉ : Vérification de la connexion Supabase
-    // On cherche l'objet de connexion (ps ou monSupabase)
-    const supabaseClient = window.ps || window.monSupabase;
-
-    if (!supabaseClient) {
-        console.error("❌ Erreur : Client Supabase introuvable.");
-        grid.innerHTML = "<p style='color:red;'>Erreur de connexion à la base.</p>";
-        return;
-    }
-
-    // 2. SÉCURITÉ : Vérification du timing utilisateur
-    // Si l'utilisateur n'est pas encore identifié, on attend un peu
+    // 1. SÉCURITÉ : On vérifie si on a un utilisateur connecté
+    // On utilise la variable globale utilisateurActuel
     if (!utilisateurActuel) {
-        console.warn("⏳ En attente de l'utilisateur...");
-        grid.innerHTML = "<p style='text-align:center;'>Identification en cours...</p>";
-        
-        // On retente automatiquement dans 500ms
-        setTimeout(chargerPlanning, 500);
+        console.warn("⚠️ Aucun utilisateur identifié. Attente de connexion...");
+        grid.innerHTML = "<p style='text-align:center; color:#718096;'>Identification en cours...</p>";
+        // Optionnel : on peut retenter automatiquement dans 1 seconde
+        setTimeout(chargerPlanning, 1000);
         return;
     }
 
-    console.log("🔍 Chargement du planning pour :", utilisateurActuel);
+    // 2. RÉCUPÉRATION FILTRÉE : On récupère uniquement les lignes de cet utilisateur
+    // On ajoute .eq('proprietaire', utilisateurActuel)
+    const { data, error } = await monSupabase
+        .from('planning')
+        .select('*')
+        .eq('proprietaire', utilisateurActuel);
 
-    try {
-        // 3. REQUÊTE : On récupère les données filtrées par propriétaire
-        const { data, error } = await supabaseClient
-            .from('planning')
-            .select('*')
-            .eq('proprietaire', utilisateurActuel);
-
-        if (error) throw error;
-
-        // 4. GESTION DU VIDE : Si aucune donnée ne correspond
-        if (!data || data.length === 0) {
-            grid.innerHTML = `
-                <div style="text-align:center; padding:20px; color:#718096;">
-                    <p>Aucun repas enregistré pour <b>${utilisateurActuel}</b>.</p>
-                    <p style="font-size:0.8em;">(Vérifiez que le nom est identique dans la colonne 'proprietaire')</p>
-                </div>`;
-            return;
-        }
-
-        // 5. CONSTRUCTION DU HTML : Ton affichage d'origine
-        let html = '';
-        
-        // Sécurité sur les jours de la semaine
-        const jours = (typeof joursDeLaSemaine !== 'undefined') 
-            ? joursDeLaSemaine 
-            : ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
-
-        jours.forEach(jour => {
-            html += `
-            <div style="background: white; padding: 10px; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom:10px;">
-                <h3 style="margin: 0 0 10px 0; font-size: 16px; color: #4a5568; text-align: center;">${jour}</h3>
-                <div style="display: flex; gap: 10px;">
-                    ${genererCasePlanning(data, jour, 'Midi')}
-                    ${genererCasePlanning(data, jour, 'Soir')}
-                </div>
-            </div>`;
-        });
-
-        grid.innerHTML = html;
-        console.log("✅ Planning affiché avec succès.");
-
-    } catch (err) {
-        console.error("❌ Erreur critique lors du chargement :", err.message);
-        grid.innerHTML = `<p style='color:red;'>Erreur lors du chargement : ${err.message}</p>`;
+    if (error) { 
+        console.error("❌ Erreur planning Supabase :", error.message); 
+        grid.innerHTML = "<p style='color:red;'>Erreur lors de la récupération du planning.</p>";
+        return; 
     }
+
+    console.log(`✅ Planning chargé pour ${utilisateurActuel} :`, data.length, "lignes trouvées.");
+
+    // 3. AFFICHAGE : Si aucune donnée n'est trouvée pour cet utilisateur
+    if (data.length === 0) {
+        grid.innerHTML = `
+            <div style="text-align:center; padding:20px; color:#a0aec0; border:2px dashed #e2e8f0; border-radius:12px;">
+                <p>Ton planning est vide, <b>${utilisateurActuel}</b>.</p>
+                <p style="font-size:12px;">Ajoute des repas pour les voir s'afficher ici.</p>
+            </div>`;
+        return;
+    }
+
+    // 4. CONSTRUCTION de l'affichage jour par jour
+    let html = '';
+    joursDeLaSemaine.forEach(jour => {
+        html += `
+        <div style="background: white; padding: 10px; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom:10px;">
+            <h3 style="margin: 0 0 10px 0; font-size: 16px; color: #4a5568; text-align: center;">${jour}</h3>
+            <div style="display: flex; gap: 10px;">
+                ${genererCasePlanning(data, jour, 'Midi')}
+                ${genererCasePlanning(data, jour, 'Soir')}
+            </div>
+        </div>`;
+    });
+
+    grid.innerHTML = html;
 }
 async function modifierPlanning(jour, moment, idExistant) {
     // SÉCURITÉ : Vérification de l'utilisateur
@@ -1395,6 +1364,22 @@ async function modifierPlanning(jour, moment, idExistant) {
     }
     
     chargerPlanning();
+}
+
+function genererCasePlanning(dataPlanning, jour, moment) {
+    // On cherche si un repas est déjà enregistré pour ce jour/moment
+    const repas = dataPlanning.find(r => r.jour === jour && r.moment === moment);
+    
+    const nomPlat = repas ? repas.plat : "+ Ajouter";
+    const bgCouleur = repas ? "#e6fffa" : "#f7fafc"; // Vert pastel si rempli, gris clair si vide
+    const texteCouleur = repas ? "#285e61" : "#a0aec0";
+
+    return `
+    <div onclick="modifierPlanning('${jour}', '${moment}', '${repas ? repas.id : ''}')" 
+         style="flex: 1; background: ${bgCouleur}; padding: 15px 5px; border-radius: 8px; text-align: center; cursor: pointer; border: 1px dashed #cbd5e0; transition: 0.2s;">
+        <b style="font-size: 12px; color: #718096; text-transform: uppercase;">${moment}</b><br>
+        <span style="font-size: 14px; font-weight: bold; color: ${texteCouleur}; display: block; margin-top: 5px;">${nomPlat}</span>
+    </div>`;
 }
 										function faireParlerIA(message) {
     // 1. SÉCURITÉ : On arrête toute voix en cours avant de lancer la nouvelle
