@@ -1268,28 +1268,30 @@ async function chargerPlanning() {
     const grid = document.getElementById('planning-grid');
     if (!grid) return;
 
-    // SÉCURITÉ : On vérifie l'identité
-    if (!utilisateurActuel) {
-        console.warn("Chargement planning annulé : pas d'utilisateur.");
+    console.log("Tentative de chargement globale...");
+
+    // On ignore temporairement la sécurité pour voir si les données arrivent
+    const { data, error } = await monSupabase
+        .from('planning')
+        .select('*');
+
+    if (error) {
+        console.error("Erreur Supabase :", error.message);
         return;
     }
 
-    // 1. On récupère UNIQUEMENT mon planning
-    const { data, error } = await monSupabase
-        .from('planning')
-        .select('*')
+    console.log("Données trouvées dans la table :", data.length);
 
-    if (error) { 
-        console.error("Erreur planning :", error.message); 
-        return; 
+    if (data.length === 0) {
+        grid.innerHTML = "<p>Aucune donnée dans la table planning.</p>";
+        return;
     }
 
-    // 2. On construit l'affichage jour par jour
     let html = '';
     joursDeLaSemaine.forEach(jour => {
         html += `
-        <div style="background: white; padding: 10px; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
-            <h3 style="margin: 0 0 10px 0; font-size: 16px; color: #4a5568; text-align: center;">${jour}</h3>
+        <div style="background: white; padding: 10px; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom:10px;">
+            <h3 style="margin: 0; color: #4a5568;">${jour}</h3>
             <div style="display: flex; gap: 10px;">
                 ${genererCasePlanning(data, jour, 'Midi')}
                 ${genererCasePlanning(data, jour, 'Soir')}
@@ -1298,7 +1300,6 @@ async function chargerPlanning() {
     });
     grid.innerHTML = html;
 }
-
 async function modifierPlanning(jour, moment, idExistant) {
     // SÉCURITÉ : Vérification de l'utilisateur
     if (!utilisateurActuel) {
