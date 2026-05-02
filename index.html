@@ -1322,6 +1322,21 @@ async function chargerPlanning() {
 
     grid.innerHTML = html;
 }
+function genererCasePlanning(dataPlanning, jour, moment) {
+    // On cherche si un repas est déjà enregistré pour ce jour/moment
+    const repas = dataPlanning.find(r => r.jour === jour && r.moment === moment);
+    
+    const nomPlat = repas ? repas.plat : "+ Ajouter";
+    const bgCouleur = repas ? "#e6fffa" : "#f7fafc"; // Vert pastel si rempli, gris clair si vide
+    const texteCouleur = repas ? "#285e61" : "#a0aec0";
+
+    return `
+    <div onclick="modifierPlanning('${jour}', '${moment}', '${repas ? repas.id : ''}')" 
+         style="flex: 1; background: ${bgCouleur}; padding: 15px 5px; border-radius: 8px; text-align: center; cursor: pointer; border: 1px dashed #cbd5e0; transition: 0.2s;">
+        <b style="font-size: 12px; color: #718096; text-transform: uppercase;">${moment}</b><br>
+        <span style="font-size: 14px; font-weight: bold; color: ${texteCouleur}; display: block; margin-top: 5px;">${nomPlat}</span>
+    </div>`;
+}
 async function modifierPlanning(jour, moment, idExistant) {
     // SÉCURITÉ : Vérification de l'utilisateur
     if (!utilisateurActuel) {
@@ -1366,21 +1381,6 @@ async function modifierPlanning(jour, moment, idExistant) {
     chargerPlanning();
 }
 
-function genererCasePlanning(dataPlanning, jour, moment) {
-    // On cherche si un repas est déjà enregistré pour ce jour/moment
-    const repas = dataPlanning.find(r => r.jour === jour && r.moment === moment);
-    
-    const nomPlat = repas ? repas.plat : "+ Ajouter";
-    const bgCouleur = repas ? "#e6fffa" : "#f7fafc"; // Vert pastel si rempli, gris clair si vide
-    const texteCouleur = repas ? "#285e61" : "#a0aec0";
-
-    return `
-    <div onclick="modifierPlanning('${jour}', '${moment}', '${repas ? repas.id : ''}')" 
-         style="flex: 1; background: ${bgCouleur}; padding: 15px 5px; border-radius: 8px; text-align: center; cursor: pointer; border: 1px dashed #cbd5e0; transition: 0.2s;">
-        <b style="font-size: 12px; color: #718096; text-transform: uppercase;">${moment}</b><br>
-        <span style="font-size: 14px; font-weight: bold; color: ${texteCouleur}; display: block; margin-top: 5px;">${nomPlat}</span>
-    </div>`;
-}
 										function faireParlerIA(message) {
     // 1. SÉCURITÉ : On arrête toute voix en cours avant de lancer la nouvelle
     window.speechSynthesis.cancel();
