@@ -1299,8 +1299,7 @@ async function basculerEtat(id, etatActuel) {
         alert("Erreur lors de l'enregistrement.");
     }
 }
-										// ==========================================================
- 5. FONCTIONS DU PLANNING DE LA SEMAINE
+// 5. FONCTIONS DU PLANNING DE LA SEMAINE
 // ==========================================================
 const joursDeLaSemaine = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
 
@@ -1308,46 +1307,15 @@ async function chargerPlanning() {
     const grid = document.getElementById('planning-grid');
     if (!grid) return;
 
-    // 1. SÉCURITÉ : On vérifie si on a un utilisateur connecté
-    // On utilise la variable globale utilisateurActuel
-    if (!utilisateurActuel) {
-        console.warn("⚠️ Aucun utilisateur identifié. Attente de connexion...");
-        grid.innerHTML = "<p style='text-align:center; color:#718096;'>Identification en cours...</p>";
-        // Optionnel : on peut retenter automatiquement dans 1 seconde
-        setTimeout(chargerPlanning, 1000);
-        return;
-    }
+    // 1. On récupère le planning depuis Supabase
+    const { data, error } = await monSupabase.from('planning').select('*');
+    if (error) { console.error("Erreur planning :", error); return; }
 
-    // 2. RÉCUPÉRATION FILTRÉE : On récupère uniquement les lignes de cet utilisateur
-    // On ajoute .eq('proprietaire', utilisateurActuel)
-    const { data, error } = await monSupabase
-        .from('planning')
-        .select('*')
-        .eq('proprietaire', utilisateurActuel);
-
-    if (error) { 
-        console.error("❌ Erreur planning Supabase :", error.message); 
-        grid.innerHTML = "<p style='color:red;'>Erreur lors de la récupération du planning.</p>";
-        return; 
-    }
-
-    console.log(`✅ Planning chargé pour ${utilisateurActuel} :`, data.length, "lignes trouvées.");
-
-    // 3. AFFICHAGE : Si aucune donnée n'est trouvée pour cet utilisateur
-    if (data.length === 0) {
-        grid.innerHTML = `
-            <div style="text-align:center; padding:20px; color:#a0aec0; border:2px dashed #e2e8f0; border-radius:12px;">
-                <p>Ton planning est vide, <b>${utilisateurActuel}</b>.</p>
-                <p style="font-size:12px;">Ajoute des repas pour les voir s'afficher ici.</p>
-            </div>`;
-        return;
-    }
-
-    // 4. CONSTRUCTION de l'affichage jour par jour
+    // 2. On construit l'affichage jour par jour
     let html = '';
     joursDeLaSemaine.forEach(jour => {
         html += `
-        <div style="background: white; padding: 10px; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom:10px;">
+        <div style="background: white; padding: 10px; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
             <h3 style="margin: 0 0 10px 0; font-size: 16px; color: #4a5568; text-align: center;">${jour}</h3>
             <div style="display: flex; gap: 10px;">
                 ${genererCasePlanning(data, jour, 'Midi')}
@@ -1355,9 +1323,9 @@ async function chargerPlanning() {
             </div>
         </div>`;
     });
-
     grid.innerHTML = html;
 }
+
 function genererCasePlanning(dataPlanning, jour, moment) {
     // On cherche si un repas est déjà enregistré pour ce jour/moment
     const repas = dataPlanning.find(r => r.jour === jour && r.moment === moment);
@@ -1373,50 +1341,31 @@ function genererCasePlanning(dataPlanning, jour, moment) {
         <span style="font-size: 14px; font-weight: bold; color: ${texteCouleur}; display: block; margin-top: 5px;">${nomPlat}</span>
     </div>`;
 }
-async function modifierPlanning(jour, moment, idExistant) {
-    // SÉCURITÉ : Vérification de l'utilisateur
-    if (!utilisateurActuel) {
-        alert("Session expirée. Reconnecte-toi pour modifier ton planning.");
-        return;
-    }
 
+async function modifierPlanning(jour, moment, idExistant) {
+    // On demande à l'utilisateur ce qu'il veut manger
     const nouveauPlat = prompt(`Que veux-tu manger ${jour} ${moment} ?\n(Laisse vide pour effacer le repas)`);
     
+    // Si l'utilisateur clique sur "Annuler"
     if (nouveauPlat === null) return;
 
     if (nouveauPlat.trim() === "") {
-        // SUPPRESSION : On ajoute le filtre propriétaire
+        // S'il efface le texte, on supprime de la base de données
         if (idExistant) {
-            await monSupabase
-                .from('planning')
-                .delete()
-                .eq('id', idExistant)
-                .eq('proprietaire', utilisateurActuel); // <--- SÉCURITÉ
+            await monSupabase.from('planning').delete().eq('id', idExistant);
         }
     } else {
+        // Sinon, on met à jour ou on insère
         if (idExistant) {
-            // MISE À JOUR : Sécurisée par ID et PROPRIÉTAIRE
-            await monSupabase
-                .from('planning')
-                .update({ plat: nouveauPlat })
-                .eq('id', idExistant)
-                .eq('proprietaire', utilisateurActuel); // <--- SÉCURITÉ
+            await monSupabase.from('planning').update({ plat: nouveauPlat }).eq('id', idExistant);
         } else {
-            // INSERTION : On ajoute la signature obligatoire
-            await monSupabase
-                .from('planning')
-                .insert([{ 
-                    jour: jour, 
-                    moment: moment, 
-                    plat: nouveauPlat, 
-                    proprietaire: utilisateurActuel // <--- SIGNATURE
-                }]);
+            await monSupabase.from('planning').insert([{ jour: jour, moment: moment, plat: nouveauPlat }]);
         }
     }
     
+    // On rafraîchit l'affichage !
     chargerPlanning();
 }
-
 										function faireParlerIA(message) {
     // 1. SÉCURITÉ : On arrête toute voix en cours avant de lancer la nouvelle
     window.speechSynthesis.cancel();
