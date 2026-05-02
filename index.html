@@ -1265,40 +1265,42 @@ async function basculerEtat(id, etatActuel) {
 }
 										// ==========================================================
 async function chargerPlanning() {
+    console.log("Appel de chargerPlanning...");
     const grid = document.getElementById('planning-grid');
-    if (!grid) return;
+    
+    // On force un affichage visuel immédiat
+    if (grid) grid.innerHTML = "Chargement en cours...";
 
-    console.log("Tentative de chargement globale...");
+    try {
+        const { data, error } = await monSupabase.from('planning').select('*');
+        
+        if (error) throw error;
 
-    // On ignore temporairement la sécurité pour voir si les données arrivent
-    const { data, error } = await monSupabase
-        .from('planning')
-        .select('*');
+        console.log("Données reçues :", data);
 
-    if (error) {
-        console.error("Erreur Supabase :", error.message);
-        return;
+        if (!data || data.length === 0) {
+            if (grid) grid.innerHTML = "Aucune donnée trouvée dans Supabase.";
+            return;
+        }
+
+        // Si on arrive ici, on tente de générer le HTML
+        let html = '';
+        // Vérifie que joursDeLaSemaine existe bien !
+        const jours = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
+        
+        jours.forEach(jour => {
+            html += `<div style="border:1px solid black; margin:5px; padding:5px;">
+                        <h3>${jour}</h3>
+                        ${genererCasePlanning(data, jour, 'Midi')}
+                     </div>`;
+        });
+        
+        if (grid) grid.innerHTML = html;
+
+    } catch (err) {
+        console.error("GROSSE ERREUR :", err.message);
+        if (grid) grid.innerHTML = "Erreur : " + err.message;
     }
-
-    console.log("Données trouvées dans la table :", data.length);
-
-    if (data.length === 0) {
-        grid.innerHTML = "<p>Aucune donnée dans la table planning.</p>";
-        return;
-    }
-
-    let html = '';
-    joursDeLaSemaine.forEach(jour => {
-        html += `
-        <div style="background: white; padding: 10px; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom:10px;">
-            <h3 style="margin: 0; color: #4a5568;">${jour}</h3>
-            <div style="display: flex; gap: 10px;">
-                ${genererCasePlanning(data, jour, 'Midi')}
-                ${genererCasePlanning(data, jour, 'Soir')}
-            </div>
-        </div>`;
-    });
-    grid.innerHTML = html;
 }
 async function modifierPlanning(jour, moment, idExistant) {
     // SÉCURITÉ : Vérification de l'utilisateur
