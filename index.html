@@ -159,19 +159,55 @@
 </div>
 
   <script>
-  // --- 0. GESTION DE L'IDENTITÉ (Version Robuste) ---
+// --- 0. GESTION DE L'IDENTITÉ ---
 let utilisateurActuel = localStorage.getItem('monFrigo_User');
 
-// Si l'utilisateur n'est pas dans le localStorage, on boucle tant qu'on n'a pas de nom
 while (!utilisateurActuel || utilisateurActuel.trim() === "") {
-    utilisateurActuel = prompt("Bienvenue ! Entre ton nom ou un pseudo pour accéder à ton inventaire :");
-    
+    utilisateurActuel = prompt("Bienvenue ! Entre ton nom pour accéder à ton inventaire :");
     if (utilisateurActuel && utilisateurActuel.trim() !== "") {
         localStorage.setItem('monFrigo_User', utilisateurActuel.trim());
-    } else {
-        alert("Tu dois obligatoirement entrer un nom pour utiliser l'application.");
     }
 }
+
+// --- VARIABLES GLOBALES ---
+// On les déclare sur l'objet window pour être SUR qu'elles sont visibles partout
+window.utilisateurActuel = utilisateurActuel;
+window.monSupabase = null; 
+
+// --- 1. LE CERVEAU AU DÉMARRAGE ---
+window.onload = async () => {
+    try {
+        console.log("👤 Utilisateur détecté :", window.utilisateurActuel);
+
+        const elUrl = document.getElementById('sUrl');
+        const elKey = document.getElementById('sKey');
+        
+        if (elUrl && elKey && elUrl.value !== "" && elKey.value !== "") {
+            // INITIALISATION GLOBALE
+            window.monSupabase = window.supabase.createClient(elUrl.value, elKey.value);
+            // On met à jour la variable courte pour tes fonctions existantes
+            monSupabase = window.monSupabase;
+            console.log("✅ Supabase connecté.");
+        } else {
+            console.error("❌ ERREUR : Clés Supabase manquantes dans le HTML.");
+            return;
+        }
+
+        // Lancement des fonctions
+        if (typeof setupVocal === "function") setupVocal();
+        if (typeof setupCollapsibles === "function") setupCollapsibles();
+
+        // On lance le chargement immédiatement
+        await chargerTout();
+        await chargerGrimoire();
+        await chargerPlanning();
+
+        console.log("🚀 Système prêt pour " + window.utilisateurActuel);
+
+    } catch (err) {
+        console.error("Erreur critique au démarrage :", err);
+    }
+};
 
 // --- VARIABLES GLOBALES ---
 let monSupabase;
