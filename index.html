@@ -1278,7 +1278,6 @@ async function chargerPlanning() {
     const { data, error } = await monSupabase
         .from('planning')
         .select('*')
-        .eq('proprietaire', utilisateurActuel); // 👈 SÉCURITÉ
 
     if (error) { 
         console.error("Erreur planning :", error.message); 
