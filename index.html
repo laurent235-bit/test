@@ -184,17 +184,29 @@ window.onload = () => {
     try {
         console.log("👤 Utilisateur détecté :", utilisateurActuel);
 
-        // A. Initialisation de Supabase
-        const elUrl = document.getElementById('sUrl');
-        const elKey = document.getElementById('sKey');
-        
-        if (elUrl && elKey && elUrl.value !== "" && elKey.value !== "") {
-            monSupabase = window.supabase.createClient(elUrl.value, elKey.value);
-            console.log("✅ Supabase connecté.");
-        } else {
-            console.error("❌ ERREUR : Supabase n'est pas configuré. Vérifie tes clés.");
-            return; // On arrête tout si Supabase n'est pas là
-        }
+       // A. Initialisation de Supabase
+const elUrl = document.getElementById('sUrl');
+const elKey = document.getElementById('sKey');
+
+if (elUrl && elKey && elUrl.value !== "" && elKey.value !== "") {
+    // 1. On l'assigne à window pour qu'il soit visible partout
+    window.monSupabase = window.supabase.createClient(elUrl.value, elKey.value);
+    
+    // 2. On met aussi à jour la variable locale au cas où
+    monSupabase = window.monSupabase; 
+    
+    console.log("✅ Supabase connecté et globalisé.");
+
+    // 3. UNE FOIS CONNECTÉ, on lance le planning
+    if (typeof chargerPlanning === "function") {
+        chargerPlanning();
+    }
+} else {
+    console.error("❌ ERREUR : Supabase n'est pas configuré. Vérifie tes clés.");
+    // Optionnel : afficher un message à l'écran pour toi
+    const grid = document.getElementById('planning-grid');
+    if (grid) grid.innerHTML = "Erreur de configuration des clés Supabase.";
+}
 
         // B. Lancement des données (seulement si Supabase est prêt)
         if (typeof setupVocal === "function") setupVocal();
