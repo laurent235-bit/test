@@ -1264,42 +1264,81 @@ async function basculerEtat(id, etatActuel) {
     }
 }
 										// ==========================================================
+/**
+ * CHARGEMENT DU PLANNING
+ * Gère l'affichage dynamique et la sécurité par utilisateur
+ */
 async function chargerPlanning() {
-    console.log("Appel de chargerPlanning...");
     const grid = document.getElementById('planning-grid');
-    
-    // On force un affichage visuel immédiat
-    if (grid) grid.innerHTML = "Chargement en cours...";
+    if (!grid) return;
+
+    // 1. SÉCURITÉ : Vérification de la connexion Supabase
+    // On cherche l'objet de connexion (ps ou monSupabase)
+    const supabaseClient = window.ps || window.monSupabase;
+
+    if (!supabaseClient) {
+        console.error("❌ Erreur : Client Supabase introuvable.");
+        grid.innerHTML = "<p style='color:red;'>Erreur de connexion à la base.</p>";
+        return;
+    }
+
+    // 2. SÉCURITÉ : Vérification du timing utilisateur
+    // Si l'utilisateur n'est pas encore identifié, on attend un peu
+    if (!utilisateurActuel) {
+        console.warn("⏳ En attente de l'utilisateur...");
+        grid.innerHTML = "<p style='text-align:center;'>Identification en cours...</p>";
+        
+        // On retente automatiquement dans 500ms
+        setTimeout(chargerPlanning, 500);
+        return;
+    }
+
+    console.log("🔍 Chargement du planning pour :", utilisateurActuel);
 
     try {
-        const { data, error } = await monSupabase.from('planning').select('*');
-        
+        // 3. REQUÊTE : On récupère les données filtrées par propriétaire
+        const { data, error } = await supabaseClient
+            .from('planning')
+            .select('*')
+            .eq('proprietaire', utilisateurActuel);
+
         if (error) throw error;
 
-        console.log("Données reçues :", data);
-
+        // 4. GESTION DU VIDE : Si aucune donnée ne correspond
         if (!data || data.length === 0) {
-            if (grid) grid.innerHTML = "Aucune donnée trouvée dans Supabase.";
+            grid.innerHTML = `
+                <div style="text-align:center; padding:20px; color:#718096;">
+                    <p>Aucun repas enregistré pour <b>${utilisateurActuel}</b>.</p>
+                    <p style="font-size:0.8em;">(Vérifiez que le nom est identique dans la colonne 'proprietaire')</p>
+                </div>`;
             return;
         }
 
-        // Si on arrive ici, on tente de générer le HTML
+        // 5. CONSTRUCTION DU HTML : Ton affichage d'origine
         let html = '';
-        // Vérifie que joursDeLaSemaine existe bien !
-        const jours = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
         
+        // Sécurité sur les jours de la semaine
+        const jours = (typeof joursDeLaSemaine !== 'undefined') 
+            ? joursDeLaSemaine 
+            : ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
+
         jours.forEach(jour => {
-            html += `<div style="border:1px solid black; margin:5px; padding:5px;">
-                        <h3>${jour}</h3>
-                        ${genererCasePlanning(data, jour, 'Midi')}
-                     </div>`;
+            html += `
+            <div style="background: white; padding: 10px; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom:10px;">
+                <h3 style="margin: 0 0 10px 0; font-size: 16px; color: #4a5568; text-align: center;">${jour}</h3>
+                <div style="display: flex; gap: 10px;">
+                    ${genererCasePlanning(data, jour, 'Midi')}
+                    ${genererCasePlanning(data, jour, 'Soir')}
+                </div>
+            </div>`;
         });
-        
-        if (grid) grid.innerHTML = html;
+
+        grid.innerHTML = html;
+        console.log("✅ Planning affiché avec succès.");
 
     } catch (err) {
-        console.error("GROSSE ERREUR :", err.message);
-        if (grid) grid.innerHTML = "Erreur : " + err.message;
+        console.error("❌ Erreur critique lors du chargement :", err.message);
+        grid.innerHTML = `<p style='color:red;'>Erreur lors du chargement : ${err.message}</p>`;
     }
 }
 async function modifierPlanning(jour, moment, idExistant) {
