@@ -24,19 +24,12 @@
 											<div class="scan-zone">
 												<b style="color:var(--accent)">🧾 ENTRÉE DE COURSES</b>
 												<div style="display: flex; gap: 10px; margin-top: 10px;">
-													<<div style="display: flex; gap: 10px;">
-    <button onclick="document.getElementById('input-photo').click()" class="btn btn-accent" style="flex:1">
-        📸 SCAN TICKET
-    </button>
-    <button onclick="ouvrirEticket()" class="btn btn-accent" style="flex:1">
-        📧 E-TICKET
-    </button>
-</div>
-
-<!-- J'ai juste enlevé 'capture' et listé les formats pour que le Xiaomi propose le choix 'Fichiers' -->
-<input type="file" id="input-photo" accept=".pdf,.jpg,.jpeg,.png,application/pdf" style="display:none" onchange="scannerTicket(this)">
-
-<div id="statut-scan" style="margin-top: 10px; font-size: 13px; font-weight: bold; text-align: center;"></div>
+													<button onclick="document.getElementById('input-photo').click()" class="btn btn-accent" style="flex:1">📸 SCAN TICKET</button>
+													<button onclick="ouvrirEticket()" class="btn btn-accent" style="flex:1">📧 E-TICKET</button>
+												</div>
+												<input type="file" id="input-photo" accept="image/*,application/pdf" capture="environment" style="display:none" onchange="scannerTicket(this)">
+												<div id="statut-scan" style="margin-top: 10px; font-size: 13px; font-weight: bold; text-align: center;"></div>
+											</div>
 
 											<div class="card" style="padding:15px; border: 2px solid var(--accent);">
 												<button id="btn-vocal" class="btn btn-accent">🎤 SORTIR UN ALIMENT (VOCAL)</button>
