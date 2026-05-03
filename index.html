@@ -973,15 +973,12 @@ async function demanderAuChef() {
 async function ajouterManuel() {
     // --- VERIFICATION DE SÉCURITÉ ---
     if (!utilisateurActuel) {
-        alert("⚠️ Erreur : Tu n'es pas connecté ou ta session a expiré. Reconnecte-toi !");
-        console.error("Variable utilisateurActuel est vide.");
+        alert("⚠️ Erreur : Tu n'es pas connecté.");
         return;
     }
 
-    // Récupération avec les bons IDs
     const nRaw = document.getElementById('add-nom').value;
     const n = nRaw.trim().replace(/\s+/g, ' '); 
-    
     const e = document.getElementById('add-emplacement').value;
     const qInput = document.getElementById('add-qte').value;
     const q = parseInt(qInput) || 1;
@@ -1000,34 +997,45 @@ async function ajouterManuel() {
 
     if (searchError) {
         console.error("Erreur de recherche:", searchError.message);
-        alert("Erreur de connexion à la base.");
         return;
     }
 
     if (existant) {
-        // 3. CAS EXISTANT : Update (On ne change pas le nom_alexa existant)
+        // CAS EXISTANT : Update
         const nouvelleQte = (parseInt(existant.quantite) || 0) + q;
-        
-        const { error: updateError } = await monSupabase
+        await monSupabase
             .from('inventaire2')
-            .update({ 
-                quantite: nouvelleQte, 
-                etat: 'Plein' 
-            })
+            .update({ quantite: nouvelleQte, etat: 'Plein' })
             .eq('id', existant.id);
             
-        if (updateError) {
-            alert("Erreur lors de la mise à jour : " + updateError.message);
-        } else {
-            console.log(`📈 Fusion réussie pour : ${n}`);
-        }
     } else {
-        // 4. CAS NOUVEAU : Insert (On ajoute nom_alexa ici !)
+        // --- CAS NOUVEAU : GENERATION NOM_ALEXA INTELLIGENTE ---
+        console.log("Simplification du nom pour Alexa...");
+        
+        let nAlexa = n; // Par défaut, on prend le nom saisi
+        
+        try {
+            // On appelle ta fonction Gemini (adapte le nom si besoin, ex: appelerGemini)
+            const promptSimplification = `En un ou deux mots maximum, donne le nom commun simplifié de ce produit de supermarché pour qu'Alexa puisse le dire facilement. Enlève les marques, les poids et les détails inutiles. 
+            Exemple: "Litière minérale Catsan 10L" -> "Litière"
+            Exemple: "Yaourt Velouté Danone x8" -> "Yaourt"
+            Produit: "${n}"`;
+
+            // On récupère la réponse de l'IA
+            const reponseIA = await appelerGemini(promptSimplification); 
+            if (reponseIA) {
+                nAlexa = reponseIA.trim();
+            }
+        } catch (err) {
+            console.warn("Gemini n'a pas pu simplifier, on utilise le nom brut.");
+        }
+
+        // --- INSERTION AVEC LE NOM NETTOYÉ ---
         const { error: insertError } = await monSupabase
             .from('inventaire2')
             .insert([{ 
                 nom: n, 
-                nom_alexa: n, // On initialise le nom court avec le nom saisi
+                nom_alexa: nAlexa, // <--- ICI le nom simplifié (ex: "Litière")
                 emplacement: e, 
                 quantite: q, 
                 etat: 'Plein',
@@ -1037,20 +1045,14 @@ async function ajouterManuel() {
         if (insertError) {
             alert("Erreur lors de la création : " + insertError.message);
         } else {
-            console.log(`🆕 Nouvel article créé avec nom_alexa : ${n}`);
+            console.log(`🆕 Créé : ${n} | Alexa dira : ${nAlexa}`);
         }
     }
 
-    // 5. Reset et Refresh
+    // Reset et Refresh
     document.getElementById('add-nom').value = "";
     document.getElementById('add-qte').value = "1";
-    
-    // On vérifie si chargerTout existe, sinon on appelle chargerInventaire
-    if (typeof chargerTout === 'function') {
-        chargerTout();
-    } else if (typeof chargerInventaire === 'function') {
-        chargerInventaire();
-    }
+    if (typeof chargerTout === 'function') chargerTout();
 }
 
 async function traiterRetourGemini(jsonTexte) {
@@ -1614,6 +1616,28 @@ async function modifierQuantite(id, qte, delta) {
     }
     
     chargerTout();
+}
+async function simplifierNomPourAlexa(nomBrut) {
+    try {
+        const prompt = `Tu es un assistant de cuisine. simplifie ce nom de produit pour qu'il soit facile à dire à haute voix à Alexa.
+        Garde uniquement le nom principal (le "nom commun"). 
+        Supprime les marques (sauf si c'est indispensable), les poids, les codes et les adjectifs inutiles.
+        
+        Exemple : "Litière minérale Catsan - Hygiène plus - 10L" -> "Litière"
+        Exemple : "Pâtes Penne Rigate Barilla 500g" -> "Pâtes"
+        Exemple : "Yaourt Velouté Danone pack de 8" -> "Yaourt"
+        
+        Produit : "${nomBrut}"
+        Retourne UNIQUEMENT le nom simplifié, sans ponctuation.`;
+
+        // Ici, utilise TA fonction habituelle pour appeler l'API Gemini
+        // Je l'appelle 'appelerGemini' pour l'exemple
+        const reponse = await appelerGemini(prompt); 
+        return reponse.trim();
+    } catch (e) {
+        // En cas d'erreur, on coupe juste au premier espace pour pas bloquer
+        return nomBrut.split(' ')[0];
+    }
 }
 async function changerEmplacement(id, nouvelEmplacement) {
     if (!utilisateurActuel) return;
