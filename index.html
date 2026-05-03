@@ -1343,23 +1343,35 @@ function genererCasePlanning(dataPlanning, jour, moment) {
 }
 
 async function modifierPlanning(jour, moment, idExistant) {
-    const nouveauPlat = prompt(`Que veux-tu manger ${jour} ${moment} ?\n(Laisse vide pour effacer le repas)`);
-    
+    // 1. On vérifie si l'utilisateur est bien reconnu par l'appli
+    if (!utilisateurActuel) {
+        console.error("ERREUR : utilisateurActuel est vide !");
+        alert("Tu ne peux pas enregistrer car tu n'es pas identifié.");
+        return;
+    }
+
+    const nouveauPlat = prompt(`Que veux-tu manger ${jour} ${moment} ?\n(Laisse vide pour effacer)`);
     if (nouveauPlat === null) return;
 
+    let resultat; // Pour stocker la réponse de Supabase
+
     if (nouveauPlat.trim() === "") {
+        // --- SUPPRESSION ---
         if (idExistant) {
-            await monSupabase.from('planning').delete().eq('id', idExistant);
+            resultat = await monSupabase.from('planning').delete().eq('id', idExistant);
         }
     } else {
         if (idExistant) {
-            // AJOUT DU PROPRIETAIRE ICI AUSSI
-            await monSupabase.from('planning')
-                .update({ plat: nouveauPlat, proprietaire: utilisateurActuel }) 
+            // --- MISE À JOUR ---
+            resultat = await monSupabase.from('planning')
+                .update({ 
+                    plat: nouveauPlat, 
+                    proprietaire: utilisateurActuel 
+                })
                 .eq('id', idExistant);
         } else {
-            // AJOUT DU PROPRIETAIRE ICI
-            await monSupabase.from('planning')
+            // --- INSERTION ---
+            resultat = await monSupabase.from('planning')
                 .insert([{ 
                     jour: jour, 
                     moment: moment, 
@@ -1368,10 +1380,17 @@ async function modifierPlanning(jour, moment, idExistant) {
                 }]);
         }
     }
-    
-    chargerPlanning();
-}
 
+    // --- ANALYSE DE L'ERREUR ---
+    if (resultat && resultat.error) {
+        console.error("❌ Erreur Supabase :", resultat.error.message);
+        console.error("Détails :", resultat.error.details);
+        alert("Erreur de sauvegarde : " + resultat.error.message);
+    } else {
+        console.log("✅ Opération réussie !");
+        chargerPlanning(); // Rafraîchit l'affichage
+    }
+}
 										function faireParlerIA(message) {
     // 1. SÉCURITÉ : On arrête toute voix en cours avant de lancer la nouvelle
     window.speechSynthesis.cancel();
