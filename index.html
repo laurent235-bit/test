@@ -24,9 +24,19 @@
 											<div class="scan-zone">
 												<b style="color:var(--accent)">🧾 ENTRÉE DE COURSES</b>
 												<div style="display: flex; gap: 10px; margin-top: 10px;">
-													<button onclick="document.getElementById('input-photo').click()" class="btn btn-accent" style="flex:1">📸 SCAN TICKET</button>
-													<button onclick="ouvrirEticket()" class="btn btn-accent" style="flex:1">📧 E-TICKET</button>
-												</div>
+													<div style="display: flex; gap: 10px;">
+    <!-- Le bouton SCAN qui ouvre maintenant le sélecteur de fichiers (Photo ou PDF) -->
+    <button onclick="document.getElementById('input-ticket-universel').click()" class="btn btn-accent" style="flex:1">📸 SCAN TICKET</button>
+    
+    <!-- Ton bouton E-TICKET (on garde ta fonction si tu veux, mais le bouton SCAN fera déjà tout) -->
+    <button onclick="ouvrirEticket()" class="btn btn-accent" style="flex:1">📧 E-TICKET</button>
+</div>
+
+<!-- L'input magique : caché, il accepte PDF et Images sans forcer l'appareil photo -->
+<input type="file" id="input-ticket-universel" accept=".pdf,.jpg,.jpeg,.png,application/pdf" style="display: none;" onchange="scannerTicket(this)">
+
+<!-- Zone d'affichage du statut -->
+<div id="statut-scan" style="margin-top: 10px; font-weight: bold; text-align: center; color: #666;"></div>
 												<input type="file" id="input-photo" accept="image/*,application/pdf" capture="environment" style="display:none" onchange="scannerTicket(this)">
 												<div id="statut-scan" style="margin-top: 10px; font-size: 13px; font-weight: bold; text-align: center;"></div>
 											</div>
@@ -616,22 +626,22 @@ async function scannerTicket(input) {
     const file = input.files[0];
     if (!file) return;
 
-    // 1. Sécurité : Vérification de la taille (4Mo max)
+    // 1. Vérification de la taille
     if (file.size > 4 * 1024 * 1024) {
-        alert("Le fichier est trop lourd (max 4Mo).");
-        input.value = ""; 
+        alert("Fichier trop lourd (max 4Mo).");
+        input.value = "";
         return;
     }
 
     const statut = document.getElementById('statut-scan');
-    statut.innerText = "⏳ Lecture du fichier...";
+    statut.innerText = "⏳ Lecture du ticket...";
 
     const reader = new FileReader();
     reader.onload = async () => {
         try {
             const base64Data = reader.result.split(',')[1];
             
-            // 2. Sécurité : Forcer le type MIME si le téléphone l'oublie
+            // 2. Identification du type (PDF ou Image)
             let mimeType = file.type;
             if (!mimeType && file.name.toLowerCase().endsWith(".pdf")) {
                 mimeType = "application/pdf";
@@ -639,30 +649,30 @@ async function scannerTicket(input) {
                 mimeType = "image/jpeg"; 
             }
 
-            statut.innerText = "🧠 Analyse par l'IA en cours...";
+            statut.innerText = "🧠 Analyse IA en cours...";
 
+            // 3. Envoi à Gemini
             const payload = {
                 contents: [{
                     parts: [
-                        { text: "Tu es un expert en ticket de caisse. Extrais les articles. RÈGLE VITALE : Nettoie les noms pour qu'ils soient naturels et lisibles (supprime les marques, les poids, les lots et les abréviations). Par exemple, 'CREME LEG.SEMI-EP.18% U 3X20CL' devient 'Crème légère semi-épaisse'. Emplacements : FRIGO, PLACARD, CONGELATEUR, ANIMAUX, HORS_CUISINE. Réponds UNIQUEMENT le JSON : [{\"nom\":\"...\",\"quantite\":1,\"emplacement\":\"...\"}]" },
+                        { text: "Tu es un expert en ticket de caisse. Extrais les articles. RÈGLE : Nettoie les noms (pas de poids, pas de marques inutiles). Emplacements : FRIGO, PLACARD, CONGELATEUR, ANIMAUX, HORS_CUISINE. Réponds UNIQUEMENT en JSON : [{\"nom\":\"...\",\"quantite\":1,\"emplacement\":\"...\"}]" },
                         { inline_data: { mime_type: mimeType, data: base64Data } }
                     ]
                 }],
-                generationConfig: {
-                    temperature: 0.1,
-                    response_mime_type: "application/json" 
-                }
+                generationConfig: { temperature: 0.1, response_mime_type: "application/json" }
             };
 
             const text = await appelGemini(payload);
+            
+            // 4. Traitement du résultat
             await traiterRetourGemini(text);
             
-            // On vide l'input pour pouvoir rescanner le même fichier si besoin
+            // Nettoyage pour pouvoir recommencer
             input.value = ""; 
 
         } catch (e) {
-            console.error("Détail erreur:", e);
-            statut.innerText = "❌ Erreur lors de l'analyse. Réessayez.";
+            console.error(e);
+            statut.innerText = "❌ Erreur d'analyse.";
             input.value = "";
         }
     };
@@ -672,42 +682,27 @@ async function scannerTicket(input) {
 async function traiterRetourGemini(text) {
     const statut = document.getElementById('statut-scan');
     try {
-        // Extraction du JSON (au cas où Gemini ajoute du texte avant/après)
+        // Extraction sécurisée du JSON
         const debut = text.indexOf('[');
         const fin = text.lastIndexOf(']') + 1;
-        
-        if (debut === -1 || fin === 0) {
-            statut.innerText = "⚠️ L'IA n'a pas pu lire de liste claire sur ce ticket.";
-            return;
-        }
-
         const jsonPropre = text.substring(debut, fin);
         const articles = JSON.parse(jsonPropre);
         
-        if (articles.length === 0) {
-            statut.innerText = "⚠️ Aucun article détecté.";
-            return;
-        }
-
-        // Enregistrement dans Supabase
         for (let a of articles) {
-            await monSupabase.from('inventaire2').insert([
-                { 
-                    nom: a.nom, 
-                    quantite: a.quantite, 
-                    emplacement: a.emplacement, 
-                    etat: 'Plein',
-                    proprietaire: (typeof utilisateurActuel !== 'undefined') ? utilisateurActuel : 'Thomas'
-                }
-            ]);
+            await monSupabase.from('inventaire2').insert([{ 
+                nom: a.nom, 
+                quantite: a.quantite, 
+                emplacement: a.emplacement, 
+                etat: 'Plein',
+                proprietaire: (typeof utilisateurActuel !== 'undefined') ? utilisateurActuel : 'Thomas'
+            }]);
         }
         
-        statut.innerText = `✅ ${articles.length} articles ajoutés avec succès !`;
+        statut.innerText = `✅ ${articles.length} articles ajoutés !`;
         if (typeof chargerTout === 'function') chargerTout();
 
     } catch (e) {
-        console.error("Erreur JSON:", e);
-        statut.innerText = "❌ Format de réponse invalide.";
+        statut.innerText = "❌ Erreur format JSON.";
     }
 }
 
