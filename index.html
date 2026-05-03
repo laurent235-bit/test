@@ -970,25 +970,47 @@ async function demanderAuChef() {
     remplirSuggestions();
 }
 
-// 1. AJOUT MANUEL (Version Blindée contre les sessions expirées)
-// ==========================================
-// Exemple de fonction d'ajout manuel à mettre à jour
 async function ajouterArticleManuel() {
-    const nom = document.getElementById('nom-article').value; // ce que tu tapes
-    
-    const { data, error } = await supabase
-        .from('inventaire2')
-        .insert([{
-            nom: nom,
-            nom_alexa: nom, // <-- AJOUTE CETTE LIGNE : on duplique le nom par défaut
-            quantite: 1,
-            proprietaire: "Laurent 235",
-            etat: 'Plein'
-        }]);
+    console.log("Tentative d'ajout manuel..."); // Pour vérifier que le clic fonctionne
+    try {
+        // On récupère les éléments
+        const inputNom = document.getElementById('nom-article');
+        const inputQte = document.getElementById('quantite-article');
+        
+        // Sécurité : on vérifie si l'input existe vraiment dans le HTML
+        if (!inputNom) {
+            console.error("ERREUR : L'élément avec l'ID 'nom-article' est introuvable dans le HTML.");
+            return;
+        }
 
-    if (!error) {
-        console.log("Article ajouté avec nom_alexa !");
-        chargerInventaire();
+        const nom = inputNom.value;
+        const qte = inputQte ? inputQte.value : 1;
+        const utilisateur = typeof utilisateurActuel !== 'undefined' ? utilisateurActuel : "Laurent 235";
+
+        console.log("Données prêtes :", { nom, qte, utilisateur });
+
+        const { error } = await supabase
+            .from('inventaire2')
+            .insert([{
+                nom: nom,
+                nom_alexa: nom,
+                quantite: parseInt(qte) || 1,
+                proprietaire: utilisateur,
+                emplacement: 'PLACARD',
+                etat: 'Plein'
+            }]);
+
+        if (error) {
+            console.error("Erreur Supabase détaillée :", error);
+            alert("Erreur base de données : " + error.message);
+        } else {
+            console.log("✅ Succès !");
+            inputNom.value = ""; // On vide le champ
+            if (typeof chargerInventaire === 'function') chargerInventaire();
+        }
+
+    } catch (err) {
+        console.error("Le script a crashé ici :", err);
     }
 }
 
