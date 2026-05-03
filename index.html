@@ -25,21 +25,37 @@
 												<b style="color:var(--accent)">🧾 ENTRÉE DE COURSES</b>
 												<div style="display: flex; gap: 10px; margin-top: 10px;">
 													<div style="display: flex; gap: 10px;">
-    <!-- Le bouton SCAN qui ouvre maintenant le sélecteur de fichiers (Photo ou PDF) -->
-    <button onclick="document.getElementById('input-ticket-universel').click()" class="btn btn-accent" style="flex:1">📸 SCAN TICKET</button>
+    <!-- Conteneur principal bien aligné -->
+<div class="flex flex-col gap-3 w-full p-2">
     
-    <!-- Ton bouton E-TICKET (on garde ta fonction si tu veux, mais le bouton SCAN fera déjà tout) -->
-    <button onclick="ouvrirEticket()" class="btn btn-accent" style="flex:1">📧 E-TICKET</button>
+    <div class="flex gap-2 w-full">
+        <!-- Bouton SCAN : Utilise l'input universel -->
+        <button onclick="document.getElementById('input-ticket-universel').click()" 
+                class="btn btn-accent flex-1 flex flex-col h-auto py-3">
+            <span class="text-xl">📸</span>
+            <span class="text-xs uppercase">Scan Ticket</span>
+        </button>
+
+        <!-- Bouton E-TICKET : Manuel -->
+        <button onclick="ouvrirEticket()" 
+                class="btn btn-outline btn-accent flex-1 flex flex-col h-auto py-3">
+            <span class="text-xl">📧</span>
+            <span class="text-xs uppercase">E-Ticket</span>
+        </button>
+    </div>
+
+    <!-- ZONE DE STATUT : Unifiée et discrète -->
+    <div id="statut-scan" class="text-center text-sm font-medium min-h-[20px] text-gray-500 italic">
+        <!-- Le message s'affichera ici -->
+    </div>
+
+    <!-- UN SEUL INPUT : Cache tout le reste -->
+    <input type="file" 
+           id="input-ticket-universel" 
+           accept=".pdf,.jpg,.jpeg,.png,application/pdf" 
+           style="display: none;" 
+           onchange="scannerTicket(this)">
 </div>
-
-<!-- L'input magique : caché, il accepte PDF et Images sans forcer l'appareil photo -->
-<input type="file" id="input-ticket-universel" accept=".pdf,.jpg,.jpeg,.png,application/pdf" style="display: none;" onchange="scannerTicket(this)">
-
-<!-- Zone d'affichage du statut -->
-<div id="statut-scan" style="margin-top: 10px; font-weight: bold; text-align: center; color: #666;"></div>
-												<input type="file" id="input-photo" accept="image/*,application/pdf" capture="environment" style="display:none" onchange="scannerTicket(this)">
-												<div id="statut-scan" style="margin-top: 10px; font-size: 13px; font-weight: bold; text-align: center;"></div>
-											</div>
 
 											<div class="card" style="padding:15px; border: 2px solid var(--accent);">
 												<button id="btn-vocal" class="btn btn-accent">🎤 SORTIR UN ALIMENT (VOCAL)</button>
