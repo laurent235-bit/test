@@ -24,38 +24,19 @@
 											<div class="scan-zone">
 												<b style="color:var(--accent)">🧾 ENTRÉE DE COURSES</b>
 												<div style="display: flex; gap: 10px; margin-top: 10px;">
-													<div style="display: flex; gap: 10px;">
-    <!-- Conteneur principal bien aligné -->
-<div class="flex flex-col gap-3 w-full p-2">
-    
-    <div class="flex gap-2 w-full">
-        <!-- Bouton SCAN : Utilise l'input universel -->
-        <button onclick="document.getElementById('input-ticket-universel').click()" 
-                class="btn btn-accent flex-1 flex flex-col h-auto py-3">
-            <span class="text-xl">📸</span>
-            <span class="text-xs uppercase">Scan Ticket</span>
-        </button>
-
-        <!-- Bouton E-TICKET : Manuel -->
-        <button onclick="ouvrirEticket()" 
-                class="btn btn-outline btn-accent flex-1 flex flex-col h-auto py-3">
-            <span class="text-xl">📧</span>
-            <span class="text-xs uppercase">E-Ticket</span>
-        </button>
-    </div>
-
-    <!-- ZONE DE STATUT : Unifiée et discrète -->
-    <div id="statut-scan" class="text-center text-sm font-medium min-h-[20px] text-gray-500 italic">
-        <!-- Le message s'affichera ici -->
-    </div>
-
-    <!-- UN SEUL INPUT : Cache tout le reste -->
-    <input type="file" 
-           id="input-ticket-universel" 
-           accept=".pdf,.jpg,.jpeg,.png,application/pdf" 
-           style="display: none;" 
-           onchange="scannerTicket(this)">
+													<<div style="display: flex; gap: 10px;">
+    <button onclick="document.getElementById('input-photo').click()" class="btn btn-accent" style="flex:1">
+        📸 SCAN TICKET
+    </button>
+    <button onclick="ouvrirEticket()" class="btn btn-accent" style="flex:1">
+        📧 E-TICKET
+    </button>
 </div>
+
+<!-- J'ai juste enlevé 'capture' et listé les formats pour que le Xiaomi propose le choix 'Fichiers' -->
+<input type="file" id="input-photo" accept=".pdf,.jpg,.jpeg,.png,application/pdf" style="display:none" onchange="scannerTicket(this)">
+
+<div id="statut-scan" style="margin-top: 10px; font-size: 13px; font-weight: bold; text-align: center;"></div>
 
 											<div class="card" style="padding:15px; border: 2px solid var(--accent);">
 												<button id="btn-vocal" class="btn btn-accent">🎤 SORTIR UN ALIMENT (VOCAL)</button>
@@ -642,22 +623,22 @@ async function scannerTicket(input) {
     const file = input.files[0];
     if (!file) return;
 
-    // 1. Vérification de la taille
+    // 1. Sécurité : Vérification de la taille (4Mo max)
     if (file.size > 4 * 1024 * 1024) {
-        alert("Fichier trop lourd (max 4Mo).");
-        input.value = "";
+        alert("Le fichier est trop lourd (max 4Mo).");
+        input.value = ""; 
         return;
     }
 
     const statut = document.getElementById('statut-scan');
-    statut.innerText = "⏳ Lecture du ticket...";
+    statut.innerText = "⏳ Lecture du fichier...";
 
     const reader = new FileReader();
     reader.onload = async () => {
         try {
             const base64Data = reader.result.split(',')[1];
             
-            // 2. Identification du type (PDF ou Image)
+            // 2. Sécurité : Forcer le type MIME si le téléphone l'oublie
             let mimeType = file.type;
             if (!mimeType && file.name.toLowerCase().endsWith(".pdf")) {
                 mimeType = "application/pdf";
@@ -665,30 +646,30 @@ async function scannerTicket(input) {
                 mimeType = "image/jpeg"; 
             }
 
-            statut.innerText = "🧠 Analyse IA en cours...";
+            statut.innerText = "🧠 Analyse par l'IA en cours...";
 
-            // 3. Envoi à Gemini
             const payload = {
                 contents: [{
                     parts: [
-                        { text: "Tu es un expert en ticket de caisse. Extrais les articles. RÈGLE : Nettoie les noms (pas de poids, pas de marques inutiles). Emplacements : FRIGO, PLACARD, CONGELATEUR, ANIMAUX, HORS_CUISINE. Réponds UNIQUEMENT en JSON : [{\"nom\":\"...\",\"quantite\":1,\"emplacement\":\"...\"}]" },
+                        { text: "Tu es un expert en ticket de caisse. Extrais les articles. RÈGLE VITALE : Nettoie les noms pour qu'ils soient naturels et lisibles (supprime les marques, les poids, les lots et les abréviations). Par exemple, 'CREME LEG.SEMI-EP.18% U 3X20CL' devient 'Crème légère semi-épaisse'. Emplacements : FRIGO, PLACARD, CONGELATEUR, ANIMAUX, HORS_CUISINE. Réponds UNIQUEMENT le JSON : [{\"nom\":\"...\",\"quantite\":1,\"emplacement\":\"...\"}]" },
                         { inline_data: { mime_type: mimeType, data: base64Data } }
                     ]
                 }],
-                generationConfig: { temperature: 0.1, response_mime_type: "application/json" }
+                generationConfig: {
+                    temperature: 0.1,
+                    response_mime_type: "application/json" 
+                }
             };
 
             const text = await appelGemini(payload);
-            
-            // 4. Traitement du résultat
             await traiterRetourGemini(text);
             
-            // Nettoyage pour pouvoir recommencer
+            // On vide l'input pour pouvoir rescanner le même fichier si besoin
             input.value = ""; 
 
         } catch (e) {
-            console.error(e);
-            statut.innerText = "❌ Erreur d'analyse.";
+            console.error("Détail erreur:", e);
+            statut.innerText = "❌ Erreur lors de l'analyse. Réessayez.";
             input.value = "";
         }
     };
@@ -698,27 +679,42 @@ async function scannerTicket(input) {
 async function traiterRetourGemini(text) {
     const statut = document.getElementById('statut-scan');
     try {
-        // Extraction sécurisée du JSON
+        // Extraction du JSON (au cas où Gemini ajoute du texte avant/après)
         const debut = text.indexOf('[');
         const fin = text.lastIndexOf(']') + 1;
+        
+        if (debut === -1 || fin === 0) {
+            statut.innerText = "⚠️ L'IA n'a pas pu lire de liste claire sur ce ticket.";
+            return;
+        }
+
         const jsonPropre = text.substring(debut, fin);
         const articles = JSON.parse(jsonPropre);
         
+        if (articles.length === 0) {
+            statut.innerText = "⚠️ Aucun article détecté.";
+            return;
+        }
+
+        // Enregistrement dans Supabase
         for (let a of articles) {
-            await monSupabase.from('inventaire2').insert([{ 
-                nom: a.nom, 
-                quantite: a.quantite, 
-                emplacement: a.emplacement, 
-                etat: 'Plein',
-                proprietaire: (typeof utilisateurActuel !== 'undefined') ? utilisateurActuel : 'Thomas'
-            }]);
+            await monSupabase.from('inventaire2').insert([
+                { 
+                    nom: a.nom, 
+                    quantite: a.quantite, 
+                    emplacement: a.emplacement, 
+                    etat: 'Plein',
+                    proprietaire: (typeof utilisateurActuel !== 'undefined') ? utilisateurActuel : 'Thomas'
+                }
+            ]);
         }
         
-        statut.innerText = `✅ ${articles.length} articles ajoutés !`;
+        statut.innerText = `✅ ${articles.length} articles ajoutés avec succès !`;
         if (typeof chargerTout === 'function') chargerTout();
 
     } catch (e) {
-        statut.innerText = "❌ Erreur format JSON.";
+        console.error("Erreur JSON:", e);
+        statut.innerText = "❌ Format de réponse invalide.";
     }
 }
 
