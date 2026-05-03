@@ -1299,9 +1299,17 @@ async function chargerPlanning() {
     const grid = document.getElementById('planning-grid');
     if (!grid) return;
 
-    // 1. On récupère le planning depuis Supabase
-    const { data, error } = await monSupabase.from('planning').select('*');
-    if (error) { console.error("Erreur planning :", error); return; }
+    // --- CORRECTION : AJOUT DU FILTRE ---
+    // On s'assure de ne récupérer QUE les données appartenant à l'utilisateur actif
+    const { data, error } = await monSupabase
+        .from('planning')
+        .select('*')
+        .eq('proprietaire', utilisateurActuel); // <-- C'est LA ligne qui manque !
+
+    if (error) { 
+        console.error("Erreur planning :", error); 
+        return; 
+    }
 
     // 2. On construit l'affichage jour par jour
     let html = '';
