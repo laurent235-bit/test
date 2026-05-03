@@ -972,148 +972,72 @@ async function demanderAuChef() {
 
 // 1. AJOUT MANUEL (Version Blindée contre les sessions expirées)
 // ==========================================
-async function ajouterManuel() {
-    // --- VERIFICATION DE SÉCURITÉ ---
-    // Si l'utilisateur n'est pas identifié, on arrête tout de suite
-    if (!utilisateurActuel) {
-        alert("⚠️ Erreur : Tu n'es pas connecté ou ta session a expiré. Reconnecte-toi !");
-        console.error("Variable utilisateurActuel est vide.");
-        return;
-    }
-
-    const nRaw = document.getElementById('add-nom').value;
-    const n = nRaw.trim().replace(/\s+/g, ' '); 
+// Exemple de fonction d'ajout manuel à mettre à jour
+async function ajouterArticleManuel() {
+    const nom = document.getElementById('nom-article').value; // ce que tu tapes
     
-    const e = document.getElementById('add-emplacement').value;
-    const qInput = document.getElementById('add-qte').value;
-    const q = parseInt(qInput) || 1;
-
-    if (!n) return;
-
-    // --- RECHERCHE ---
-    const { data: existant, error: searchError } = await monSupabase
+    const { data, error } = await supabase
         .from('inventaire2')
-        .select('*')
-        .ilike('nom', n) 
-        .eq('emplacement', e)
-        .eq('proprietaire', utilisateurActuel) 
-        .neq('etat', 'Vide')
-        .maybeSingle();
+        .insert([{
+            nom: nom,
+            nom_alexa: nom, // <-- AJOUTE CETTE LIGNE : on duplique le nom par défaut
+            quantite: 1,
+            proprietaire: "Laurent 235",
+            etat: 'Plein'
+        }]);
 
-    if (searchError) {
-        console.error("Erreur de recherche:", searchError.message);
-        alert("Erreur de connexion à la base.");
-        return;
+    if (!error) {
+        console.log("Article ajouté avec nom_alexa !");
+        chargerInventaire();
     }
-
-    if (existant) {
-        // 3. CAS EXISTANT : Update
-        const nouvelleQte = (parseInt(existant.quantite) || 0) + q;
-        
-        const { error: updateError } = await monSupabase
-            .from('inventaire2')
-            .update({ 
-                quantite: nouvelleQte, 
-                etat: 'Plein' 
-            })
-            .eq('id', existant.id);
-            
-        if (updateError) {
-            alert("Erreur lors de la mise à jour : " + updateError.message);
-        } else {
-            console.log(`📈 Fusion réussie pour : ${n}`);
-        }
-    } else {
-        // 4. CAS NOUVEAU : Insert
-        const { error: insertError } = await monSupabase
-            .from('inventaire2')
-            .insert([{ 
-                nom: n, 
-                emplacement: e, 
-                quantite: q, 
-                etat: 'Plein',
-                proprietaire: utilisateurActuel 
-            }]);
-            
-        if (insertError) {
-            alert("Erreur lors de la création : " + insertError.message);
-        } else {
-            console.log(`🆕 Nouvel article créé : ${n}`);
-        }
-    }
-
-    // 5. Reset et Refresh
-    document.getElementById('add-nom').value = "";
-    document.getElementById('add-qte').value = "1";
-    chargerTout();
 }
 
-async function traiterRetourGemini(text) {
-    // 1. SÉCURITÉ : On vérifie si l'utilisateur est connu
-    if (!utilisateurActuel) {
-        document.getElementById('statut-scan').innerText = "❌ Session expirée.";
-        return;
-    }
-
+async function traiterRetourGemini(jsonTexte) {
     try {
-        const debut = text.indexOf('[');
-        const fin = text.lastIndexOf(']') + 1;
-        const jsonPropre = text.substring(debut, fin);
-if (!jsonPropre) throw new Error("Aucun JSON trouvé");
-const articles = JSON.parse(jsonPropre);
+        // Nettoyage du JSON (au cas où Gemini mettrait des balises)
+        const netoye = jsonTexte.replace(/```json/g, "").replace(/```/g, "").trim();
+        const articles = JSON.parse(netoye);
+        
+        // On récupère l'utilisateur connecté (Laurent 235 pour toi, ou l'ID du bêta-testeur)
+        // Je suppose que tu as une variable 'utilisateurActuel' ou 'userEmail'
+        const utilisateur = typeof utilisateurActuel !== 'undefined' ? utilisateurActuel : "Laurent 235"; 
 
-        for (let a of articles) {
-            const nomNettoye = a.nom.trim().replace(/\s+/g, ' ');
-            const qteScan = parseInt(a.quantite) || 1;
-            const datePerim = a.peremption || null;
+        for (const art of articles) {
+            // CONSTRUCTION DE L'ARTICLE
+            const nouvelArticle = {
+                nom: art.nom, // Nom détaillé (toujours affiché dans l'appli)
+                
+                // NOUVEAU : On stocke le nom court pour Alexa. 
+                // Si l'IA ne le donne pas, on prend les 20 premiers caractères du nom.
+                nom_alexa: art.nom_alexa || art.nom.substring(0, 20), 
+                
+                quantite: art.quantite || 1,
+                emplacement: art.emplacement || 'PLACARD',
+                proprietaire: utilisateur,
+                etat: 'Plein'
+            };
 
-            // RECHERCHE : On filtre bien par le propriétaire actuel
-            let query = monSupabase
+            // Insertion dans Supabase
+            const { error } = await supabase
                 .from('inventaire2')
-                .select('*')
-                .ilike('nom', nomNettoye)
-                .eq('emplacement', a.emplacement)
-                .eq('proprietaire', utilisateurActuel)
-                .neq('etat', 'Vide');
+                .insert([nouvelArticle]);
 
-            if (datePerim) {
-                query = query.eq('date_peremption', datePerim);
-            } else {
-                query = query.is('date_peremption', null);
-            }
-
-            const { data: existant } = await query.maybeSingle();
-
-            if (existant) {
-                // CAS EXISTANT : Update
-                const nouvelleQte = (parseInt(existant.quantite) || 0) + qteScan;
-                await monSupabase
-                    .from('inventaire2')
-                    .update({ quantite: nouvelleQte, etat: 'Plein' })
-                    .eq('id', existant.id);
-                console.log(`✅ Fusion : ${nomNettoye}`);
-            } else {
-                // CAS NOUVEAU : Insert avec signature du propriétaire
-                await monSupabase
-                    .from('inventaire2')
-                    .insert([{ 
-                        nom: nomNettoye, 
-                        quantite: qteScan, 
-                        emplacement: a.emplacement, 
-                        etat: 'Plein',
-                        date_peremption: datePerim,
-                        proprietaire: utilisateurActuel 
-                    }]);
-                console.log(`🆕 Nouveau : ${nomNettoye}`);
+            if (error) {
+                console.error("Erreur d'ajout de l'article :", art.nom, error);
             }
         }
+        
+        // Feedback visuel pour l'utilisateur (inchangé pour tes testeurs)
+        const statutElement = document.getElementById('statut-scan');
+        if (statutElement) statutElement.innerText = "✅ Ticket enregistré avec succès !";
+        
+        // Rafraîchir la liste affichée
+        if (typeof chargerInventaire === 'function') chargerInventaire(); 
 
-        document.getElementById('statut-scan').innerText = "✅ " + articles.length + " articles traités !";
-        chargerTout();
-
-    } catch(e) { 
-        console.error("Erreur dans traiterRetourGemini :", e);
-        document.getElementById('statut-scan').innerText = "❌ Erreur de traitement."; 
+    } catch (e) {
+        console.error("Erreur critique traitement Gemini :", e);
+        const statutElement = document.getElementById('statut-scan');
+        if (statutElement) statutElement.innerText = "❌ Erreur lors de la lecture du ticket.";
     }
 }
 // --- 3. SUPPRIMER DÉFINITIF ---
