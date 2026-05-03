@@ -1343,57 +1343,35 @@ function genererCasePlanning(dataPlanning, jour, moment) {
 }
 
 async function modifierPlanning(jour, moment, idExistant) {
-    // On demande à l'utilisateur ce qu'il veut manger
     const nouveauPlat = prompt(`Que veux-tu manger ${jour} ${moment} ?\n(Laisse vide pour effacer le repas)`);
     
-    // Si l'utilisateur clique sur "Annuler"
     if (nouveauPlat === null) return;
 
     if (nouveauPlat.trim() === "") {
-        // S'il efface le texte, on supprime de la base de données
         if (idExistant) {
             await monSupabase.from('planning').delete().eq('id', idExistant);
         }
     } else {
-        // Sinon, on met à jour ou on insère
         if (idExistant) {
-            await monSupabase.from('planning').update({ plat: nouveauPlat }).eq('id', idExistant);
+            // AJOUT DU PROPRIETAIRE ICI AUSSI
+            await monSupabase.from('planning')
+                .update({ plat: nouveauPlat, proprietaire: utilisateurActuel }) 
+                .eq('id', idExistant);
         } else {
-            await monSupabase.from('planning').insert([{ jour: jour, moment: moment, plat: nouveauPlat }]);
+            // AJOUT DU PROPRIETAIRE ICI
+            await monSupabase.from('planning')
+                .insert([{ 
+                    jour: jour, 
+                    moment: moment, 
+                    plat: nouveauPlat, 
+                    proprietaire: utilisateurActuel 
+                }]);
         }
     }
     
-    // On rafraîchit l'affichage !
     chargerPlanning();
 }
-async function enregistrerRepas(jour, moment, nouveauRepas) {
-    // 1. SECURITÉ : On vérifie si l'utilisateur est connecté
-    if (!utilisateurActuel) {
-        alert("Tu dois être connecté pour modifier le planning.");
-        return;
-    }
 
-    // 2. On utilise UPSERT (mélange de INSERT et UPDATE)
-    // On précise bien le propriétaire pour que la ligne lui appartienne
-    const { error } = await monSupabase
-        .from('planning')
-        .upsert({ 
-            jour: jour, 
-            moment: moment, 
-            repas: nouveauRepas, 
-            proprietaire: utilisateurActuel // 👈 C'EST LA CLÉ !
-        }, { 
-            onConflict: 'jour, moment, proprietaire' // Évite les doublons pour une même case
-        });
-
-    if (error) {
-        console.error("Erreur d'enregistrement planning:", error.message);
-        alert("Impossible d'enregistrer le repas.");
-    } else {
-        console.log(`✅ Repas enregistré pour ${jour} (${moment})`);
-        chargerPlanning(); // On rafraîchit l'affichage
-    }
-}
 										function faireParlerIA(message) {
     // 1. SÉCURITÉ : On arrête toute voix en cours avant de lancer la nouvelle
     window.speechSynthesis.cancel();
