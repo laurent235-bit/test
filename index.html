@@ -290,8 +290,7 @@ window.onload = () => {
 async function appelGemini(message) {
     const urlRelais = "https://gemini-relais.laurent235.workers.dev";
     
-    // Si c'est du texte (vocal), on en fait un petit objet {prompt}
-    // Si c'est le payload du ticket, on l'envoie tel quel
+    // On s'assure d'envoyer le bon format
     const corps = (typeof message === 'string') ? { prompt: message } : message;
 
     const resp = await fetch(urlRelais, {
@@ -300,37 +299,27 @@ async function appelGemini(message) {
         body: JSON.stringify(corps)
     });
 
+    if (!resp.ok) {
+        const errTxt = await resp.text();
+        console.error("❌ Erreur Relais HTTP:", resp.status, errTxt);
+        throw new Error("Relais indisponible");
+    }
+
     const data = await resp.json();
-    if (data.error) throw new Error(data.error.message || "Erreur API");
+
+    // --- SÉCURITÉ : Vérification de la réponse de Google ---
+    if (data.error) {
+        console.error("❌ Erreur API Google:", data.error);
+        throw new Error(data.error.message);
+    }
+
+    if (!data.candidates || !data.candidates[0]?.content?.parts?.[0]?.text) {
+        console.error("❌ Structure de réponse invalide ou contenu bloqué:", data);
+        throw new Error("Réponse IA vide");
+    }
+
     return data.candidates[0].content.parts[0].text;
 }
-
-// --- 2. GESTION DU RÉSULTAT VOCAL (Fusionné et Sécurisé) ---
-recognition.onresult = async (e) => { 
-    // A. Récupération de la phrase
-    const phrase = e.results[0][0].transcript.toLowerCase();
-    const statut = document.getElementById('statut-vocal');
-    
-    if (statut) statut.innerText = "💬 J'ai entendu : " + phrase;
-    console.log("🎤 Phrase captée :", phrase);
-
-    // B. SÉCURITÉ : Vérification de l'utilisateur
-    if (!utilisateurActuel) {
-        console.error("Action vocale impossible : utilisateurActuel est absent.");
-        if (typeof faireParlerIA === "function") {
-            faireParlerIA("Je ne peux pas répondre car je ne sais pas qui tu es. Reconnecte-toi.");
-        }
-        return; 
-    }
-
-    // C. SÉCURITÉ STOP / ANNULE
-    if (phrase.includes("stop") || phrase.includes("annule")) {
-        window.speechSynthesis.cancel();
-        window.attenteChoixRecette = false;
-        if (typeof faireParlerIA === "function") faireParlerIA("D'accord.");
-        return;
-    }
-
 
     // --- 2. SI ON ATTEND TON CHOIX (Écriture de la recette) ---
 if (window.attenteChoixRecette) {
@@ -1026,9 +1015,12 @@ async function ajouterManuel() {
             if (reponseIA) {
                 nAlexa = reponseIA.trim();
             }
-        } catch (err) {
-            console.warn("Gemini n'a pas pu simplifier, on utilise le nom brut.");
-        }
+       } catch (err) {
+    console.error("L'IA a dit non. Raison :", err.message); // <-- C'est CA qui va nous dire la vérité
+    nAlexa = n.split(' ')[0]; 
+}
+console.log("NOM ENVOYÉ :", n);
+console.log("NOM ALEXA ENVOYÉ :", nAlexa);
 
         // --- INSERTION AVEC LE NOM NETTOYÉ ---
         const { error: insertError } = await monSupabase
