@@ -971,46 +971,85 @@ async function demanderAuChef() {
 }
 
 async function ajouterManuel() {
-    console.log("Tentative d'ajout manuel..."); // Pour vérifier que le clic fonctionne
-    try {
-        // On récupère les éléments
-        const inputNom = document.getElementById('nom-article');
-        const inputQte = document.getElementById('quantite-article');
+    // --- VERIFICATION DE SÉCURITÉ ---
+    if (!utilisateurActuel) {
+        alert("⚠️ Erreur : Tu n'es pas connecté ou ta session a expiré. Reconnecte-toi !");
+        console.error("Variable utilisateurActuel est vide.");
+        return;
+    }
+
+    // Récupération avec les bons IDs
+    const nRaw = document.getElementById('add-nom').value;
+    const n = nRaw.trim().replace(/\s+/g, ' '); 
+    
+    const e = document.getElementById('add-emplacement').value;
+    const qInput = document.getElementById('add-qte').value;
+    const q = parseInt(qInput) || 1;
+
+    if (!n) return;
+
+    // --- RECHERCHE ---
+    const { data: existant, error: searchError } = await monSupabase
+        .from('inventaire2')
+        .select('*')
+        .ilike('nom', n) 
+        .eq('emplacement', e)
+        .eq('proprietaire', utilisateurActuel) 
+        .neq('etat', 'Vide')
+        .maybeSingle();
+
+    if (searchError) {
+        console.error("Erreur de recherche:", searchError.message);
+        alert("Erreur de connexion à la base.");
+        return;
+    }
+
+    if (existant) {
+        // 3. CAS EXISTANT : Update (On ne change pas le nom_alexa existant)
+        const nouvelleQte = (parseInt(existant.quantite) || 0) + q;
         
-        // Sécurité : on vérifie si l'input existe vraiment dans le HTML
-        if (!inputNom) {
-            console.error("ERREUR : L'élément avec l'ID 'nom-article' est introuvable dans le HTML.");
-            return;
-        }
-
-        const nom = inputNom.value;
-        const qte = inputQte ? inputQte.value : 1;
-        const utilisateur = typeof utilisateurActuel !== 'undefined' ? utilisateurActuel : "Laurent 235";
-
-        console.log("Données prêtes :", { nom, qte, utilisateur });
-
-        const { error } = await supabase
+        const { error: updateError } = await monSupabase
             .from('inventaire2')
-            .insert([{
-                nom: nom,
-                nom_alexa: nom,
-                quantite: parseInt(qte) || 1,
-                proprietaire: utilisateur,
-                emplacement: 'PLACARD',
-                etat: 'Plein'
-            }]);
-
-        if (error) {
-            console.error("Erreur Supabase détaillée :", error);
-            alert("Erreur base de données : " + error.message);
+            .update({ 
+                quantite: nouvelleQte, 
+                etat: 'Plein' 
+            })
+            .eq('id', existant.id);
+            
+        if (updateError) {
+            alert("Erreur lors de la mise à jour : " + updateError.message);
         } else {
-            console.log("✅ Succès !");
-            inputNom.value = ""; // On vide le champ
-            if (typeof chargerInventaire === 'function') chargerInventaire();
+            console.log(`📈 Fusion réussie pour : ${n}`);
         }
+    } else {
+        // 4. CAS NOUVEAU : Insert (On ajoute nom_alexa ici !)
+        const { error: insertError } = await monSupabase
+            .from('inventaire2')
+            .insert([{ 
+                nom: n, 
+                nom_alexa: n, // On initialise le nom court avec le nom saisi
+                emplacement: e, 
+                quantite: q, 
+                etat: 'Plein',
+                proprietaire: utilisateurActuel 
+            }]);
+            
+        if (insertError) {
+            alert("Erreur lors de la création : " + insertError.message);
+        } else {
+            console.log(`🆕 Nouvel article créé avec nom_alexa : ${n}`);
+        }
+    }
 
-    } catch (err) {
-        console.error("Le script a crashé ici :", err);
+    // 5. Reset et Refresh
+    document.getElementById('add-nom').value = "";
+    document.getElementById('add-qte').value = "1";
+    
+    // On vérifie si chargerTout existe, sinon on appelle chargerInventaire
+    if (typeof chargerTout === 'function') {
+        chargerTout();
+    } else if (typeof chargerInventaire === 'function') {
+        chargerInventaire();
     }
 }
 
