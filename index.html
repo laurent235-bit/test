@@ -1060,30 +1060,26 @@ console.log("NOM ALEXA ENVOYÉ :", nAlexa);
 
 async function traiterRetourGemini(jsonTexte) {
     try {
-        // Nettoyage du JSON (au cas où Gemini mettrait des balises)
-        const netoye = jsonTexte.replace(/```json/g, "").replace(/```/g, "").trim();
+        // Nettoyage du JSON
+        const netoye = jsonTexte.replace(/
+```json/g, "").replace(/```/g, "").trim();
         const articles = JSON.parse(netoye);
         
-        // On récupère l'utilisateur connecté (Laurent 235 pour toi, ou l'ID du bêta-testeur)
-        // Je suppose que tu as une variable 'utilisateurActuel' ou 'userEmail'
         const utilisateur = typeof utilisateurActuel !== 'undefined' ? utilisateurActuel : "Laurent 235"; 
 
         for (const art of articles) {
             // CONSTRUCTION DE L'ARTICLE
             const nouvelArticle = {
-                nom: art.nom, // Nom détaillé (toujours affiché dans l'appli)
-                
-                // NOUVEAU : On stocke le nom court pour Alexa. 
-                // Si l'IA ne le donne pas, on prend les 20 premiers caractères du nom.
-                nom_alexa: art.nom_alexa || art.nom.substring(0, 20), 
-                
+                nom: art.nom, 
+                // On s'assure que nom_alexa existe et n'est pas trop long
+                nom_alexa: art.nom_alexa || art.nom.split(' ')[0], 
                 quantite: art.quantite || 1,
                 emplacement: art.emplacement || 'PLACARD',
                 proprietaire: utilisateur,
                 etat: 'Plein'
             };
 
-            // Insertion dans Supabase
+            // --- CORRECTION CI-DESSOUS : monSupabase avec un S majuscule ---
             const { error } = await monSupabase
                 .from('inventaire2')
                 .insert([nouvelArticle]);
@@ -1093,12 +1089,15 @@ async function traiterRetourGemini(jsonTexte) {
             }
         }
         
-        // Feedback visuel pour l'utilisateur (inchangé pour tes testeurs)
         const statutElement = document.getElementById('statut-scan');
         if (statutElement) statutElement.innerText = "✅ Ticket enregistré avec succès !";
         
-        // Rafraîchir la liste affichée
-        if (typeof chargerInventaire === 'function') chargerInventaire(); 
+        // Rafraîchir l'affichage
+        if (typeof chargerTout === 'function') {
+            chargerTout();
+        } else if (typeof chargerInventaire === 'function') {
+            chargerInventaire(); 
+        }
 
     } catch (e) {
         console.error("Erreur critique traitement Gemini :", e);
