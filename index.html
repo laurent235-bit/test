@@ -1084,7 +1084,7 @@ async function traiterRetourGemini(jsonTexte) {
             };
 
             // Insertion dans Supabase
-            const { error } = await monsupabase
+            const { error } = await monSupabase
                 .from('inventaire2')
                 .insert([nouvelArticle]);
 
