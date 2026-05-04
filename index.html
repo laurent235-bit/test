@@ -287,6 +287,39 @@ window.onload = () => {
 								let recognition = (SpeechRecognition) ? new SpeechRecognition() : null;
 
 								// ==========================================================
+/**
+ * Calcule une date de péremption estimée selon le type de produit.
+ * Utile pour les scans de tickets où la date n'est pas indiquée.
+ */
+function calculerDateMoyenne(nomProduit, emplacement) {
+    // On ne calcule une date automatique que pour le frais (Frigo)
+    // Pour le placard ou le congélo, la durée est trop longue ou indifférente
+    if (emplacement.toUpperCase() !== 'FRIGO') return null;
+
+    const nom = nomProduit.toLowerCase();
+    let jours = 10; // Durée standard par défaut pour le frigo
+
+    // --- DICTIONNAIRE D'INTELLIGENCE MÉTIER ---
+    if (nom.includes('jambon') || nom.includes('lardons') || nom.includes('viande') || nom.includes('poisson') || nom.includes('poulet') || nom.includes('steak')) {
+        jours = 4; // Produits très périssables
+    } 
+    else if (nom.includes('yaourt') || nom.includes('lait') || nom.includes('creme') || nom.includes('dessert') || nom.includes('suisse')) {
+        jours = 15; // Produits laitiers
+    } 
+    else if (nom.includes('oeuf') || nom.includes('fromage') || nom.includes('beurre')) {
+        jours = 25; // Produits à longue conservation au frais
+    }
+    else if (nom.includes('ouvert') || nom.includes('reste') || nom.includes('plat')) {
+        jours = 3; // Restes de cuisine (anti-gaspi)
+    }
+
+    // Calcul de la date finale
+    const d = new Date();
+    d.setDate(d.getDate() + jours);
+    
+    // Retourne le format YYYY-MM-DD accepté par Supabase
+    return d.toISOString().split('T')[0];
+}
 async function appelGemini(message) {
     const urlRelais = "https://gemini-relais.laurent235.workers.dev";
     
@@ -1066,6 +1099,23 @@ async function traiterRetourGemini(text) {
         return;
     }
 
+    // --- PETITE FONCTION INTERNE POUR LA MOYENNE ---
+    const calculerDateMoyenne = (nomProduit, emplacement) => {
+        if (emplacement.toUpperCase() !== 'FRIGO') return null;
+        const nom = nomProduit.toLowerCase();
+        let jours = 10; // Par défaut
+        if (nom.includes('jambon') || nom.includes('lardons') || nom.includes('viande') || nom.includes('poisson') || nom.includes('poulet')) {
+            jours = 4;
+        } else if (nom.includes('yaourt') || nom.includes('lait') || nom.includes('creme') || nom.includes('dessert')) {
+            jours = 15;
+        } else if (nom.includes('oeuf') || nom.includes('fromage') || nom.includes('beurre')) {
+            jours = 25;
+        }
+        const d = new Date();
+        d.setDate(d.getDate() + jours);
+        return d.toISOString().split('T')[0];
+    };
+
     try {
         const debut = text.indexOf('[');
         const fin = text.lastIndexOf(']') + 1;
@@ -1076,17 +1126,18 @@ async function traiterRetourGemini(text) {
         for (let a of articles) {
             const nomNettoye = a.nom.trim().replace(/\s+/g, ' ');
             const qteScan = parseInt(a.quantite) || 1;
-            const datePerim = a.peremption || null;
+            const emplacementPropre = (a.emplacement || 'PLACARD').toUpperCase().trim();
             
-            // --- NOUVEAU : On prépare le nom court pour Alexa ---
-            // Si l'IA ne fournit pas nom_alexa, on prend le premier mot du nom
+            // On calcule la date si l'IA ne l'a pas trouvée
+            const datePerim = a.peremption || calculerDateMoyenne(nomNettoye, emplacementPropre);
+            
             const nomCourt = a.nom_alexa || nomNettoye.split(' ')[0];
 
             let query = monSupabase
                 .from('inventaire2')
                 .select('*')
                 .ilike('nom', nomNettoye)
-                .eq('emplacement', a.emplacement)
+                .eq('emplacement', emplacementPropre)
                 .eq('proprietaire', utilisateurActuel)
                 .neq('etat', 'Vide');
 
@@ -1099,31 +1150,30 @@ async function traiterRetourGemini(text) {
             const { data: existant } = await query.maybeSingle();
 
             if (existant) {
-                // UPDATE : On met à jour quantité ET on en profite pour remplir nom_alexa s'il était vide
                 const nouvelleQte = (parseInt(existant.quantite) || 0) + qteScan;
                 await monSupabase
                     .from('inventaire2')
                     .update({ 
                         quantite: nouvelleQte, 
                         etat: 'Plein',
-                        nom_alexa: existant.nom_alexa || nomCourt // Remplit si vide
+                        nom_alexa: existant.nom_alexa || nomCourt,
+                        date_peremption: existant.date_peremption || datePerim // Remplit si vide
                     })
                     .eq('id', existant.id);
                 console.log(`✅ Fusion : ${nomNettoye}`);
             } else {
-                // INSERT : On ajoute le produit avec sa signature propriétaire ET le nom Alexa
                 await monSupabase
                     .from('inventaire2')
                     .insert([{ 
                         nom: nomNettoye, 
-                        nom_alexa: nomCourt, // <--- INDISPENSABLE POUR ALEXA
+                        nom_alexa: nomCourt, 
                         quantite: qteScan, 
-                        emplacement: a.emplacement, 
+                        emplacement: emplacementPropre, 
                         etat: 'Plein',
                         date_peremption: datePerim,
                         proprietaire: utilisateurActuel 
                     }]);
-                console.log(`🆕 Nouveau : ${nomNettoye} (Alexa : ${nomCourt})`);
+                console.log(`🆕 Nouveau : ${nomNettoye} (Date estimée: ${datePerim})`);
             }
         }
 
