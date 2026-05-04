@@ -1059,52 +1059,74 @@ console.log("NOM ALEXA ENVOYÉ :", nAlexa);
 }
 
 async function traiterRetourGemini(text) {
+    // 1. SÉCURITÉ : On vérifie si l'utilisateur est connu
+    if (!utilisateurActuel) {
+        document.getElementById('statut-scan').innerText = "❌ Session expirée.";
+        return;
+    }
+
     try {
-        // Nettoyage du JSON
-        const netoye = jsonTexte.replace(/
-```json/g, "").replace(/```/g, "").trim();
-        const articles = JSON.parse(netoye);
-        
-        const utilisateur = typeof utilisateurActuel !== 'undefined' ? utilisateurActuel : "Laurent 235"; 
+        const debut = text.indexOf('[');
+        const fin = text.lastIndexOf(']') + 1;
+        const jsonPropre = text.substring(debut, fin);
+if (!jsonPropre) throw new Error("Aucun JSON trouvé");
+const articles = JSON.parse(jsonPropre);
 
-        for (const art of articles) {
-            // CONSTRUCTION DE L'ARTICLE
-            const nouvelArticle = {
-                nom: art.nom, 
-                // On s'assure que nom_alexa existe et n'est pas trop long
-                nom_alexa: art.nom_alexa || art.nom.split(' ')[0], 
-                quantite: art.quantite || 1,
-                emplacement: art.emplacement || 'PLACARD',
-                proprietaire: utilisateur,
-                etat: 'Plein'
-            };
+        for (let a of articles) {
+            const nomNettoye = a.nom.trim().replace(/\s+/g, ' ');
+            const qteScan = parseInt(a.quantite) || 1;
+            const datePerim = a.peremption || null;
 
-            // --- CORRECTION CI-DESSOUS : monSupabase avec un S majuscule ---
-            const { error } = await monSupabase
+            // RECHERCHE : On filtre bien par le propriétaire actuel
+            let query = monSupabase
                 .from('inventaire2')
-                .insert([nouvelArticle]);
+                .select('*')
+                .ilike('nom', nomNettoye)
+                .eq('emplacement', a.emplacement)
+                .eq('proprietaire', utilisateurActuel)
+                .neq('etat', 'Vide');
 
-            if (error) {
-                console.error("Erreur d'ajout de l'article :", art.nom, error);
+            if (datePerim) {
+                query = query.eq('date_peremption', datePerim);
+            } else {
+                query = query.is('date_peremption', null);
+            }
+
+            const { data: existant } = await query.maybeSingle();
+
+            if (existant) {
+                // CAS EXISTANT : Update
+                const nouvelleQte = (parseInt(existant.quantite) || 0) + qteScan;
+                await monSupabase
+                    .from('inventaire2')
+                    .update({ quantite: nouvelleQte, etat: 'Plein' })
+                    .eq('id', existant.id);
+                console.log(`✅ Fusion : ${nomNettoye}`);
+            } else {
+                // CAS NOUVEAU : Insert avec signature du propriétaire
+                await monSupabase
+                    .from('inventaire2')
+                    .insert([{ 
+                        nom: nomNettoye, 
+                        quantite: qteScan, 
+                        emplacement: a.emplacement, 
+                        etat: 'Plein',
+                        date_peremption: datePerim,
+                        proprietaire: utilisateurActuel 
+                    }]);
+                console.log(`🆕 Nouveau : ${nomNettoye}`);
             }
         }
-        
-        const statutElement = document.getElementById('statut-scan');
-        if (statutElement) statutElement.innerText = "✅ Ticket enregistré avec succès !";
-        
-        // Rafraîchir l'affichage
-        if (typeof chargerTout === 'function') {
-            chargerTout();
-        } else if (typeof chargerInventaire === 'function') {
-            chargerInventaire(); 
-        }
 
-    } catch (e) {
-        console.error("Erreur critique traitement Gemini :", e);
-        const statutElement = document.getElementById('statut-scan');
-        if (statutElement) statutElement.innerText = "❌ Erreur lors de la lecture du ticket.";
+        document.getElementById('statut-scan').innerText = "✅ " + articles.length + " articles traités !";
+        chargerTout();
+
+    } catch(e) { 
+        console.error("Erreur dans traiterRetourGemini :", e);
+        document.getElementById('statut-scan').innerText = "❌ Erreur de traitement."; 
     }
 }
+
 // --- 3. SUPPRIMER DÉFINITIF ---
 async function supprimerDefinitif(id) { 
     if (!utilisateurActuel) return; // Sécurité
