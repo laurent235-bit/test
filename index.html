@@ -1058,7 +1058,7 @@ console.log("NOM ALEXA ENVOYÉ :", nAlexa);
     if (typeof chargerTout === 'function') chargerTout();
 }
 
-async function traiterRetourGemini(jsonTexte) {
+async function traiterRetourGemini(text) {
     try {
         // Nettoyage du JSON
         const netoye = jsonTexte.replace(/
