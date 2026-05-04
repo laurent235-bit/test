@@ -1059,7 +1059,6 @@ console.log("NOM ALEXA ENVOYÉ :", nAlexa);
 }
 
 async function traiterRetourGemini(text) {
-    // 1. SÉCURITÉ : On vérifie si l'utilisateur est connu
     if (!utilisateurActuel) {
         document.getElementById('statut-scan').innerText = "❌ Session expirée.";
         return;
@@ -1069,15 +1068,18 @@ async function traiterRetourGemini(text) {
         const debut = text.indexOf('[');
         const fin = text.lastIndexOf(']') + 1;
         const jsonPropre = text.substring(debut, fin);
-if (!jsonPropre) throw new Error("Aucun JSON trouvé");
-const articles = JSON.parse(jsonPropre);
+        if (!jsonPropre) throw new Error("Aucun JSON trouvé");
+        const articles = JSON.parse(jsonPropre);
 
         for (let a of articles) {
             const nomNettoye = a.nom.trim().replace(/\s+/g, ' ');
             const qteScan = parseInt(a.quantite) || 1;
             const datePerim = a.peremption || null;
+            
+            // --- NOUVEAU : On prépare le nom court pour Alexa ---
+            // Si l'IA ne fournit pas nom_alexa, on prend le premier mot du nom
+            const nomCourt = a.nom_alexa || nomNettoye.split(' ')[0];
 
-            // RECHERCHE : On filtre bien par le propriétaire actuel
             let query = monSupabase
                 .from('inventaire2')
                 .select('*')
@@ -1095,26 +1097,31 @@ const articles = JSON.parse(jsonPropre);
             const { data: existant } = await query.maybeSingle();
 
             if (existant) {
-                // CAS EXISTANT : Update
+                // UPDATE : On met à jour quantité ET on en profite pour remplir nom_alexa s'il était vide
                 const nouvelleQte = (parseInt(existant.quantite) || 0) + qteScan;
                 await monSupabase
                     .from('inventaire2')
-                    .update({ quantite: nouvelleQte, etat: 'Plein' })
+                    .update({ 
+                        quantite: nouvelleQte, 
+                        etat: 'Plein',
+                        nom_alexa: existant.nom_alexa || nomCourt // Remplit si vide
+                    })
                     .eq('id', existant.id);
                 console.log(`✅ Fusion : ${nomNettoye}`);
             } else {
-                // CAS NOUVEAU : Insert avec signature du propriétaire
+                // INSERT : On ajoute le produit avec sa signature propriétaire ET le nom Alexa
                 await monSupabase
                     .from('inventaire2')
                     .insert([{ 
                         nom: nomNettoye, 
+                        nom_alexa: nomCourt, // <--- INDISPENSABLE POUR ALEXA
                         quantite: qteScan, 
                         emplacement: a.emplacement, 
                         etat: 'Plein',
                         date_peremption: datePerim,
                         proprietaire: utilisateurActuel 
                     }]);
-                console.log(`🆕 Nouveau : ${nomNettoye}`);
+                console.log(`🆕 Nouveau : ${nomNettoye} (Alexa : ${nomCourt})`);
             }
         }
 
