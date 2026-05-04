@@ -901,6 +901,8 @@ async function demanderAuChef() {
         // --- CAS C : STOCK CLASSIQUE ---
         else {
             const container = document.getElementById(mapping[item.emplacement] || 'list-Placard');
+			// 🔴 PLACE LE LOG ICI :
+    console.log(`Produit: ${item.nom} | Emplacement: "${item.emplacement}" | Date: ${item.date_peremption}`);
             if(container) {
                 const couleurEtat = item.etat === 'Entamé' ? '#ef6c00' : '#333';
                 const labelEtat = item.etat === 'Entamé' ? '⚠️ Entamé' : '📦 Plein';
