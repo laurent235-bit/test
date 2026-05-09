@@ -727,22 +727,26 @@ async function demanderAuChef() {
         const urlRelais = "https://gemini-relais.laurent235.workers.dev"; 
 
         const promptExpert = `
-        Tu es un Chef cuisinier créatif.
+        Tu es un Chef cuisinier STRICT et ingénieux. 
+        
         DEMANDE UTILISATEUR : "${pU}"
-        STOCK DISPONIBLE : ${ing}
+        STOCK RÉEL DISPONIBLE : [${ing}]
 
-        CONSIGNES :
-        1. Propose 3 idées de plats variés.
-        2. Utilise le stock en priorité.
-        3. RÉPONDS UNIQUEMENT AU FORMAT JSON STRICT (tableau d'objets) sans texte avant ou après : 
-        [{"titre":"Nom du plat", "contenu":"Description courte"}]`;
+        CONSIGNES DE CUISINE :
+        1. Tu dois proposer 3 plats FAISABLES UNIQUEMENT avec les ingrédients du STOCK.
+        2. INTERDICTION d'ajouter des ingrédients frais que je n'ai pas (pas d'œufs, pas de crème, pas de viande si non listés).
+        3. Tu as le droit d'utiliser UNIQUEMENT ces "Invisibles" : Eau, Sel, Poivre, Huile. Rien d'autre.
+        4. Si un ingrédient du stock est "Entamé", utilise-le en priorité.
+        5. Pour chaque plat, si un ingrédient manque pour que ce soit parfait, écris à la fin du contenu : "(Optionnel : serait meilleur avec [nom])", mais la recette doit fonctionner sans.
 
+        RÉPONDS UNIQUEMENT AU FORMAT JSON STRICT (tableau d'objets) : 
+        [{"titre":"Nom du plat", "contenu":"Description de la préparation étape par étape"}]`;
         const resp = await fetch(urlRelais, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ 
                 prompt: promptExpert,
-                temperature: 0.7 
+                temperature: 0.4 
             }) 
         });
 
@@ -1057,7 +1061,7 @@ async function ajouterManuel() {
             Produit: "${n}"`;
 
             // On récupère la réponse de l'IA
-            const reponseIA = await appelerGemini(promptSimplification); 
+            const reponseIA = await appelGemini(promptSimplification);
             if (reponseIA) {
                 nAlexa = reponseIA.trim();
             }
@@ -1131,7 +1135,21 @@ async function traiterRetourGemini(text) {
             // On calcule la date si l'IA ne l'a pas trouvée
             const datePerim = a.peremption || calculerDateMoyenne(nomNettoye, emplacementPropre);
             
-            const nomCourt = a.nom_alexa || nomNettoye.split(' ')[0];
+           let nomCourt = a.nom_alexa || "";
+if (!nomCourt) {
+    try {
+        const promptAlias = `En 2-3 mots maximum, donne le nom naturel et prononçable à voix haute de ce produit. Supprime marques, poids, codes. Garde l'essentiel.
+        Exemples : "ESCALOPES CORDON BLEU DINDE 2X100G" -> "cordon bleu"
+        "YAOURT BRASSE NATURE 0% MG 4X125G" -> "yaourt nature"
+        "PETIT BEURRE CHOCOLAT LU 200G" -> "petit beurre chocolat"
+        Produit : "${nomNettoye}"
+        Réponds UNIQUEMENT le nom simplifié, en minuscules, sans ponctuation.`;
+        nomCourt = await appelGemini(promptAlias);
+        nomCourt = nomCourt.trim().toLowerCase();
+    } catch(e) {
+        nomCourt = nomNettoye.split(' ').slice(0, 2).join(' ').toLowerCase();
+    }
+}
 
             let query = monSupabase
                 .from('inventaire2')
