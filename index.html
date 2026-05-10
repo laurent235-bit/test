@@ -614,7 +614,7 @@ Invisibles autorisés : eau, sel, poivre, huile, beurre.
 Priorise les produits du FRIGO — ils périment en premier.
 ${window.historiqueChef?.length ? `CES PLATS ONT DÉJÀ ÉTÉ PROPOSÉS — INTERDICTION ABSOLUE de les reproposer : ${window.historiqueChef.join(' | ')} Tu DOIS proposer 3 plats COMPLÈTEMENT DIFFÉRENTS.` : ''}
 FORMAT : Une seule phrase naturelle avec 3 propositions courtes.
-Termine OBLIGATOIREMENT par : "Lequel te tente ?"`;
+Termine OBLIGATOIREMENT par : "Lequel te tente ?"`; }
 
         else if (mode === 'monde') {promptChef = `Tu es un assistant cuisine pratique.
 STOCK DISPONIBLE : ${listeProduits}
@@ -628,9 +628,10 @@ Exemples :
 - Stock contient "cordon bleu" → propose "cordon bleu avec des haricots"
 Invisibles autorisés : eau, sel, poivre, huile, beurre.
 Priorise les produits du FRIGO — ils périment en premier.
-${window.historiqueChef?.length ? `CES PLATS ONT DÉJÀ ÉTÉ PROPOSÉS — INTERDICTION ABSOLUE de les reproposer : ${window.historiqueChef.join(' | ')} Tu DOIS proposer 3 plats COMPLÈTEMENT DIFFÉRENTS.` : ''}
-FORMAT : Une seule phrase naturelle avec 3 propositions courtes.
-Termine OBLIGATOIREMENT par : "Lequel te tente ?"`;
+${window.historiqueChef?.length ? `${window.historiqueChef?.length ? 
+    `\nCES PLATS ONT DÉJÀ ÉTÉ PROPOSÉS — INTERDICTION ABSOLUE de les reproposer : ${window.historiqueChef.join(' | ')}
+Tu DOIS proposer 3 plats COMPLÈTEMENT DIFFÉRENTS.` 
+    : ''}
 
             promptChef = `Tu es un assistant cuisine spécialisé dans les cuisines du monde.
 STOCK : ${listeProduits}
