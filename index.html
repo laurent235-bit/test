@@ -600,17 +600,26 @@ async function lancerChefMode(mode) {
         let promptChef = "";
 
         if (mode === 'quotidien') {
-            promptChef = `Tu es un assistant cuisine pour la vie de tous les jours.
-STOCK : ${listeProduits}
-RÈGLES :
-1. Propose 3 plats simples et rapides du quotidien (moins de 20 min).
-2. UNIQUEMENT avec le stock disponible. Invisibles autorisés : eau, sel, poivre, huile, beurre.
-3. Noms simples : "pâtes au fromage", "riz aux lardons", "poêlée de légumes". PAS de noms gastro.
-4. Mélange : 1 très simple, 1 moyen, 1 un peu élaboré.
-5. Priorise les produits du FRIGO (périment en premier).
-${historique ? `ÉVITE ces plats déjà proposés : ${historique}` : ''}
-FORMAT : Une phrase naturelle avec 3 noms courts. Termine par "Lequel te tente ?"`;
-        }
+            const promptChef = `Tu es un assistant cuisine pratique.
+
+STOCK DISPONIBLE : ${listeProduits}
+
+Ta mission : Regarde ce stock et propose 3 façons simples de l'utiliser ce soir.
+Pas d'invention — utilise UNIQUEMENT ce qui EST dans le stock.
+
+RÈGLE ABSOLUE : Le nom exact du produit du stock DOIT apparaître dans chaque proposition.
+Exemples :
+- Stock contient "boulettes de bœuf" → propose "boulettes de bœuf avec des pâtes"
+- Stock contient "poisson pané" → propose "poisson pané avec du riz"
+- Stock contient "frites" → propose "frites maison"
+- Stock contient "cordon bleu" → propose "cordon bleu avec des haricots"
+
+Invisibles autorisés : eau, sel, poivre, huile, beurre.
+Priorise les produits du FRIGO — ils périment en premier.
+${window.historiqueChef?.length ? `\nÉVITE : ${window.historiqueChef.join(', ')}` : ''}
+
+FORMAT : Une seule phrase naturelle avec 3 propositions courtes.
+Termine OBLIGATOIREMENT par : "Lequel te tente ?"`;
 
         else if (mode === 'monde') {
             promptChef = `Tu es un assistant cuisine spécialisé dans les cuisines du monde.
