@@ -1,330 +1,453 @@
-										<!DOCTYPE html>
-										<html lang="fr">
-										<head>
-											<meta charset="UTF-8">
-											<meta name="viewport" content="width=device-width, initial-scale=1.0">
-											<title>FRIGO ELITE v2.5</title>
-											<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-											<style>
-												:root { --accent: #1a73e8; --chef: #8e24aa; --mur: #34a853; --danger: #ea4335; --maison: #ef6c00; --animaux: #00838f; }
-												body { font-family: 'Segoe UI', sans-serif; background: #f4f7f6; margin: 0; padding: 15px; color: #333; }
-												.btn { border: none; border-radius: 8px; padding: 12px; font-weight: bold; cursor: pointer; color: white; width: 100%; margin-top: 5px; }
-												.btn-accent { background: var(--accent); }
-												.btn-mur { background: var(--mur); }
-												.card { background: white; border-radius: 15px; margin-bottom: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); overflow: hidden; }
-												.collapsible { width: 100%; padding: 15px; border: none; background: none; text-align: left; font-size: 16px; font-weight: bold; display: flex; justify-content: space-between; cursor: pointer; border-bottom: 1px solid #f0f0f0; }
-												.content { padding: 0 15px; max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; }
-												.scan-zone { background: #e3f2fd; border: 2px dashed var(--accent); border-radius: 15px; padding: 15px; margin-bottom: 20px; }
-												.item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #eee; }
-												.qte-btn { width: 35px; height: 35px; border-radius: 8px; border: 1px solid #ccc; background: #fff; font-size: 18px; }
-											</style>
-										</head>
-										<body>
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FRIGO ELITE v3.0</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root {
+            --accent: #1a73e8;
+            --chef: #8e24aa;
+            --mur: #34a853;
+            --danger: #ea4335;
+            --maison: #ef6c00;
+            --animaux: #00838f;
+            --bg: #f4f7f6;
+            --white: #ffffff;
+            --shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
 
-											<div class="scan-zone">
-												<b style="color:var(--accent)">🧾 ENTRÉE DE COURSES</b>
-												<div style="display: flex; gap: 10px; margin-top: 10px;">
-    <button onclick="document.getElementById('input-photo').click()" class="btn btn-accent" style="flex:1">
-        📸 SCANNER UN TICKET
-    </button>
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: var(--bg);
+            margin: 0;
+            padding: 15px;
+            color: #333;
+        }
+
+        .btn {
+            border: none;
+            border-radius: 10px;
+            padding: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            color: white;
+            width: 100%;
+            margin-top: 5px;
+            transition: opacity 0.2s, transform 0.1s;
+        }
+        .btn:active { transform: scale(0.98); opacity: 0.9; }
+        .btn-accent { background: var(--accent); }
+        .btn-mur { background: var(--mur); }
+        .btn-danger { background: var(--danger); }
+
+        .card {
+            background: var(--white);
+            border-radius: 15px;
+            margin-bottom: 12px;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+
+        .collapsible {
+            width: 100%;
+            padding: 15px;
+            border: none;
+            background: none;
+            text-align: left;
+            font-size: 16px;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .collapsible::after { content: '▼'; font-size: 10px; color: #999; transition: transform 0.3s; }
+        .collapsible.active::after { transform: rotate(180deg); }
+
+        .content {
+            padding: 0 15px;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out, padding 0.3s;
+        }
+
+        .scan-zone {
+            background: #e3f2fd;
+            border: 2px dashed var(--accent);
+            border-radius: 15px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+
+        .item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            background: white;
+            border-radius: 10px;
+            margin-bottom: 6px;
+        }
+
+        .qte-btn {
+            width: 35px;
+            height: 35px;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+            background: #fff;
+            font-size: 18px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .qte-btn:active { background: #eee; }
+
+        /* LOADING SPINNER */
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #999;
+            font-size: 13px;
+        }
+
+        /* TOAST NOTIFICATION */
+        #toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: #333;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 25px;
+            font-size: 14px;
+            font-weight: bold;
+            transition: transform 0.3s;
+            z-index: 9999;
+        }
+        #toast.show { transform: translateX(-50%) translateY(0); }
+
+        /* MODAL PLANNING */
+        #modal-planning {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        #modal-planning.show { display: flex; }
+        #modal-planning .modal-box {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            width: 90%;
+            max-width: 400px;
+        }
+
+        #recherche-container {
+            margin: 10px 0;
+            position: sticky;
+            top: 0;
+            background: white;
+            z-index: 100;
+            padding: 10px;
+            border-radius: 10px;
+            box-shadow: var(--shadow);
+        }
+
+        #mon-filtre-texte {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ed8936;
+            border-radius: 25px;
+            font-size: 16px;
+            outline: none;
+        }
+    </style>
+</head>
+<body>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<!-- MODAL PLANNING -->
+<div id="modal-planning">
+    <div class="modal-box">
+        <h3 id="modal-titre" style="margin:0 0 15px 0; color:#4a5568;"></h3>
+        <input type="text" id="modal-input" placeholder="Nom du repas..." 
+               style="width:100%; padding:12px; border:2px solid #e2e8f0; border-radius:10px; font-size:16px; margin-bottom:15px;">
+        <div style="display:flex; gap:10px;">
+            <button onclick="validerPlanning()" class="btn btn-mur">✅ Valider</button>
+            <button onclick="fermerModal()" class="btn" style="background:#718096;">Annuler</button>
+            <button onclick="supprimerPlanning()" class="btn btn-danger" style="width:auto; padding:12px;">🗑️</button>
+        </div>
+    </div>
 </div>
-												<input type="file" id="input-photo" accept=".pdf,image/*,application/pdf" style="display:none" onchange="scannerTicket(this)">
-												<div id="statut-scan" style="margin-top: 10px; font-size: 13px; font-weight: bold; text-align: center;"></div>
-											</div>
 
-											<div class="card" style="padding:15px; border: 2px solid var(--accent);">
-												<button id="btn-vocal" class="btn btn-accent">🎤 SORTIR UN ALIMENT (VOCAL)</button>
-												<div id="statut-vocal" style="text-align:center; margin-top:5px; font-size:13px;"></div>
-											</div>
-								<button id="btn-chef" style="background: #ff9800; color: white; border: none; padding: 10px; border-radius: 50%; cursor: pointer; font-size: 20px;">👨‍🍳</button>
+<!-- SCAN TICKET -->
+<div class="scan-zone">
+    <b style="color:var(--accent)">🧾 ENTRÉE DE COURSES</b>
+    <div style="display:flex; gap:10px; margin-top:10px;">
+        <button onclick="document.getElementById('input-photo').click()" class="btn btn-accent" style="flex:1">
+            📸 SCANNER UN TICKET
+        </button>
+    </div>
+    <input type="file" id="input-photo" accept=".pdf,image/*,application/pdf" style="display:none" onchange="scannerTicket(this)">
+    <div id="statut-scan" style="margin-top:10px; font-size:13px; font-weight:bold; text-align:center;"></div>
+</div>
 
-								<div id="zone-recette" style="margin-top: 20px; padding: 15px; background: #fff8e1; border-left: 5px solid #ff9800; display: none; white-space: pre-wrap; font-family: sans-serif;">
-									<h3 id="titre-recette" style="margin-top: 0;"></h3>
-									<div id="corps-recette"></div>
-								</div>
-											<div class="card" style="padding:15px; background: #f3e5f5; border: 2px solid var(--chef); margin-top:15px;">
-												<b style="color:var(--chef)">👨‍🍳 Suggestion d'idée de repas par le chef</b>
-												<div style="display:flex; gap:5px; margin-top:10px;">
-													<input type="text" id="chef-prompt" placeholder="Une idée de recette ?" style="flex:1; padding:10px; border-radius:8px; border:1px solid #ddd;">
-													<button onclick="demanderAuChef()" class="btn btn-mur" style="width:60px; margin:0">GO</button>
-												</div>
-												<div id="recette-zone" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;"></div>
-											</div>
-											
-<div id="recherche-container" style="margin: 10px 0; position: sticky; top: 0; background: white; z-index: 1000; padding: 10px;">
-    <input type="text" id="mon-filtre-texte" 
-           list="liste-suggestions" 
-           oninput="rechercherArticle()" 
-           placeholder="🔍 Tapez le nom d'un article..." 
-           style="width: 100%; padding: 12px; border: 2px solid #ed8936; border-radius: 25px; font-size: 16px;">
-    
+<!-- VOCAL -->
+<div class="card" style="padding:15px; border:2px solid var(--accent);">
+    <button id="btn-vocal" class="btn btn-accent">🎤 SORTIR UN ALIMENT (VOCAL)</button>
+    <div id="statut-vocal" style="text-align:center; margin-top:5px; font-size:13px;"></div>
+</div>
+
+
+
+<div class="card" style="padding:15px; background:#fff8e1; border:2px solid #ff9800;">
+    <b style="color:#ff9800; font-size:15px;">👨‍🍳 QUE VOULEZ-VOUS MANGER ?</b>
+    <p style="font-size:12px; color:#888; margin:5px 0 12px 0;">Le Chef propose 3 idées avec votre stock</p>
+
+    <!-- ✅ ICI avant le grid, pas dans le bouton -->
+    <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+        <input type="checkbox" id="mode-silencieux" style="width:18px; height:18px; cursor:pointer;">
+        <label for="mode-silencieux" style="font-size:13px; color:#555; cursor:pointer;">🔇 Mode silencieux</label>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+        <button onclick="lancerChefMode('quotidien')"
+                style="background:#ff9800; color:white; border:none; border-radius:12px; padding:14px 8px; cursor:pointer; font-size:13px; font-weight:bold;">
+            👨‍🍳 Quotidien
+        </button>
+        <button onclick="lancerChefMode('monde')"
+                style="background:#3182ce; color:white; border:none; border-radius:12px; padding:14px 8px; cursor:pointer; font-size:13px; font-weight:bold;">
+            🌍 Monde
+        </button>
+        <button onclick="lancerChefMode('healthy')"
+                style="background:#38a169; color:white; border:none; border-radius:12px; padding:14px 8px; cursor:pointer; font-size:13px; font-weight:bold;">
+            🥗 Healthy
+        </button>
+        <button onclick="lancerChefMode('dessert')"
+                style="background:#8e24aa; color:white; border:none; border-radius:12px; padding:14px 8px; cursor:pointer; font-size:13px; font-weight:bold;">
+            🍰 Dessert
+        </button>
+        <button onclick="lancerChefMode('antigaspi')"
+                style="background:#2d3748; color:white; border:none; border-radius:12px; padding:14px 8px; cursor:pointer; font-size:13px; font-weight:bold; grid-column:1/3;">
+            ♻️ Anti-gaspi (finir les restes)
+        </button>
+    </div>
+    <div id="statut-chef" style="text-align:center; margin-top:10px; font-size:13px; font-weight:bold; min-height:20px;"></div>
+    <div id="chef-resultats" style="margin-top:5px;"></div>
+</div>
+
+<!-- ZONE RECETTE VOCALE -->
+<div id="zone-recette" style="display:none; margin-bottom:12px; padding:15px; background:#fff8e1; border-left:5px solid #ff9800; border-radius:10px;"></div>
+
+<!-- RECHERCHE -->
+<div id="recherche-container">
+    <input type="text" id="mon-filtre-texte" list="liste-suggestions"
+           oninput="rechercherArticle()"
+           placeholder="🔍 Tapez le nom d'un article..."
+           autocomplete="off">
     <datalist id="liste-suggestions"></datalist>
 </div>
 
-											<div class="card" style="padding:15px; border: 1px solid #ddd; margin-top:15px;">
-												<b style="font-size:14px;">➕ AJOUT MANUEL</b>
-												<div style="display:flex; flex-direction:column; gap:8px; margin-top:10px;">
-													<input type="text" id="add-nom" placeholder="Nom de l'article" style="padding:8px; border-radius:5px; border:1px solid #ccc;">
-													<div style="display:flex; gap:5px;">
-														<select id="add-emplacement" style="flex:1; padding:8px; border-radius:5px;">
-    <option value="FRIGO">Frigo</option>
-    <option value="PLACARD">Placard</option>
-    <option value="CONGELATEUR">Congélo</option>
-    <option value="ANIMAUX">Animaux</option>
-    <option value="SALLE_DE_BAIN">Salle de Bain</option>
-    <option value="AUTRES">Autres</option>
-</select>
+<!-- AJOUT MANUEL -->
+<div class="card" style="padding:15px; border:1px solid #ddd;">
+    <b style="font-size:14px;">➕ AJOUT MANUEL</b>
+    <div style="display:flex; flex-direction:column; gap:8px; margin-top:10px;">
+        <input type="text" id="add-nom" placeholder="Nom de l'article" 
+               style="padding:10px; border-radius:8px; border:1px solid #ccc; font-size:14px;"
+               onkeypress="if(event.key==='Enter') ajouterManuel()">
+        <div style="display:flex; gap:5px;">
+            <select id="add-emplacement" style="flex:1; padding:10px; border-radius:8px; border:1px solid #ccc;">
+                <option value="FRIGO">🥦 Frigo</option>
+                <option value="PLACARD">🍝 Placard</option>
+                <option value="CONGELATEUR">❄️ Congélo</option>
+                <option value="ANIMAUX">🐾 Animaux</option>
+                <option value="SALLE_DE_BAIN">🚿 Salle de Bain</option>
+                <option value="AUTRES">📦 Autres</option>
+            </select>
+            <input type="number" id="add-qte" value="1" min="1"
+                   style="width:60px; padding:10px; border-radius:8px; border:1px solid #ccc; text-align:center;">
+            <button onclick="ajouterManuel()" class="btn btn-mur" style="width:auto; padding:10px 15px; margin:0;">✅</button>
+        </div>
+    </div>
+</div>
 
-<input type="number" id="add-qte" value="1" style="width:50px; padding:8px; border-radius:5px;">
-													<button onclick="ajouterManuel()" class="btn btn-mur">ENREGISTRER</button>
-												</div>
-											</div>
+<!-- LISTE DE COURSES -->
+<div class="card" style="border-left:8px solid var(--danger);">
+    <button class="collapsible">🛒 LISTE DE COURSES & MUR FAMILLE</button>
+    <div class="content">
+        <div style="display:flex; gap:5px; margin-bottom:10px; margin-top:10px;">
+            <input type="text" id="nouvelArticleFamille" placeholder="Rajouter un truc..."
+                   style="flex:1; padding:10px; border:2px solid #fed7d7; border-radius:8px;"
+                   onkeypress="if(event.key==='Enter') ajouterAuMur()">
+            <button onclick="ajouterAuMur()"
+                    style="background:#e53e3e; color:white; border:none; border-radius:8px; padding:0 15px; font-weight:bold; cursor:pointer; font-size:20px;">+</button>
+        </div>
+        <button onclick="viderTouteLaListe()" class="btn btn-danger" style="margin-bottom:10px;">
+            🗑️ VIDER TOUTE LA LISTE
+        </button>
+        <div id="shoppingList"></div>
+    </div>
+</div>
 
-											<div class="card" style="border-left: 8px solid var(--danger);">
-											<button class="collapsible">🛒 LISTE DE COURSES & MUR FAMILLE</button>
-											<div class="content">
-												<div style="display: flex; gap: 5px; margin-bottom: 15px;">
-													<input type="text" id="nouvelArticleFamille" placeholder="Rajouter un truc..." 
-														   style="flex: 1; padding: 10px; border: 2px solid #fed7d7; border-radius: 8px;">
-													<button onclick="ajouterAuMur()" 
-															style="background: #e53e3e; color: white; border: none; border-radius: 8px; padding: 0 15px; font-weight: bold; cursor: pointer;">
-														+
-													</button>
-												</div>
-
-												<button onclick="viderTouteLaListe()" class="btn" style="background: var(--danger); color: white; margin-bottom: 15px; width: 100%; font-weight: bold;">
-													🗑️ VIDER TOUTE LA LISTE
-												</button>
-
-												<div id="shoppingList"></div>
-											</div>
-										</div>
-<div class="card"><button class="collapsible">🥦 FRIGO</button><div class="content"><div id="list-Frigo"></div></div></div>
-
+<!-- INVENTAIRE PAR EMPLACEMENT -->
+<div class="card"><button class="collapsible">🥦 FRIGO</button><div class="content"><div id="list-Frigo" class="loading">Chargement...</div></div></div>
 <div class="card"><button class="collapsible">❄️ CONGÉLATEUR</button><div class="content"><div id="list-Congélateur"></div></div></div>
-
 <div class="card"><button class="collapsible">🍝 PLACARD</button><div class="content"><div id="list-Placard"></div></div></div>
+<div class="card" style="border-left:8px solid var(--animaux);"><button class="collapsible">🐾 ANIMAUX</button><div class="content"><div id="list-Animaux"></div></div></div>
+<div class="card" style="border-left:8px solid #00838f;"><button class="collapsible">🚿 SALLE DE BAIN</button><div class="content"><div id="list-SalleBain"></div></div></div>
+<div class="card" style="border-left:8px solid #718096;"><button class="collapsible">📦 AUTRES & DIVERS</button><div class="content"><div id="list-Autres"></div></div></div>
 
-<div class="card" style="border-left: 8px solid var(--animaux);">
-    <button class="collapsible">🚿 SALLE DE BAIN</button>
-    <div class="content">
-        <div id="list-SalleBain"></div>
-    </div>
-</div>
-
-<div class="card" style="border-left: 8px solid #718096;">
-    <button class="collapsible">📦 AUTRES & DIVERS</button>
-    <div class="content">
-        <div id="list-Autres"></div>
-    </div>
-</div>
-
-<div class="card" style="border-left: 8px solid var(--chef);">
+<!-- GRIMOIRE -->
+<div class="card" style="border-left:8px solid var(--chef);">
     <button class="collapsible">📖 GRIMOIRE</button>
     <div class="content">
-        <input type="text" id="search-grimoire" onkeyup="filtrerGrimoire()" placeholder="🔍 Chercher une recette..." style="width:100%; padding:10px; border-radius:8px; border:1px solid #ddd; margin: 10px 0;">
+        <input type="text" id="search-grimoire" oninput="filtrerGrimoire()"
+               placeholder="🔍 Chercher une recette..."
+               style="width:100%; padding:10px; border-radius:8px; border:1px solid #ddd; margin:10px 0;">
         <div id="grimoire-zone"></div>
     </div>
 </div>
 
-<div class="card" style="border-left: 8px solid #38a169;">
+<!-- ANTI-GASPI -->
+<div class="card" style="border-left:8px solid #38a169;">
     <button class="collapsible">
-        🍱 ANTI-GASPI : TUPPS & RESTES 
-        <span id="badge-danger" style="background: #e53e3e; color: white; border-radius: 50%; padding: 2px 8px; font-size: 0.8em; margin-left: 10px; display: none;">0</span>
+        🍱 ANTI-GASPI : TUPPS & RESTES
+        <span id="badge-danger" style="background:#e53e3e; color:white; border-radius:50%; padding:2px 8px; font-size:0.8em; margin-left:10px; display:none;">0</span>
     </button>
     <div class="content">
-        <div style="background: #f0fff4; padding: 12px; border-radius: 10px; margin-bottom: 15px; border: 1px solid #c6f6d5;">
-            <p style="margin:0 0 10px 0; font-size: 0.9em; color: #2f855a; font-weight: bold;">📝 Noter un reste :</p>
-            <div style="display: flex; gap: 5px;">
-                <input type="text" id="nomTup" placeholder="Ex: Reste de Lasagnes" style="flex: 1; padding: 10px; border: 1px solid #98e6ad; border-radius: 8px;">
-                <button onclick="ajouterTup()" style="background: #38a169; color: white; border: none; border-radius: 8px; padding: 0 15px; cursor: pointer; font-weight: bold;">OK</button>
+        <div style="background:#f0fff4; padding:12px; border-radius:10px; margin:10px 0; border:1px solid #c6f6d5;">
+            <p style="margin:0 0 10px 0; font-size:0.9em; color:#2f855a; font-weight:bold;">📝 Noter un reste :</p>
+            <div style="display:flex; gap:5px;">
+                <input type="text" id="nomTup" placeholder="Ex: Reste de Lasagnes"
+                       style="flex:1; padding:10px; border:1px solid #98e6ad; border-radius:8px;"
+                       onkeypress="if(event.key==='Enter') ajouterTup()">
+                <button onclick="ajouterTup()" style="background:#38a169; color:white; border:none; border-radius:8px; padding:0 15px; cursor:pointer; font-weight:bold;">OK</button>
             </div>
         </div>
         <div id="listeTups"></div>
     </div>
 </div>
 
-<div class="card" style="border-left: 8px solid #3182ce;">
+<!-- PLANNING -->
+<div class="card" style="border-left:8px solid #3182ce;">
     <button class="collapsible">📅 PLANNING DE LA SEMAINE</button>
     <div class="content">
-        <p style="text-align: center; font-size: 12px; color: gray; margin-top: 10px;">Clique sur une case pour ajouter ou modifier un repas.</p>
-        <div id="planning-grid" style="display: flex; flex-direction: column; gap: 10px; padding: 10px;">
-            </div>
+        <div id="planning-grid" style="display:flex; flex-direction:column; gap:10px; padding:10px;"></div>
     </div>
 </div>
-											
 
-    <input id="sUrl" type="hidden" value="https://ylguhodjcgistealluzy.supabase.co">
-    <input id="sKey" type="hidden" value="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsZ3Vob2RqY2dpc3RlYWxsdXp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA2MjcxMDAsImV4cCI6MjA4NjIwMzEwMH0.0czapM1DeFs7T3pTrExUMUKUcyUHi3w-p_jKj6XkTUM">
-</div>
+<!-- CLÉS SUPABASE -->
+<input id="sUrl" type="hidden" value="https://ylguhodjcgistealluzy.supabase.co">
+<input id="sKey" type="hidden" value="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsZ3Vob2RqY2dpc3RlYWxsdXp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA2MjcxMDAsImV4cCI6MjA4NjIwMzEwMH0.0czapM1DeFs7T3pTrExUMUKUcyUHi3w-p_jKj6XkTUM">
 
-  <script>
-// --- 0. GESTION DE L'IDENTITÉ ---
+<script>
+// ============================================================
+// 0. IDENTITÉ UTILISATEUR
+// ============================================================
 let utilisateurActuel = localStorage.getItem('monFrigo_User');
-
 while (!utilisateurActuel || utilisateurActuel.trim() === "") {
-    utilisateurActuel = prompt("Bienvenue ! Entre ton nom pour accéder à ton inventaire :");
+    utilisateurActuel = prompt("Bienvenue ! Entre ton prénom pour accéder à ton inventaire :");
     if (utilisateurActuel && utilisateurActuel.trim() !== "") {
-        localStorage.setItem('monFrigo_User', utilisateurActuel.trim());
+        utilisateurActuel = utilisateurActuel.trim();
+        localStorage.setItem('monFrigo_User', utilisateurActuel);
     }
 }
 
-// --- VARIABLES GLOBALES ---
-// On les déclare sur l'objet window pour être SUR qu'elles sont visibles partout
-window.utilisateurActuel = utilisateurActuel;
-window.monSupabase = null; 
+// ============================================================
+// 1. VARIABLES GLOBALES
+// ============================================================
+let monSupabase = null;
+let recettesTemporaires = [];
+window.attenteReponseIA = false;
+window.attenteChoixProduit = false;
+window.produitsPossibles = [];
+window.dernierProduitSupprime = null;
+window.attenteChoixRecette = false;
+window.dernieresPropositions = "";
+window.historiqueChef = [];
+window.modalJour = "";
+window.modalMoment = "";
+window.modalIdExistant = "";
 
-// --- 1. LE CERVEAU AU DÉMARRAGE ---
+// Planning
+const joursDeLaSemaine = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+
+// ============================================================
+// 2. DÉMARRAGE — UN SEUL window.onload
+// ============================================================
 window.onload = async () => {
     try {
-        console.log("👤 Utilisateur détecté :", window.utilisateurActuel);
-
         const elUrl = document.getElementById('sUrl');
         const elKey = document.getElementById('sKey');
-        
-        if (elUrl && elKey && elUrl.value !== "" && elKey.value !== "") {
-            // INITIALISATION GLOBALE
-            window.monSupabase = window.supabase.createClient(elUrl.value, elKey.value);
-            // On met à jour la variable courte pour tes fonctions existantes
-            monSupabase = window.monSupabase;
-            console.log("✅ Supabase connecté.");
-        } else {
-            console.error("❌ ERREUR : Clés Supabase manquantes dans le HTML.");
+
+        if (!elUrl?.value || !elKey?.value) {
+            afficherToast("❌ Clés Supabase manquantes !");
             return;
         }
 
-        // Lancement des fonctions
-        if (typeof setupVocal === "function") setupVocal();
-        if (typeof setupCollapsibles === "function") setupCollapsibles();
+        monSupabase = window.supabase.createClient(elUrl.value, elKey.value);
 
-        // On lance le chargement immédiatement
-        await chargerTout();
-        await chargerGrimoire();
-        await chargerPlanning();
+        setupCollapsibles();
+        setupVocal();
 
-        console.log("🚀 Système prêt pour " + window.utilisateurActuel);
-
-    } catch (err) {
-        console.error("Erreur critique au démarrage :", err);
-    }
-};
-
-// --- VARIABLES GLOBALES ---
-let monSupabase;
-let recettesTemporaires = [];
-let modeVocalActuel = ""; 
-const MODEL_25 = "gemini-2.5-flash"; 
-
-// --- 1. LE CERVEAU AU DÉMARRAGE ---
-window.onload = () => {
-    try {
-        console.log("👤 Utilisateur détecté :", utilisateurActuel);
-
-        // A. Initialisation de Supabase
-        const elUrl = document.getElementById('sUrl');
-        const elKey = document.getElementById('sKey');
-        
-        if (elUrl && elKey && elUrl.value !== "" && elKey.value !== "") {
-            monSupabase = window.supabase.createClient(elUrl.value, elKey.value);
-            console.log("✅ Supabase connecté.");
-        } else {
-            console.error("❌ ERREUR : Supabase n'est pas configuré. Vérifie tes clés.");
-            return; // On arrête tout si Supabase n'est pas là
-        }
-
-        // B. Lancement des données (seulement si Supabase est prêt)
-        if (typeof setupVocal === "function") setupVocal();
-        
-        // On attend un tout petit peu pour s'assurer que la connexion est stable
-        setTimeout(() => {
-            if (typeof chargerTout === "function") chargerTout();
-            if (typeof chargerGrimoire === "function") chargerGrimoire();
-            if (typeof chargerPlanning === "function") chargerPlanning();
-        }, 500);
-        
-        if (typeof setupCollapsibles === "function") setupCollapsibles();
-
-        console.log("🚀 Système prêt pour " + utilisateurActuel + " !");
+        await Promise.all([
+            chargerTout(),
+            chargerGrimoire(),
+            chargerPlanning()
+        ]);
 
     } catch (err) {
         console.error("Erreur critique au démarrage :", err);
+        afficherToast("❌ Erreur de démarrage");
     }
 };
-   function setupCollapsibles() {
-    const coll = document.getElementsByClassName("collapsible");
-    for (let i = 0; i < coll.length; i++) {
-        coll[i].onclick = function() {
+
+// ============================================================
+// 3. COLLAPSIBLES
+// ============================================================
+function setupCollapsibles() {
+    document.querySelectorAll(".collapsible").forEach(btn => {
+        btn.onclick = function () {
             this.classList.toggle("active");
             const content = this.nextElementSibling;
-            
-            if (content) {
-                // Si le menu est fermé (pas de hauteur ou hauteur 0)
-                if (!content.style.maxHeight || content.style.maxHeight === "0px") {
-                    // On lui donne sa hauteur réelle pour qu'il se déplie
-                    content.style.maxHeight = content.scrollHeight + "px";
-                    content.style.padding = "15px"; 
-                } else {
-                    // On le remet à zéro pour qu'il se replie
-                    content.style.maxHeight = "0px";
-                    content.style.padding = "0 15px";
-                }
+            if (!content) return;
+            if (!content.style.maxHeight || content.style.maxHeight === "0px") {
+                content.style.maxHeight = content.scrollHeight + 200 + "px";
+                content.style.padding = "15px";
+            } else {
+                content.style.maxHeight = "0px";
+                content.style.padding = "0 15px";
             }
         };
-    }
+    });
 }
 
-								// ==========================================================
-								// 1. INITIALISATION DES VARIABLES
-								// ==========================================================
-								window.attenteReponseIA = false;
-								window.attenteChoixProduit = false;
-								window.produitsPossibles = [];
-								window.dernierProduitSupprime = null;
-								window.attenteChoixRecette = false;
-								window.dernieresPropositions = [];
-
-								const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-								let recognition = (SpeechRecognition) ? new SpeechRecognition() : null;
-
-								// ==========================================================
-/**
- * Calcule une date de péremption estimée selon le type de produit.
- * Utile pour les scans de tickets où la date n'est pas indiquée.
- */
-function calculerDateMoyenne(nomProduit, emplacement) {
-    // On ne calcule une date automatique que pour le frais (Frigo)
-    // Pour le placard ou le congélo, la durée est trop longue ou indifférente
-    if (emplacement.toUpperCase() !== 'FRIGO') return null;
-
-    const nom = nomProduit.toLowerCase();
-    let jours = 10; // Durée standard par défaut pour le frigo
-
-    // --- DICTIONNAIRE D'INTELLIGENCE MÉTIER ---
-    if (nom.includes('jambon') || nom.includes('lardons') || nom.includes('viande') || nom.includes('poisson') || nom.includes('poulet') || nom.includes('steak')) {
-        jours = 4; // Produits très périssables
-    } 
-    else if (nom.includes('yaourt') || nom.includes('lait') || nom.includes('creme') || nom.includes('dessert') || nom.includes('suisse')) {
-        jours = 15; // Produits laitiers
-    } 
-    else if (nom.includes('oeuf') || nom.includes('fromage') || nom.includes('beurre')) {
-        jours = 25; // Produits à longue conservation au frais
-    }
-    else if (nom.includes('ouvert') || nom.includes('reste') || nom.includes('plat')) {
-        jours = 3; // Restes de cuisine (anti-gaspi)
-    }
-
-    // Calcul de la date finale
-    const d = new Date();
-    d.setDate(d.getDate() + jours);
-    
-    // Retourne le format YYYY-MM-DD accepté par Supabase
-    return d.toISOString().split('T')[0];
+// ============================================================
+// 4. TOAST NOTIFICATION (remplace les alert())
+// ============================================================
+function afficherToast(message, duree = 3000) {
+    const toast = document.getElementById('toast');
+    toast.innerText = message;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), duree);
 }
+
+// ============================================================
+// 5. APPEL GEMINI
+// ============================================================
 async function appelGemini(message) {
     const urlRelais = "https://gemini-relais.laurent235.workers.dev";
-    
-    // Si c'est du texte (vocal), on en fait un petit objet {prompt}
-    // Si c'est le payload du ticket, on l'envoie tel quel
     const corps = (typeof message === 'string') ? { prompt: message } : message;
 
     const resp = await fetch(urlRelais, {
@@ -334,314 +457,528 @@ async function appelGemini(message) {
     });
 
     const data = await resp.json();
-    if (data.error) throw new Error(data.error.message || "Erreur API");
+    if (data.error) throw new Error(data.error.message || "Erreur API Gemini");
     return data.candidates[0].content.parts[0].text;
 }
 
-// --- 2. GESTION DU RÉSULTAT VOCAL (Fusionné et Sécurisé) ---
-recognition.onresult = async (e) => { 
-    // A. Récupération de la phrase
-    const phrase = e.results[0][0].transcript.toLowerCase();
-    const statut = document.getElementById('statut-vocal');
-    
-    if (statut) statut.innerText = "💬 J'ai entendu : " + phrase;
-    console.log("🎤 Phrase captée :", phrase);
+// ============================================================
+// 6. VOCAL — CONFIGURATION
+// ============================================================
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = SpeechRecognition ? new SpeechRecognition() : null;
 
-    // B. SÉCURITÉ : Vérification de l'utilisateur
+function setupVocal() {
+    if (!recognition) {
+        document.getElementById('btn-vocal').disabled = true;
+        document.getElementById('btn-chef').disabled = true;
+        return;
+    }
+    recognition.lang = 'fr-FR';
+    recognition.continuous = false;
+    recognition.interimResults = false;
+
+    recognition.onresult = traiterResultatVocal;
+    recognition.onerror = (e) => {
+        console.error("Erreur micro :", e.error);
+        const statut = document.getElementById('statut-vocal');
+        if (statut) statut.innerText = "❌ Erreur micro : " + e.error;
+    };
+}
+
+// Bouton VOCAL
+document.getElementById('btn-vocal')?.addEventListener('click', () => {
+    if (!utilisateurActuel) { afficherToast("Identifie-toi d'abord !"); return; }
+    demarrerMicro();
+});
+
+// Bouton CHEF VOCAL
+document.getElementById('btn-chef')?.addEventListener('click', () => {
+    if (!utilisateurActuel) { afficherToast("Identifie-toi d'abord !"); return; }
+    lancerLeChef();
+});
+
+function demarrerMicro() {
+    if (!recognition) return;
+    try { recognition.start(); } catch(e) { /* déjà actif */ }
+}
+
+// ============================================================
+// 7. TRAITEMENT VOCAL PRINCIPAL
+// ============================================================
+async function traiterResultatVocal(e) {
+    const phrase = e.results[0][0].transcript.toLowerCase().trim();
+    const statut = document.getElementById('statut-vocal');
+    if (statut) statut.innerText = "💬 J'ai entendu : " + phrase;
+
     if (!utilisateurActuel) {
-        console.error("Action vocale impossible : utilisateurActuel est absent.");
-        if (typeof faireParlerIA === "function") {
-            faireParlerIA("Je ne peux pas répondre car je ne sais pas qui tu es. Reconnecte-toi.");
-        }
-        return; 
+        faireParlerIA("Je ne sais pas qui tu es. Reconnecte-toi.");
+        return;
     }
 
-    // C. SÉCURITÉ STOP / ANNULE
+    // STOP / ANNULE
     if (phrase.includes("stop") || phrase.includes("annule")) {
         window.speechSynthesis.cancel();
         window.attenteChoixRecette = false;
-        if (typeof faireParlerIA === "function") faireParlerIA("D'accord.");
+        window.attenteReponseIA = false;
+        window.attenteChoixProduit = false;
+        faireParlerIA("D'accord.");
         return;
     }
 
-
-    // --- 2. SI ON ATTEND TON CHOIX (Écriture de la recette) ---
-if (window.attenteChoixRecette) {
-    try {
-        // 🛑 2a. LE DÉTECTEUR DE REFUS
-        if (phrase.includes("autre") || phrase.includes("aucun") || phrase.includes("bof") || phrase.includes("non") || phrase.includes("pas ça")) {
-            if (statut) statut.innerText = "🤔 Le Chef cherche de nouvelles idées...";
-            
-            // SÉCURITÉ : On ne récupère que tes produits pour les nouvelles idées
-            const { data: produits } = await monSupabase
-                .from('inventaire2')
-                .select('*')
-                .eq('proprietaire', utilisateurActuel) // <--- FILTRE PROPRIO
-                .neq('etat', 'Vide');
-
-            let liste = produits ? produits.map(p => p.nom).join(", ") : "";
-
-            const promptNouvellesIdees = `Tu es un Chef cuisinier. L'utilisateur n'a pas aimé tes idées précédentes et te dit : "${phrase}".
-            STOCK DISPONIBLE : ${liste}
-            Propose 3 NOUVELLES idées de plats, TOTALEMENT DIFFÉRENTES de ce que tu as déjà proposé.
-            Ne donne pas la recette, formule juste une phrase naturelle à l'oral avec 3 noms courts.
-            Termine obligatoirement ta réponse par : "Lequel te tente cette fois ?"`;
-
-            const reponseChef = await appelGemini(promptNouvellesIdees);
-            window.dernieresPropositions = reponseChef; 
-            faireParlerIA(reponseChef);
-            return;
-        }
-
-        // 🍳 2b. LA RÉDACTION DE LA RECETTE (Si choix validé)
-        if (statut) statut.innerText = "✍️ Le Chef rédige la recette...";
-        const promptRecette = `L'utilisateur a choisi : "${phrase}" parmi tes idées : ${window.dernieresPropositions}. 
-        Écris la recette détaillée. 
-        RÉPONDS UNIQUEMENT AU FORMAT JSON STRICTEMENT COMME CECI : 
-        [{"titre":"Nom du plat", "contenu":"Liste des ingrédients\\n\\n1. Étape 1\\n2. Étape 2..."}]`;
-            
-        const resultatBrut = await appelGemini(promptRecette);
-        const jsonStr = resultatBrut.substring(resultatBrut.indexOf('['), resultatBrut.lastIndexOf(']') + 1);
-        recettesTemporaires = JSON.parse(jsonStr);
-            
-        const zone = document.getElementById('zone-recette');
-        if (zone) {
-            zone.innerHTML = recettesTemporaires.map((r, i) => `
-                <div style="background:white; padding:12px; border-radius:12px; border:1px solid #ddd; margin-top: 15px;">
-                    <b style="color:var(--chef);">${r.titre}</b>
-                    <p style="white-space: pre-wrap;">${r.contenu}</p>
-                    <button onclick="sauverRecetteDirect(${i})" style="width:100%; background:var(--mur); color:white; padding:8px; border-radius:8px;">💾 SAUVER</button>
-                </div>`).join('');
-            zone.style.display = "block";
-        }
-        window.attenteChoixRecette = false;
-        faireParlerIA("C'est prêt ! Je t'ai affiché la recette.");
-    } catch (err) { 
-        console.error("Erreur recette :", err);
-        faireParlerIA("Mince, j'ai eu un souci pour formater la recette.");
+    // ATTENTE CHOIX RECETTE
+    if (window.attenteChoixRecette) {
+        await gererChoixRecette(phrase);
+        return;
     }
-    return;
-}
 
-    // --- 3. SI TU DEMANDES DES IDÉES (Lancement Chef) ---
-if (phrase.includes("chef") || phrase.includes("propose") || phrase.includes("recette") || phrase.includes("mange") || phrase.includes("idées")) {
-    try {
-        if (statut) statut.innerText = "👨‍🍳 Le Chef réfléchit...";
-        
-        // CORRECTION : On ne récupère que TES produits pour que le Chef ne délire pas
-        const { data: produits } = await monSupabase
-            .from('inventaire2')
-            .select('nom')
-            .eq('proprietaire', utilisateurActuel) // <--- FILTRE ICI
-            .neq('etat', 'Vide');
-
-        const liste = produits ? produits.map(p => p.nom).join(', ') : "";
-
-        const promptChef = `
-            Tu es un Chef cuisinier expert et pragmatique.
-            DEMANDE UTILISATEUR : "${phrase}"
-            STOCK DISPONIBLE : ${liste}
-
-            CONSIGNES STRICTES :
-            1. Ne propose que des plats réalisables AVEC le stock en l'associant intelligemment.
-            2. Si l'utilisateur demande un plat précis (ex: "des frites"), respecte la technique (friture) et n'invente pas un substitut (ex: purée) sauf si l'ingrédient principal manque.
-            3. C'est l'étape de proposition : NE DONNE SURTOUT PAS la recette, ni les étapes, ni la liste des ingrédients.
-            4. Formule une phrase naturelle à l'oral pour proposer exactement 3 noms de plats courts et précis.
-            5. Termine OBLIGATOIREMENT ta réponse par : "Lequel te tente ?"`;
-            
-        const idees = await appelGemini(promptChef);
-        
-        window.dernieresPropositions = idees;
-        window.attenteChoixRecette = true;
-        faireParlerIA(idees);
-    } catch (err) { 
-        console.error("Erreur Chef :", err); 
+    // DEMANDE AU CHEF
+    if (phrase.includes("chef") || phrase.includes("propose") || phrase.includes("recette") ||
+        phrase.includes("mange") || phrase.includes("idée") || phrase.includes("cuisin")) {
+        await demanderAuChefVocal(phrase);
+        return;
     }
-    return;
-}
-// --- 4. CHOIX PRÉCIS PRODUIT (Affinement si doublon) ---
-if (window.attenteChoixProduit) {
-    try {
-        const promptAffinement = `L'utilisateur a dit : "${phrase}". Parmi cette liste : ${JSON.stringify(window.produitsPossibles)}, lequel est le bon ? Réponds uniquement l'ID numérique.`;
-        
-        const textID = await appelGemini(promptAffinement);
-        
-        const idTrouve = parseInt(textID.trim().replace(/[^0-9]/g, ''));
-        
-        if (idTrouve > 0) {
-            const p = window.produitsPossibles.find(x => x.id === idTrouve);
-            // SÉCURITÉ : On vérifie que le produit trouvé appartient bien à l'utilisateur
-            if (p && p.proprietaire === utilisateurActuel) {
-                window.attenteChoixProduit = false;
-                await executerLogiqueSuppression(p); 
-            } else {
-                console.warn("Tentative d'accès à un produit non autorisé ou inexistant.");
-                window.attenteChoixProduit = false;
-            }
-        }
-    } catch (err) { 
-        console.error("Erreur affinement produit :", err); 
-    }
-    return; 
-}
 
-// --- 5. OUI/NON COURSES (Confirmation finale) ---
-if (window.attenteReponseIA) {
-    if (phrase.includes("oui") || phrase.includes("ajoute") || phrase.includes("vas-y") || phrase.includes("d'accord")) {
-        const p = window.dernierProduitSupprime;
-        // SÉCURITÉ : On vérifie que p existe ET appartient à l'utilisateur
-        if (p && p.proprietaire === utilisateurActuel) {
-            try {
-                // Mise à jour Supabase SÉCURISÉE par ID + PROPRIÉTAIRE
-                await monSupabase.from('inventaire2')
-                    .update({ etat: 'Vide', quantite: 0 })
-                    .eq('id', p.id)
-                    .eq('proprietaire', utilisateurActuel); // <--- FILTRE CRUCIAL
-                
-                faireParlerIA("C'est fait, je l'ai ajouté à ta liste de courses.");
-                
-                if (typeof chargerTout === 'function') await chargerTout();
-            } catch (err) {
-                console.error("Erreur Supabase courses :", err);
-            }
-        }
-    } else {
-        faireParlerIA("D'accord, je ne l'ajoute pas.");
+    // ATTENTE CHOIX PRODUIT (doublon)
+    if (window.attenteChoixProduit) {
+        await gererChoixProduit(phrase);
+        return;
     }
-    window.attenteReponseIA = false;
-    return;
-}
-   // --- 4. AJOUT D'UN RESTE AU FRIGO ---
+
+    // ATTENTE OUI/NON COURSES
+    if (window.attenteReponseIA) {
+        await gererReponseOuiNon(phrase);
+        return;
+    }
+
+    // AJOUT AU FRIGO
     if (phrase.includes("frigo") && (phrase.includes("mis") || phrase.includes("ajoute") || phrase.includes("rangé"))) {
-        try {
-            const promptAjout = `Tu es un assistant qui note les restes dans un frigo.
-                            Voici la phrase : "${phrase}".
-                            Mission : Extraire UNIQUEMENT le nom du plat ajouté.
-                            1. Enlève "j'ai mis", "ajoute", "rangé", "au frigo", "dans le frigo".
-                            2. Enlève les articles (le, la, les, un, une, des).
-                            3. Ne réponds QUE le nom pur, avec une majuscule.
-                            Ex: "j'ai mis des pâtes au frigo" -> Pâtes`;
-            
-            const nomAliment = await appelGemini(promptAjout);
-            
-            // SÉCURITÉ : On vérifie qu'on a bien un nom et qu'on sait à qui l'attribuer
-            if (nomAliment && nomAliment.trim().length > 1 && utilisateurActuel) {
-                await ajouterAuFrigoVocal(nomAliment.trim());
-            }
-        } catch (err) { console.error("Erreur ajout vocal :", err); }
+        await ajouterAuFrigoVocal(phrase);
         return;
     }
 
-    // --- 5. SUPPRESSION INTELLIGENTE ---
-    if (phrase.includes("supprime") || phrase.includes("retire") || phrase.includes("enlève")) {
-        try {
-            const promptNettoyage = `Tu es un expert en extraction de mots-clés pour une base de données d'inventaire. 
-        Voici la commande vocale de l'utilisateur : "${phrase}".
-        
-        Ta mission : Extraire UNIQUEMENT la "racine" distinctive du produit (la marque ou l'ingrédient principal) pour maximiser les chances de le trouver.
-        
-        Règles STRICTES :
-        1. Supprime les verbes, les articles et les formules de politesse.
-        2. Supprime les mots génériques de catégorie ou d'emballage (yaourt, brassé, nature, bouteille, boîte, paquet, tranche, pot, brique).
-        3. Mets le mot au SINGULIER.
-        4. Garde UNIQUEMENT l'identifiant fort, la marque ou l'ingrédient central.
-        5. NE RÉPONDS QUE LE RÉSULTAT, sans aucune phrase autour.`;
-
-            const motCleParfait = await appelGemini(promptNettoyage);
-            
-            // SÉCURITÉ : On ne lance la suppression que si on a un mot-clé et un utilisateur
-            if (motCleParfait && motCleParfait.trim() !== "" && utilisateurActuel) {
-                await supprimerProduitVocal(motCleParfait.trim().toLowerCase());
-            }
-        } catch (err) { console.error("Erreur suppression vocale :", err); }
+    // SUPPRESSION
+    if (phrase.includes("supprime") || phrase.includes("retire") || phrase.includes("enlève") || phrase.includes("j'ai utilisé") || phrase.includes("j'ai mangé")) {
+        await supprimerVocal(phrase);
         return;
     }
-}; // Fin du recognition.onresult
 
-// --- GESTION DES BOUTONS (Hors de la fonction onresult) ---
-const btnVocal = document.getElementById('btn-vocal');
-if (btnVocal) {
-    btnVocal.onclick = () => { 
-        if (!utilisateurActuel) {
-            alert("Identifie-toi d'abord !");
-            return;
-        }
-        try { recognition.start(); } catch(e) { console.log("Micro déjà actif"); } 
-    };
+    faireParlerIA("Je n'ai pas compris. Tu peux me demander de supprimer un produit, d'appeler le chef, ou d'ajouter quelque chose au frigo.");
 }
 
-const btnChef = document.getElementById('btn-chef');
-if (btnChef) {
-    btnChef.onclick = () => {
-        if (!utilisateurActuel) {
-            alert("Identifie-toi d'abord !");
-            return;
-        }
-        const statut = document.getElementById('statut-vocal');
-        if (statut) statut.innerText = "🎤 Le Chef t'écoute...";
-        window.attenteChoixRecette = false; 
-        try { recognition.start(); } catch(e) { console.log("Micro déjà actif"); }
-    };
-}
-								// ==========================================================
-								// 4. FONCTION LOGIQUE DU CHEF
-// ==========================================================
-async function lancerLeChef() {
-    // SÉCURITÉ : On vérifie l'utilisateur avant de déranger le Chef
+// ============================================================
+async function lancerChefMode(mode) {
     if (!utilisateurActuel) {
         alert("Je ne sais pas qui tu es ! Reconnecte-toi.");
         return;
     }
 
-    const statut = document.getElementById('statut-vocal');
-    if (statut) statut.innerText = "👨‍🍳 Le Chef regarde tes restes...";
+    const statut = document.getElementById('statut-chef');
+    const resultats = document.getElementById('chef-resultats');
+
+    if (statut) statut.innerText = "👨‍🍳 Le Chef regarde ton stock...";
+    if (resultats) resultats.innerHTML = "";
 
     try {
-        // CORRECTION : On ne récupère que TES produits
+        // Récupérer le stock
         const { data: produits, error } = await monSupabase
             .from('inventaire2')
-            .select('*')
-            .eq('proprietaire', utilisateurActuel) // <--- FILTRE CRUCIAL
+            .select('nom, quantite, emplacement, etat')
+            .eq('proprietaire', utilisateurActuel)
             .neq('etat', 'Vide');
 
         if (error) throw error;
 
-        // On prépare la liste pour Gemini
-        const listeProduits = produits && produits.length > 0 
-            ? produits.map(p => `${p.nom} (Qté: ${p.quantite})`).join(', ')
-            : "Le frigo est vide !";
+        const listeProduits = produits?.length > 0
+            ? produits.map(p => `${p.nom} (Qté:${p.quantite}, ${p.emplacement}${p.etat === 'Entamé' ? ', ENTAMÉ' : ''})`).join(', ')
+            : "Stock vide";
 
-        const promptChef = `Tu es un Chef cuisinier. Regarde mon stock : ${listeProduits}. 
-                            Propose 3 idées de plats rapides. Juste les noms. 
-                            Termine par : "Lequel te tente ?"`;
+        const historique = window.historiqueChef?.slice(-5).join(', ') || '';
 
-        // Appel à l'IA
-        const reponse = await appelGemini({ contents: [{ parts: [{ text: promptChef }] }] });
-        
+        // ============================================================
+        // PROMPTS PAR MODE
+        // ============================================================
+        let promptChef = "";
+
+        if (mode === 'quotidien') {
+            promptChef = `Tu es un assistant cuisine pour la vie de tous les jours.
+STOCK : ${listeProduits}
+RÈGLES :
+1. Propose 3 plats simples et rapides du quotidien (moins de 20 min).
+2. UNIQUEMENT avec le stock disponible. Invisibles autorisés : eau, sel, poivre, huile, beurre.
+3. Noms simples : "pâtes au fromage", "riz aux lardons", "poêlée de légumes". PAS de noms gastro.
+4. Mélange : 1 très simple, 1 moyen, 1 un peu élaboré.
+5. Priorise les produits du FRIGO (périment en premier).
+${historique ? `ÉVITE ces plats déjà proposés : ${historique}` : ''}
+FORMAT : Une phrase naturelle avec 3 noms courts. Termine par "Lequel te tente ?"`;
+        }
+
+        else if (mode === 'monde') {
+            promptChef = `Tu es un assistant cuisine spécialisé dans les cuisines du monde.
+STOCK : ${listeProduits}
+RÈGLES :
+1. Propose 3 plats inspirés de cuisines différentes (italienne, asiatique, mexicaine, etc.).
+2. UNIQUEMENT avec le stock disponible. Invisibles : eau, sel, poivre, huile, beurre.
+3. Adapte la recette au stock — si l'ingrédient typique manque, propose une version adaptée.
+4. Noms clairs : "riz sauté façon asiatique", "pâtes à l'italienne", "bowl mexicain".
+5. Reste SIMPLE et RAPIDE (moins de 25 min).
+${historique ? `ÉVITE : ${historique}` : ''}
+FORMAT : Une phrase naturelle avec 3 noms courts. Termine par "Lequel te tente ?"`;
+        }
+
+        else if (mode === 'healthy') {
+            promptChef = `Tu es un assistant cuisine orienté alimentation saine et équilibrée.
+STOCK : ${listeProduits}
+RÈGLES :
+1. Propose 3 plats légers, équilibrés et nutritifs.
+2. UNIQUEMENT avec le stock disponible. Invisibles : eau, sel, poivre, huile d'olive.
+3. Privilégie : légumes, protéines maigres, céréales. Évite les plats trop gras.
+4. Si le stock ne permet pas de plat très healthy, propose le plus équilibré possible.
+5. Noms simples : "salade composée", "poêlée de légumes protéinée", "bowl de riz".
+${historique ? `ÉVITE : ${historique}` : ''}
+FORMAT : Une phrase naturelle avec 3 noms courts. Termine par "Lequel te tente ?"`;
+        }
+
+        else if (mode === 'dessert') {
+            promptChef = `Tu es un assistant pâtisserie et desserts.
+STOCK : ${listeProduits}
+RÈGLES :
+1. Propose 3 desserts ou goûters réalisables avec le stock.
+2. UNIQUEMENT avec le stock disponible. Invisibles : eau, sel, sucre, beurre.
+3. Si peu d'ingrédients sucrés, propose des options simples (yaourt + miel, pain + confiture...).
+4. Noms simples : "yaourt au miel", "crumble aux fruits", "mousse au chocolat rapide".
+5. Reste SIMPLE (moins de 20 min ou sans cuisson).
+${historique ? `ÉVITE : ${historique}` : ''}
+FORMAT : Une phrase naturelle avec 3 noms courts. Termine par "Lequel te tente ?"`;
+        }
+
+        else if (mode === 'antigaspi') {
+            promptChef = `Tu es un assistant anti-gaspi spécialisé dans l'utilisation des restes.
+STOCK : ${listeProduits}
+RÈGLES :
+1. Priorise ABSOLUMENT les produits ENTAMÉ et du FRIGO — ils doivent être utilisés en premier.
+2. L'objectif est de VIDER le frigo intelligemment sans gaspiller.
+3. UNIQUEMENT avec le stock disponible. Invisibles : eau, sel, poivre, huile, beurre.
+4. Propose des plats qui utilisent un maximum de produits déjà ouverts.
+5. Noms simples et directs.
+${historique ? `ÉVITE : ${historique}` : ''}
+FORMAT : Une phrase naturelle avec 3 noms courts. Termine par "Lequel te tente ?"`;
+        }
+
+        if (statut) statut.innerText = "🧠 Le Chef réfléchit...";
+
+        // Appel Gemini
+        const reponse = await appelGemini(promptChef);
+
+        // Mémoriser pour éviter les répétitions
+        if (!window.historiqueChef) window.historiqueChef = [];
+        window.historiqueChef.push(reponse);
+        if (window.historiqueChef.length > 10) window.historiqueChef.shift();
+
+        window.dernieresPropositions = reponse;
         window.attenteChoixRecette = true;
-        window.dernieresPropositions = reponse; 
-        faireParlerIA(reponse);
-        
-        // On attend que l'IA finisse de parler avant de rouvrir le micro
-        setTimeout(() => { 
-            if (statut) statut.innerText = "🎤 Chef à l'écoute...";
-            try { recognition.start(); } catch(e) { console.log("Micro déjà actif"); }
-        }, 5000); 
+        window.modeChefActuel = mode;
 
-    } catch (err) { 
+        if (statut) statut.innerText = "🎤 Dis-moi ton choix ou clique sur un plat !";
+
+        // Affichage des propositions
+        if (resultats) {
+            resultats.innerHTML = `
+                <div style="background:white; padding:12px; border-radius:12px; border:1px solid #ddd; margin-top:5px;">
+                    <p style="margin:0 0 12px 0; font-size:14px; color:#333; line-height:1.6;">${reponse}</p>
+                    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                        <button onclick="choisirEtRedigerRecette('${mode}', 'premier plat')"
+                                style="flex:1; min-width:80px; background:#e3f2fd; color:#1a73e8; border:2px solid #1a73e8; border-radius:8px; padding:10px 5px; cursor:pointer; font-weight:bold; font-size:12px;">
+                            🍽️ Plat 1
+                        </button>
+                        <button onclick="choisirEtRedigerRecette('${mode}', 'deuxième plat')"
+                                style="flex:1; min-width:80px; background:#e8f5e9; color:#34a853; border:2px solid #34a853; border-radius:8px; padding:10px 5px; cursor:pointer; font-weight:bold; font-size:12px;">
+                            🍽️ Plat 2
+                        </button>
+                        <button onclick="choisirEtRedigerRecette('${mode}', 'troisième plat')"
+                                style="flex:1; min-width:80px; background:#fce4ec; color:#ea4335; border:2px solid #ea4335; border-radius:8px; padding:10px 5px; cursor:pointer; font-weight:bold; font-size:12px;">
+                            🍽️ Plat 3
+                        </button>
+                        <button onclick="lancerChefMode('${mode}')"
+                                style="width:100%; background:#718096; color:white; border:none; border-radius:8px; padding:10px; cursor:pointer; font-size:12px; font-weight:bold; margin-top:4px;">
+                            🔄 Autres idées
+                        </button>
+                    </div>
+                </div>`;
+        }
+
+        // Lecture vocale
+       if (!document.getElementById('mode-silencieux')?.checked) {
+    faireParlerIA(reponse);
+}
+
+    } catch (err) {
         console.error("Erreur Chef :", err);
-        if (statut) statut.innerText = "❌ Le Chef a eu un problème.";
+        if (statut) statut.innerText = "❌ Le Chef a eu un problème. Réessaie dans quelques secondes.";
     }
 }
+
+// ============================================================
+// RÉDIGER LA RECETTE APRÈS CHOIX DU PLAT
+// ============================================================
+async function choisirEtRedigerRecette(mode, choix) {
+    const statut = document.getElementById('statut-chef');
+    const resultats = document.getElementById('chef-resultats');
+
+    if (statut) statut.innerText = "✍️ Le Chef rédige la recette...";
+
+    try {
+        const promptRecette = `L'utilisateur a choisi le "${choix}" parmi ces propositions : "${window.dernieresPropositions}".
+Écris la recette complète et détaillée.
+RÉPONDS UNIQUEMENT EN JSON :
+[{"titre":"Nom exact du plat","contenu":"Ingrédients:\\n- ingrédient 1\\n- ingrédient 2\\n\\nÉtapes:\\n1. Étape 1\\n2. Étape 2\\n3. Étape 3"}]`;
+
+        const resultatBrut = await appelGemini(promptRecette);
+        const jsonStr = resultatBrut.substring(resultatBrut.indexOf('['), resultatBrut.lastIndexOf(']') + 1);
+        recettesTemporaires = JSON.parse(jsonStr);
+
+        if (resultats) {
+            resultats.innerHTML = recettesTemporaires.map((r, i) => `
+                <div style="background:white; padding:15px; border-radius:12px; border:1px solid #ddd; margin-top:10px;">
+                    <b style="color:var(--chef); font-size:15px; display:block; margin-bottom:10px;">🍽️ ${r.titre}</b>
+                    <p style="white-space:pre-wrap; font-size:13px; color:#555; margin:0 0 12px 0; line-height:1.6;">${r.contenu}</p>
+                    <div style="display:flex; gap:8px;">
+                        <button onclick="sauverRecetteDirect(${i})" class="btn btn-mur" style="margin:0;">💾 Sauver</button>
+                        <button onclick="lancerChefMode('${mode}')"
+                                style="flex:1; background:#718096; color:white; border:none; border-radius:8px; padding:10px; cursor:pointer; font-weight:bold;">
+                            🔄 Autres idées
+                        </button>
+                    </div>
+                </div>`).join('');
+        }
+
+        window.attenteChoixRecette = false;
+        if (statut) statut.innerText = "✅ Recette prête !";
+        faireParlerIA("C'est prêt ! Je t'ai affiché la recette.");
+
+    } catch (err) {
+        console.error("Erreur recette :", err);
+        if (statut) statut.innerText = "❌ Erreur. Réessaie.";
+    }
+}
+
 						
-							
+async function demanderAuChefVocal(phrase) {
+    const statut = document.getElementById('statut-vocal');
+    if (statut) statut.innerText = "👨‍🍳 Le Chef réfléchit...";
+
+    try {
+        const { data: produits } = await monSupabase
+            .from('inventaire2')
+            .select('nom, quantite, emplacement')
+            .eq('proprietaire', utilisateurActuel)
+            .neq('etat', 'Vide');
+
+        const liste = produits?.map(p => `${p.nom} (Qté:${p.quantite})`).join(', ') || "";
+
+        const promptChef = `Tu es un Chef cuisinier expert et pragmatique.
+DEMANDE : "${phrase}"
+STOCK : ${liste}
+
+RÈGLES STRICTES :
+1. Propose UNIQUEMENT des plats réalisables avec le stock.
+2. Invisibles autorisés : eau, sel, poivre, huile uniquement.
+3. Ne donne PAS la recette maintenant, juste 3 noms de plats.
+4. Termine par : "Lequel te tente ?"
+${window.historiqueChef.length ? `\nÉVITE : ${window.historiqueChef.slice(-5).join(', ')}` : ''}`;
+
+        const idees = await appelGemini(promptChef);
+
+        window.historiqueChef.push(idees);
+        if (window.historiqueChef.length > 10) window.historiqueChef.shift();
+
+        window.dernieresPropositions = idees;
+        window.attenteChoixRecette = true;
+        faireParlerIA(idees);
+    } catch (err) {
+        console.error("Erreur Chef :", err);
+    }
+}
+
+async function gererChoixRecette(phrase) {
+    const statut = document.getElementById('statut-vocal');
+
+    // Refus
+    if (phrase.includes("autre") || phrase.includes("aucun") || phrase.includes("bof") ||
+        phrase.includes("non") || phrase.includes("pas ça") || phrase.includes("autre chose")) {
+        if (statut) statut.innerText = "🤔 Le Chef cherche de nouvelles idées...";
+
+        const { data: produits } = await monSupabase
+            .from('inventaire2')
+            .select('nom')
+            .eq('proprietaire', utilisateurActuel)
+            .neq('etat', 'Vide');
+
+        const liste = produits?.map(p => p.nom).join(', ') || "";
+
+        const promptNouvellesIdees = `Tu es un Chef cuisinier. L'utilisateur n'a pas aimé tes idées.
+STOCK : ${liste}
+DÉJÀ PROPOSÉ À ÉVITER : ${window.dernieresPropositions}
+Propose 3 NOUVELLES idées TOTALEMENT DIFFÉRENTES.
+Juste les noms en une phrase naturelle.
+Termine par : "Lequel te tente cette fois ?"`;
+
+        const reponseChef = await appelGemini(promptNouvellesIdees);
+        window.dernieresPropositions = reponseChef;
+        faireParlerIA(reponseChef);
+        return;
+    }
+
+    // Choix validé → rédiger la recette
+    if (statut) statut.innerText = "✍️ Le Chef rédige la recette...";
+
+    try {
+       const promptChef = `Tu es un assistant cuisine pour la vie de tous les jours — PAS un chef gastronomique.
+DEMANDE : "${phrase}"
+STOCK : ${liste}
+
+RÈGLES STRICTES :
+1. Propose UNIQUEMENT des plats réalisables avec le stock.
+2. Invisibles autorisés : eau, sel, poivre, huile, beurre. Rien d'autre.
+3. Plats SIMPLES et RAPIDES (moins de 20 min).
+4. Noms simples du quotidien : "pâtes au fromage", "riz aux lardons". PAS de noms gastro.
+5. Ne donne PAS la recette, juste 3 noms de plats.
+6. Priorise les produits du FRIGO.
+${window.historiqueChef?.length ? `\nÉVITE : ${window.historiqueChef.slice(-5).join(', ')}` : ''}
+
+FORMAT : Une phrase naturelle avec 3 noms courts. Termine par "Lequel te tente ?"`;
+
+        const resultatBrut = await appelGemini(promptRecette);
+        const jsonStr = resultatBrut.substring(resultatBrut.indexOf('['), resultatBrut.lastIndexOf(']') + 1);
+        recettesTemporaires = JSON.parse(jsonStr);
+
+        const zone = document.getElementById('zone-recette');
+        if (zone) {
+            zone.innerHTML = recettesTemporaires.map((r, i) => `
+                <div style="background:white; padding:12px; border-radius:12px; border:1px solid #ddd; margin-bottom:10px;">
+                    <b style="color:var(--chef); font-size:16px;">${r.titre}</b>
+                    <p style="white-space:pre-wrap; font-size:13px; color:#555; margin:10px 0;">${r.contenu}</p>
+                    <button onclick="sauverRecetteDirect(${i})" class="btn btn-mur">💾 SAUVER DANS LE GRIMOIRE</button>
+                </div>`).join('');
+            zone.style.display = "block";
+        }
+
+        window.attenteChoixRecette = false;
+        if (!document.getElementById('mode-silencieux')?.checked) {
+    faireParlerIA("C'est prêt ! Je t'ai affiché la recette.");
+}
+
+    } catch (err) {
+        console.error("Erreur recette :", err);
+        faireParlerIA("Mince, j'ai eu un souci pour la recette. Réessaie.");
+    }
+}
+
+async function gererChoixProduit(phrase) {
+    try {
+        const promptNouvellesIdees = `Tu es un assistant cuisine du quotidien. L'utilisateur n'a pas aimé tes idées.
+STOCK : ${liste}
+DÉJÀ PROPOSÉ À ÉVITER ABSOLUMENT : ${window.dernieresPropositions}
+
+Propose 3 NOUVELLES idées TOTALEMENT DIFFÉRENTES, simples et rapides.
+Noms simples du quotidien uniquement.
+Une phrase naturelle. Termine par : "Lequel te tente cette fois ?"`;
+
+        const textID = await appelGemini(promptAffinement);
+        const idTrouve = parseInt(textID.trim().replace(/[^0-9]/g, ''));
+
+        if (idTrouve > 0) {
+            const p = window.produitsPossibles.find(x => x.id === idTrouve);
+            if (p && p.proprietaire === utilisateurActuel) {
+                window.attenteChoixProduit = false;
+                await executerLogiqueSuppression(p);
+            }
+        }
+    } catch (err) {
+        console.error("Erreur affinement produit :", err);
+    }
+}
+
+async function gererReponseOuiNon(phrase) {
+    const p = window.dernierProduitSupprime;
+    if (phrase.includes("oui") || phrase.includes("ajoute") || phrase.includes("vas-y") || phrase.includes("d'accord")) {
+        if (p && p.proprietaire === utilisateurActuel) {
+            await monSupabase.from('inventaire2')
+                .update({ etat: 'Vide', quantite: 0 })
+                .eq('id', p.id)
+                .eq('proprietaire', utilisateurActuel);
+            faireParlerIA("C'est fait, je l'ai ajouté à ta liste de courses.");
+            await chargerTout();
+        }
+    } else {
+        faireParlerIA("D'accord, je ne l'ajoute pas.");
+    }
+    window.attenteReponseIA = false;
+    window.dernierProduitSupprime = null;
+}
+
+async function ajouterAuFrigoVocal(phrase) {
+    try {
+        const nomAliment = await appelGemini(`Extrais UNIQUEMENT le nom du plat de cette phrase : "${phrase}".
+Enlève : "j'ai mis", "ajoute", "rangé", "au frigo", articles.
+Réponds UNIQUEMENT le nom, avec une majuscule.`);
+
+        if (nomAliment?.trim().length > 1) {
+            const { error } = await monSupabase.from('inventaire2').insert([{
+                nom: nomAliment.trim(),
+                etat: 'Tup',
+                emplacement: new Date().toISOString().split('T')[0],
+                quantite: 1,
+                proprietaire: utilisateurActuel
+            }]);
+            if (!error) {
+                faireParlerIA("C'est noté ! J'ai ajouté " + nomAliment.trim() + " dans tes restes.");
+                await chargerTout();
+            }
+        }
+    } catch (err) { console.error("Erreur ajout vocal :", err); }
+}
+
+async function supprimerVocal(phrase) {
+    try {
+        const motCle = await appelGemini(`Extrais le nom principal du produit à supprimer de : "${phrase}".
+Règles : supprime verbes, articles, mots génériques (boîte, paquet, bouteille).
+Garde uniquement le nom essentiel au singulier.
+Réponds UNIQUEMENT le résultat.`);
+
+        if (motCle?.trim()) {
+            await supprimerProduitVocal(motCle.trim().toLowerCase());
+        }
+    } catch (err) { console.error("Erreur suppression vocale :", err); }
+}
+
+// ============================================================
+// 9. SYNTHÈSE VOCALE
+// ============================================================
+function faireParlerIA(message) {
+    window.speechSynthesis.cancel();
+    const textePropre = message.replace(/[*#]/g, '').replace(/-/g, ' ');
+    const énoncé = new SpeechSynthesisUtterance(textePropre);
+    énoncé.lang = 'fr-FR';
+    énoncé.rate = 1.05;
+
+    énoncé.onend = () => {
+        if (utilisateurActuel && (window.attenteChoixRecette || window.attenteChoixProduit || window.attenteReponseIA)) {
+            try { recognition?.start(); } catch(e) {}
+        }
+    };
+
+    window.speechSynthesis.speak(énoncé);
+}
+
+// ============================================================
+// 10. SCAN TICKET
+// ============================================================
 async function scannerTicket(input) {
     const file = input.files[0];
     if (!file) return;
 
-    // 1. Vérification de la taille
     if (file.size > 4 * 1024 * 1024) {
-        alert("Fichier trop lourd (max 4Mo).");
+        afficherToast("❌ Fichier trop lourd (max 4Mo)");
         input.value = "";
         return;
     }
@@ -653,22 +990,27 @@ async function scannerTicket(input) {
     reader.onload = async () => {
         try {
             const base64Data = reader.result.split(',')[1];
-            
-            // 2. Identification du type (PDF ou Image)
-            let mimeType = file.type;
-            if (!mimeType && file.name.toLowerCase().endsWith(".pdf")) {
-                mimeType = "application/pdf";
-            } else if (!mimeType) {
-                mimeType = "image/jpeg"; 
-            }
+            let mimeType = file.type || (file.name.toLowerCase().endsWith(".pdf") ? "application/pdf" : "image/jpeg");
 
             statut.innerText = "🧠 Analyse IA en cours...";
 
-            // 3. Envoi à Gemini
             const payload = {
                 contents: [{
                     parts: [
-                        { text: "Tu es un expert en ticket de caisse. Extrais les articles. RÈGLE : Nettoie les noms (pas de poids, pas de marques inutiles). Emplacements : FRIGO, PLACARD, CONGELATEUR, ANIMAUX, HORS_CUISINE. Réponds UNIQUEMENT en JSON : [{\"nom\":\"...\",\"quantite\":1,\"emplacement\":\"...\"}]" },
+                        {
+                            text: `Tu es un expert en ticket de caisse alimentaire.
+Extrais TOUS les articles alimentaires et ménagers.
+
+RÈGLES :
+- Nettoie les noms : enlève codes, poids, prix, promotions
+- Garde un nom clair et reconnaissable
+- Détermine l'emplacement : FRIGO, PLACARD, CONGELATEUR, ANIMAUX, SALLE_DE_BAIN, AUTRES
+- Extrais la quantité réelle (ex: "YAOURT X4" → quantite: 4)
+- Génère un nom_alexa court (2-3 mots max, prononçable)
+
+Réponds UNIQUEMENT en JSON valide :
+[{"nom":"...","nom_alexa":"...","quantite":1,"emplacement":"..."}]`
+                        },
                         { inline_data: { mime_type: mimeType, data: base64Data } }
                     ]
                 }],
@@ -676,12 +1018,8 @@ async function scannerTicket(input) {
             };
 
             const text = await appelGemini(payload);
-            
-            // 4. Traitement du résultat
             await traiterRetourGemini(text);
-            
-            // Nettoyage pour pouvoir recommencer
-            input.value = ""; 
+            input.value = "";
 
         } catch (e) {
             console.error(e);
@@ -692,1087 +1030,698 @@ async function scannerTicket(input) {
     reader.readAsDataURL(file);
 }
 
-async function demanderAuChef() {
-    if (!utilisateurActuel) {
-        alert("Session expirée. Reconnecte-toi pour interroger le Chef !");
-        return;
-    }
-
-    const pU = document.getElementById('chef-prompt').value;
-    const z = document.getElementById('recette-zone');
-    
-    if (!pU) return;
-    
-    z.innerHTML = "<p style='grid-column:1/3; text-align:center;'>👨‍🍳 Le Chef examine votre stock...</p>";
-    
-    // Récupération du stock
-    const { data: stock, error: dbError } = await monSupabase
-        .from('inventaire2')
-        .select('nom')
-        .eq('proprietaire', utilisateurActuel)
-        .neq('etat', 'Vide');
-    
-    if (dbError) {
-        console.error("Erreur base de données :", dbError);
-        z.innerHTML = "<p style='color:red;'>❌ Erreur lors de la lecture du stock.</p>";
-        return;
-    }
-    
-    // Optimisation de la liste des ingrédients (limite à 40 pour la stabilité)
-    const ing = stock && stock.length > 0 
-        ? stock.slice(0, 40).map(s => s.nom).join(', ') 
-        : "Rien de spécial";
-
-    try {
-        const urlRelais = "https://gemini-relais.laurent235.workers.dev"; 
-
-        const promptExpert = `
-        Tu es un Chef cuisinier STRICT et ingénieux. 
-        
-        DEMANDE UTILISATEUR : "${pU}"
-        STOCK RÉEL DISPONIBLE : [${ing}]
-
-        CONSIGNES DE CUISINE :
-        1. Tu dois proposer 3 plats FAISABLES UNIQUEMENT avec les ingrédients du STOCK.
-        2. INTERDICTION d'ajouter des ingrédients frais que je n'ai pas (pas d'œufs, pas de crème, pas de viande si non listés).
-        3. Tu as le droit d'utiliser UNIQUEMENT ces "Invisibles" : Eau, Sel, Poivre, Huile. Rien d'autre.
-        4. Si un ingrédient du stock est "Entamé", utilise-le en priorité.
-        5. Pour chaque plat, si un ingrédient manque pour que ce soit parfait, écris à la fin du contenu : "(Optionnel : serait meilleur avec [nom])", mais la recette doit fonctionner sans.
-
-        RÉPONDS UNIQUEMENT AU FORMAT JSON STRICT (tableau d'objets) : 
-        [{"titre":"Nom du plat", "contenu":"Description de la préparation étape par étape"}]`;
-        const resp = await fetch(urlRelais, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }, 
-            body: JSON.stringify({ 
-                prompt: promptExpert,
-                temperature: 0.4 
-            }) 
-        });
-
-        if (!resp.ok) {
-            if (resp.status === 503) throw new Error("Le Chef est débordé (Google saturé). Réessaie dans 10 secondes !");
-            throw new Error("Le serveur du Chef ne répond pas.");
-        }
-
-        const d = await resp.json();
-        console.log("DEBUG DU CHEF :", d);
-
-        if (d.error) throw new Error("Gemini : " + d.error.message);
-
-        // EXTRACTION DU TEXTE
-        let texteGenere = "";
-        try {
-            texteGenere = d.candidates[0].content.parts[0].text;
-        } catch (err) {
-            throw new Error("Le Chef a eu un bug de mémoire, réessaie.");
-        }
-
-        // NETTOYAGE DU JSON (Suppression du markdown et espaces inutiles)
-        let propre = texteGenere.replace(/```json/g, "").replace(/```/g, "").trim();
-        
-        const start = propre.indexOf('[');
-        const end = propre.lastIndexOf(']');
-        
-        if (start === -1 || end === -1) {
-            console.log("Texte reçu sans JSON valide :", texteGenere);
-            throw new Error("Le Chef n'a pas utilisé le bon format de réponse.");
-        }
-        
-        const jsonFinal = propre.substring(start, end + 1);
-        
-        // Stockage dans la variable globale (assure-toi qu'elle est bien déclarée en haut de ton script)
-        recettesTemporaires = JSON.parse(jsonFinal);
-        
-        // AFFICHAGE DES RÉSULTATS
-        z.innerHTML = recettesTemporaires.map((r, i) => `
-            <div style="background:white; padding:12px; border-radius:12px; border:1px solid #ddd; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom:10px;">
-                <b style="color:var(--chef); font-size:14px;">${r.titre}</b>
-                <p style="font-size:12px; margin:10px 0; color:#555; white-space: pre-wrap;">${r.contenu}</p>
-                <button onclick="sauverRecetteDirect(${i})" style="width:100%; background:var(--mur); color:white; border:none; padding:8px; border-radius:8px; cursor:pointer; font-weight:bold;">💾 SAUVER</button>
-            </div>`).join('');
-
-    } catch(e) { 
-        console.error("Erreur détaillée:", e);
-        z.innerHTML = `<p style="color:red; text-align:center;">❌ ${e.message}</p>`; 
-    }
-}
-										async function sauverRecetteDirect(i) {
-    // SÉCURITÉ : On vérifie l'identité avant de sauver
-    if (!utilisateurActuel) {
-        alert("Session perdue. Reconnecte-toi pour sauver cette recette !");
-        return;
-    }
-
-    const r = recettesTemporaires[i];
-    if (!r) return;
-    
-    // 1. On sauvegarde dans Supabase avec la SIGNATURE
-    const { error } = await monSupabase
-        .from('recettes_sauvees')
-        .insert([{ 
-            titre: r.titre, 
-            contenu: r.contenu,
-            proprietaire: utilisateurActuel // <--- INDISPENSABLE
-        }]);
-
-    if (error) {
-        console.error("Erreur sauvegarde grimoire:", error.message);
-        alert("Zut, la sauvegarde a échoué.");
-        return;
-    }
-
-    alert("Sauvegardé dans ton Grimoire !"); 
-    
-    // 2. On met à jour l'affichage du Grimoire
-    if (typeof chargerGrimoire === "function") chargerGrimoire();
-
-    // 3. Nettoyage de l'écran
-    const zoneVocale = document.getElementById('zone-recette');
-    if (zoneVocale) {
-        zoneVocale.innerHTML = ""; 
-        zoneVocale.style.display = "none";
-    }
-    
-    const zoneTexte = document.getElementById('recette-zone');
-    if (zoneTexte) {
-        zoneTexte.innerHTML = ""; 
-    }
-}
-
-   async function chargerTout() {
-    // 1. SECURITÉ : Si on ne sait pas qui est l'utilisateur, on ne charge rien
-    if (!utilisateurActuel) {
-        console.warn("Chargement annulé : utilisateurActuel est vide.");
-        // Optionnel : tu peux vider tes listes HTML ici pour plus de clarté
-        // document.getElementById('ma-liste').innerHTML = ""; 
-        return;
-    }
-
-    // 2. On filtre par propriétaire
-    const { data: items, error } = await monSupabase
-        .from('inventaire2')
-        .select('*')
-        .eq('proprietaire', utilisateurActuel) // 👈 SEULEMENT mes produits
-        .order('nom');
-
-    if (error) {
-        console.error("Erreur de chargement Supabase:", error.message);
-        return;
-    }
-
-    // 2. Mapping des emplacements vers les IDs HTML
-    const mapping = { 
-        'FRIGO': 'list-Frigo', 
-        'CONGELATEUR': 'list-Congélateur', 
-        'PLACARD': 'list-Placard', 
-        'ANIMAUX': 'list-Animaux',  
-        'SALLE_DE_BAIN': 'list-SalleBain', 
-        'AUTRES': 'list-Autres',
-        'TUP': 'listeTups'
-    };
-
-    // 3. Reset (vidage) de toutes les listes
-    Object.values(mapping).forEach(id => { 
-        const el = document.getElementById(id);
-        if(el) el.innerHTML = ""; 
-    });
-
-    const sl = document.getElementById('shoppingList'); 
-    if(sl) sl.innerHTML = "";
-
-    const lt = document.getElementById('listeTups');
-    if(lt) lt.innerHTML = "";
-
-    let nbDanger = 0; 
-
-    if(!items) return;
-
-    // 4. Boucle sur chaque article
-    items.forEach(item => {
-
-        // --- CAS A : LISTE DE COURSES ---
-        if (item.etat === 'Vide') {
-            if(sl) {
-                sl.innerHTML += `
-                <div class="item" style="background:#fff5f5; padding:10px; border-radius:10px; border:1px solid #fed7d7; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
-                    <span style="font-weight:600; color:#c53030;">🛒 ${item.nom}</span>
-                    <div style="display:flex; gap:10px; align-items:center;">
-                        <button onclick="copierNom('${item.nom.replace(/'/g, "\\'")}', this)" 
-                                style="background:#4a5568; color:white; border:none; border-radius:6px; padding:6px 12px; cursor:pointer; font-size:13px;">Copier</button>
-                        <button onclick="supprimerDefinitif(${item.id})" 
-                                style="background:none; border:none; color:#9b2c2c; cursor:pointer; font-size:20px;">🗑️</button>
-                    </div>
-                </div>`;
-            }
-        } 
-        // --- CAS B : TUPPERWARE (ANTI-GASPI) ---
-        else if (item.etat === 'Tup') {
-            if(lt) {
-                const dateEnregistree = new Date(item.emplacement);
-                const aujourdhui = new Date();
-                const joursPasses = Math.floor((aujourdhui - dateEnregistree) / (1000 * 60 * 60 * 24));
-
-                let couleur = "#48bb78";
-                let msg = "Frais";
-                if (joursPasses >= 3) { couleur = "#ed8936"; msg = "À consommer"; } 
-                if (joursPasses >= 5) { 
-                    couleur = "#e53e3e"; 
-                    msg = "DANGER"; 
-                    nbDanger++; 
-                }
-
-                lt.innerHTML += `
-                <div class="item" style="border-left: 6px solid ${couleur}; background:white; padding:10px; border-radius:10px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
-                    <div>
-                        <b style="font-size:14px;">🍱 ${item.nom}</b><br>
-                        <small style="color:gray;">Il y a ${joursPasses} jour(s)</small>
-                    </div>
-                    <div style="display:flex; align-items:center; gap:10px;">
-                        <span style="background:${couleur}; color:white; font-size:10px; padding:2px 6px; border-radius:10px; font-weight:bold;">${msg}</span>
-                        <button onclick="supprimerDefinitif(${item.id})" style="background:none; border:none; color:#9b2c2c; cursor:pointer; font-size:18px;">🗑️</button>
-                    </div>
-                </div>`;
-            }
-        }
-        // --- CAS C : STOCK CLASSIQUE ---
-        else {
-            const container = document.getElementById(mapping[item.emplacement] || 'list-Placard');
-			// 🔴 PLACE LE LOG ICI :
-    console.log(`Produit: ${item.nom} | Emplacement: "${item.emplacement}" | Date: ${item.date_peremption}`);
-            if(container) {
-                const couleurEtat = item.etat === 'Entamé' ? '#ef6c00' : '#333';
-                const labelEtat = item.etat === 'Entamé' ? '⚠️ Entamé' : '📦 Plein';
-                
-                // --- LOGIQUE INDICATEUR FRAÎCHEUR (FRIGO) ---
-                let alerteHtml = "";
-                if (item.date_peremption && item.emplacement === 'FRIGO') {
-                    const aujourdhui = new Date();
-                    const datePerim = new Date(item.date_peremption);
-                    const diff = Math.ceil((datePerim - aujourdhui) / (1000 * 60 * 60 * 24));
-
-                    let icone = "🟢"; 
-                    if (diff <= 1) icone = "🔴"; 
-                    else if (diff <= 3) icone = "🟠"; 
-
-                    alerteHtml = `
-                        <div style="display:flex; align-items:center; gap:5px; margin-top:2px;">
-                            <span title="Date estimée">${icone}</span>
-                            <small style="font-size:10px; color:#718096;">Exp: ${item.date_peremption}</small>
-                            <button onclick="prolongerDate(${item.id}, '${item.date_peremption}')" 
-                                    style="font-size:9px; background:#edf2f7; border:1px solid #cbd5e0; border-radius:3px; padding:0 4px; cursor:pointer; color:#4a5568;">
-                                +2j
-                            </button>
-                        </div>`;
-                }
-
-                const destinations = ['FRIGO', 'CONGELATEUR', 'PLACARD', 'ANIMAUX', 'HORS_CUISINE', 'SALLE_DE_BAIN', 'AUTRES'];
-                const optionsHtml = destinations.map(d => `<option value="${d}" ${d === item.emplacement ? 'selected' : ''}>${d}</option>`).join('');
-
-                container.innerHTML += `
-                <div class="item" style="border-left: 4px solid ${item.etat === 'Entamé' ? '#ef6c00' : '#4a5568'}; padding-left:10px; display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; background:white; padding:10px; border-radius:10px;">
-                    <div style="flex:1">
-                        <b style="color:${couleurEtat}">${item.nom}</b>
-                        ${alerteHtml}
-                        <div style="display:flex; align-items:center; gap:8px; margin-top:4px;">
-                            <select onchange="changerEmplacement(${item.id}, this.value)" style="font-size:10px; border:1px solid #ddd; border-radius:4px; background:#f7fafc; color:#4a5568; cursor:pointer;">
-                                ${optionsHtml}
-                            </select>
-                            <small style="cursor:pointer; color:gray;" onclick="basculerEtat(${item.id}, '${item.etat}')">${labelEtat}</small>
-                        </div>
-                    </div>
-                    <div style="display:flex; align-items:center; gap:5px;">
-                        <button class="qte-btn" onclick="modifierQuantite(${item.id},${item.quantite},-1)">-</button>
-                        <b style="width:25px; text-align:center;">${item.quantite}</b>
-                        <button class="qte-btn" onclick="modifierQuantite(${item.id},${item.quantite},1)">+</button>
-                        <button onclick="basculerEtat(${item.id}, '${item.etat}')" style="background:none; border:none; font-size:20px; cursor:pointer;">
-                            ${item.etat === 'Entamé' ? '🍴' : '🍽️'}
-                        </button>
-                    </div>
-                </div>`;
-            }
-        }
-    });
-
-    // 5. Mise à jour du badge d'alerte
-    const badge = document.getElementById('badge-danger');
-    if (badge) {
-        if (nbDanger > 0) {
-            badge.innerText = nbDanger;
-            badge.style.display = "inline-block";
-        } else {
-            badge.style.display = "none";
-        }
-    }
-
-    // 6. ✨ REMPLISSAGE DES SUGGESTIONS
-    remplirSuggestions();
-}
-
-async function ajouterManuel() {
-    // --- VERIFICATION DE SÉCURITÉ ---
-    if (!utilisateurActuel) {
-        alert("⚠️ Erreur : Tu n'es pas connecté.");
-        return;
-    }
-
-    const nRaw = document.getElementById('add-nom').value;
-    const n = nRaw.trim().replace(/\s+/g, ' '); 
-    const e = document.getElementById('add-emplacement').value;
-    const qInput = document.getElementById('add-qte').value;
-    const q = parseInt(qInput) || 1;
-
-    if (!n) return;
-
-    // --- RECHERCHE ---
-    const { data: existant, error: searchError } = await monSupabase
-        .from('inventaire2')
-        .select('*')
-        .ilike('nom', n) 
-        .eq('emplacement', e)
-        .eq('proprietaire', utilisateurActuel) 
-        .neq('etat', 'Vide')
-        .maybeSingle();
-
-    if (searchError) {
-        console.error("Erreur de recherche:", searchError.message);
-        return;
-    }
-
-    if (existant) {
-        // CAS EXISTANT : Update
-        const nouvelleQte = (parseInt(existant.quantite) || 0) + q;
-        await monSupabase
-            .from('inventaire2')
-            .update({ quantite: nouvelleQte, etat: 'Plein' })
-            .eq('id', existant.id);
-            
-    } else {
-        // --- CAS NOUVEAU : GENERATION NOM_ALEXA INTELLIGENTE ---
-        console.log("Simplification du nom pour Alexa...");
-        
-        let nAlexa = n; // Par défaut, on prend le nom saisi
-        
-        try {
-            // On appelle ta fonction Gemini (adapte le nom si besoin, ex: appelerGemini)
-            const promptSimplification = `En un ou deux mots maximum, donne le nom commun simplifié de ce produit de supermarché pour qu'Alexa puisse le dire facilement. Enlève les marques, les poids et les détails inutiles. 
-            Exemple: "Litière minérale Catsan 10L" -> "Litière"
-            Exemple: "Yaourt Velouté Danone x8" -> "Yaourt"
-            Produit: "${n}"`;
-
-            // On récupère la réponse de l'IA
-            const reponseIA = await appelGemini(promptSimplification);
-            if (reponseIA) {
-                nAlexa = reponseIA.trim();
-            }
-       } catch (err) {
-    console.error("L'IA a dit non. Raison :", err.message); // <-- C'est CA qui va nous dire la vérité
-    nAlexa = n.split(' ')[0]; 
-}
-console.log("NOM ENVOYÉ :", n);
-console.log("NOM ALEXA ENVOYÉ :", nAlexa);
-
-        // --- INSERTION AVEC LE NOM NETTOYÉ ---
-        const { error: insertError } = await monSupabase
-            .from('inventaire2')
-            .insert([{ 
-                nom: n, 
-                nom_alexa: nAlexa, // <--- ICI le nom simplifié (ex: "Litière")
-                emplacement: e, 
-                quantite: q, 
-                etat: 'Plein',
-                proprietaire: utilisateurActuel 
-            }]);
-            
-        if (insertError) {
-            alert("Erreur lors de la création : " + insertError.message);
-        } else {
-            console.log(`🆕 Créé : ${n} | Alexa dira : ${nAlexa}`);
-        }
-    }
-
-    // Reset et Refresh
-    document.getElementById('add-nom').value = "";
-    document.getElementById('add-qte').value = "1";
-    if (typeof chargerTout === 'function') chargerTout();
-}
-
 async function traiterRetourGemini(text) {
     if (!utilisateurActuel) {
         document.getElementById('statut-scan').innerText = "❌ Session expirée.";
         return;
     }
-
-    // --- PETITE FONCTION INTERNE POUR LA MOYENNE ---
-    const calculerDateMoyenne = (nomProduit, emplacement) => {
-        if (emplacement.toUpperCase() !== 'FRIGO') return null;
-        const nom = nomProduit.toLowerCase();
-        let jours = 10; // Par défaut
-        if (nom.includes('jambon') || nom.includes('lardons') || nom.includes('viande') || nom.includes('poisson') || nom.includes('poulet')) {
-            jours = 4;
-        } else if (nom.includes('yaourt') || nom.includes('lait') || nom.includes('creme') || nom.includes('dessert')) {
-            jours = 15;
-        } else if (nom.includes('oeuf') || nom.includes('fromage') || nom.includes('beurre')) {
-            jours = 25;
-        }
+ 
+    const calculerDatePeremption = (nom, emplacement) => {
+        if (emplacement !== 'FRIGO') return null;
+        const n = nom.toLowerCase();
+        let jours = 10;
+        if (n.includes('jambon') || n.includes('viande') || n.includes('poisson') || n.includes('poulet') || n.includes('lardons')) jours = 4;
+        else if (n.includes('yaourt') || n.includes('lait') || n.includes('creme') || n.includes('dessert')) jours = 15;
+        else if (n.includes('oeuf') || n.includes('fromage') || n.includes('beurre')) jours = 25;
         const d = new Date();
         d.setDate(d.getDate() + jours);
         return d.toISOString().split('T')[0];
     };
-
+ 
     try {
+        // ÉTAPE 1 : Parser le JSON du ticket
         const debut = text.indexOf('[');
         const fin = text.lastIndexOf(']') + 1;
-        const jsonPropre = text.substring(debut, fin);
-        if (!jsonPropre) throw new Error("Aucun JSON trouvé");
-        const articles = JSON.parse(jsonPropre);
-
-        for (let a of articles) {
-            const nomNettoye = a.nom.trim().replace(/\s+/g, ' ');
+        if (debut === -1) throw new Error("Aucun JSON trouvé dans la réponse");
+        const articles = JSON.parse(text.substring(debut, fin));
+ 
+        if (!articles || articles.length === 0) {
+            document.getElementById('statut-scan').innerText = "⚠️ Aucun article détecté.";
+            return;
+        }
+ 
+        document.getElementById('statut-scan').innerText = `🧠 Génération des noms vocaux...`;
+ 
+        // ÉTAPE 2 : UN SEUL appel Gemini pour TOUS les nom_alexa
+        // Au lieu de 20 appels séparés → 1 seul appel groupé
+        const produitsAvecAlias = articles.filter(a => !a.nom_alexa || a.nom_alexa.trim() === "");
+        
+        if (produitsAvecAlias.length > 0) {
+            try {
+                const promptAliases = `Pour chaque produit de cette liste, génère un nom court (2-3 mots maximum) naturel et prononçable à voix haute pour Alexa.
+Supprime : marques, poids, codes, adjectifs marketing.
+Garde : l'essentiel du nom en minuscules.
+ 
+Exemples :
+"CORDON BLEU DINDE 2X100G" → "cordon bleu"
+"YAOURT BRASSE NATURE 0% MG 4X125G" → "yaourt nature"
+"PETIT BEURRE CHOCOLAT LU 200G" → "petit beurre chocolat"
+"PAPIER TOILETTE 12 ROULEAUX" → "papier toilette"
+"LESSIVE LIQUIDE ARIEL 2L" → "lessive"
+ 
+Réponds UNIQUEMENT en JSON valide, sans markdown, sans backticks :
+{"NOM_EXACT_DU_PRODUIT": "alias_court", ...}
+ 
+Produits à traiter :
+${produitsAvecAlias.map(a => `"${a.nom}"`).join('\n')}`;
+ 
+                const aliasesRaw = await appelGemini(promptAliases);
+                
+                // Nettoyage au cas où Gemini ajoute des backticks
+                const aliasesPropre = aliasesRaw
+                    .replace(/```json\n?/g, '')
+                    .replace(/```\n?/g, '')
+                    .trim();
+                
+                const aliases = JSON.parse(aliasesPropre);
+                
+                // Injecter les alias dans les articles
+                articles.forEach(a => {
+                    if (!a.nom_alexa || a.nom_alexa.trim() === "") {
+                        a.nom_alexa = aliases[a.nom] || 
+                                      aliases[a.nom.toUpperCase()] || 
+                                      a.nom.split(' ').slice(0, 2).join(' ').toLowerCase();
+                    }
+                });
+ 
+            } catch(e) {
+                console.error("Erreur génération aliases groupée :", e);
+                // Fallback : premier mot du nom
+                articles.forEach(a => {
+                    if (!a.nom_alexa) {
+                        a.nom_alexa = a.nom.split(' ').slice(0, 2).join(' ').toLowerCase();
+                    }
+                });
+            }
+        }
+ 
+        // ÉTAPE 3 : Insérer/mettre à jour chaque article dans Supabase
+        document.getElementById('statut-scan').innerText = `💾 Enregistrement des articles...`;
+        
+        let nbAjoutes = 0;
+        let nbFusionnes = 0;
+ 
+        for (const a of articles) {
+            const nomNettoye = (a.nom || "").trim().replace(/\s+/g, ' ');
+            if (!nomNettoye) continue;
+ 
             const qteScan = parseInt(a.quantite) || 1;
-            const emplacementPropre = (a.emplacement || 'PLACARD').toUpperCase().trim();
-            
-            // On calcule la date si l'IA ne l'a pas trouvée
-            const datePerim = a.peremption || calculerDateMoyenne(nomNettoye, emplacementPropre);
-            
-           let nomCourt = a.nom_alexa || "";
-if (!nomCourt) {
-    try {
-        const promptAlias = `En 2-3 mots maximum, donne le nom naturel et prononçable à voix haute de ce produit. Supprime marques, poids, codes. Garde l'essentiel.
-        Exemples : "ESCALOPES CORDON BLEU DINDE 2X100G" -> "cordon bleu"
-        "YAOURT BRASSE NATURE 0% MG 4X125G" -> "yaourt nature"
-        "PETIT BEURRE CHOCOLAT LU 200G" -> "petit beurre chocolat"
-        Produit : "${nomNettoye}"
-        Réponds UNIQUEMENT le nom simplifié, en minuscules, sans ponctuation.`;
-        nomCourt = await appelGemini(promptAlias);
-        nomCourt = nomCourt.trim().toLowerCase();
+            const emplacement = (a.emplacement || 'PLACARD').toUpperCase().trim();
+            const datePerim = a.peremption || calculerDatePeremption(nomNettoye, emplacement);
+            const nomAlexa = (a.nom_alexa || nomNettoye.split(' ')[0]).trim().toLowerCase();
+ 
+            // Chercher si le produit existe déjà
+            const { data: existant } = await monSupabase
+                .from('inventaire2')
+                .select('id, quantite, nom_alexa, date_peremption')
+                .ilike('nom', nomNettoye)
+                .eq('emplacement', emplacement)
+                .eq('proprietaire', utilisateurActuel)
+                .neq('etat', 'Vide')
+                .maybeSingle();
+ 
+            if (existant) {
+                // Produit existant → fusionner les quantités
+                await monSupabase
+                    .from('inventaire2')
+                    .update({
+                        quantite: (parseInt(existant.quantite) || 0) + qteScan,
+                        etat: 'Plein',
+                        nom_alexa: existant.nom_alexa || nomAlexa,
+                        date_peremption: existant.date_peremption || datePerim
+                    })
+                    .eq('id', existant.id);
+                nbFusionnes++;
+            } else {
+                // Nouveau produit → insérer
+                await monSupabase
+                    .from('inventaire2')
+                    .insert([{
+                        nom: nomNettoye,
+                        nom_alexa: nomAlexa,
+                        quantite: qteScan,
+                        emplacement: emplacement,
+                        etat: 'Plein',
+                        date_peremption: datePerim,
+                        proprietaire: utilisateurActuel
+                    }]);
+                nbAjoutes++;
+            }
+        }
+ 
+        document.getElementById('statut-scan').innerText =
+            `✅ ${nbAjoutes} nouveaux + ${nbFusionnes} mis à jour !`;
+        
+        await chargerTout();
+ 
     } catch(e) {
-        nomCourt = nomNettoye.split(' ').slice(0, 2).join(' ').toLowerCase();
+        console.error("Erreur traiterRetourGemini :", e);
+        document.getElementById('statut-scan').innerText = "❌ Erreur de traitement : " + e.message;
     }
 }
 
-            let query = monSupabase
-                .from('inventaire2')
-                .select('*')
-                .ilike('nom', nomNettoye)
-                .eq('emplacement', emplacementPropre)
-                .eq('proprietaire', utilisateurActuel)
-                .neq('etat', 'Vide');
+// ============================================================
+// 12. SAUVER RECETTE
+// ============================================================
+async function sauverRecetteDirect(i) {
+    if (!utilisateurActuel) { afficherToast("Session expirée !"); return; }
+    const r = recettesTemporaires[i];
+    if (!r) return;
 
-            if (datePerim) {
-                query = query.eq('date_peremption', datePerim);
-            } else {
-                query = query.is('date_peremption', null);
-            }
+    const { error } = await monSupabase.from('recettes_sauvees').insert([{
+        titre: r.titre,
+        contenu: r.contenu,
+        proprietaire: utilisateurActuel
+    }]);
 
-            const { data: existant } = await query.maybeSingle();
+    if (error) {
+        afficherToast("❌ Erreur de sauvegarde");
+        return;
+    }
 
-            if (existant) {
-                const nouvelleQte = (parseInt(existant.quantite) || 0) + qteScan;
-                await monSupabase
-                    .from('inventaire2')
-                    .update({ 
-                        quantite: nouvelleQte, 
-                        etat: 'Plein',
-                        nom_alexa: existant.nom_alexa || nomCourt,
-                        date_peremption: existant.date_peremption || datePerim // Remplit si vide
-                    })
-                    .eq('id', existant.id);
-                console.log(`✅ Fusion : ${nomNettoye}`);
-            } else {
-                await monSupabase
-                    .from('inventaire2')
-                    .insert([{ 
-                        nom: nomNettoye, 
-                        nom_alexa: nomCourt, 
-                        quantite: qteScan, 
-                        emplacement: emplacementPropre, 
-                        etat: 'Plein',
-                        date_peremption: datePerim,
-                        proprietaire: utilisateurActuel 
-                    }]);
-                console.log(`🆕 Nouveau : ${nomNettoye} (Date estimée: ${datePerim})`);
+    afficherToast("✅ Recette sauvée dans le Grimoire !");
+    await chargerGrimoire();
+
+    document.getElementById('zone-recette').style.display = "none";
+    document.getElementById('zone-recette').innerHTML = "";
+    document.getElementById('recette-zone').innerHTML = "";
+}
+
+// ============================================================
+// 13. CHARGER TOUT L'INVENTAIRE
+// ============================================================
+async function chargerTout() {
+    if (!utilisateurActuel) return;
+
+    const { data: items, error } = await monSupabase
+        .from('inventaire2')
+        .select('*')
+        .eq('proprietaire', utilisateurActuel)
+        .order('nom');
+
+    if (error) { console.error("Erreur chargement :", error.message); return; }
+
+    const mapping = {
+        'FRIGO': 'list-Frigo',
+        'CONGELATEUR': 'list-Congélateur',
+        'PLACARD': 'list-Placard',
+        'ANIMAUX': 'list-Animaux',
+        'SALLE_DE_BAIN': 'list-SalleBain',
+        'AUTRES': 'list-Autres'
+    };
+
+    // Reset
+    Object.values(mapping).forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = "";
+    });
+    const sl = document.getElementById('shoppingList');
+    if (sl) sl.innerHTML = "";
+    const lt = document.getElementById('listeTups');
+    if (lt) lt.innerHTML = "";
+
+    let nbDanger = 0;
+    if (!items) return;
+
+    items.forEach(item => {
+
+        // CAS A : LISTE DE COURSES
+        if (item.etat === 'Vide') {
+            if (sl) sl.innerHTML += `
+                <div class="item" style="background:#fff5f5; border:1px solid #fed7d7;">
+                    <span style="font-weight:600; color:#c53030;">🛒 ${item.nom}</span>
+                    <div style="display:flex; gap:8px; align-items:center;">
+                        <button onclick="copierNom('${item.nom.replace(/'/g, "\\'")}', this)"
+                                style="background:#4a5568; color:white; border:none; border-radius:6px; padding:6px 12px; cursor:pointer; font-size:12px;">Copier</button>
+                        <button onclick="supprimerDefinitif(${item.id})"
+                                style="background:none; border:none; color:#9b2c2c; cursor:pointer; font-size:18px;">🗑️</button>
+                    </div>
+                </div>`;
+        }
+
+        // CAS B : ANTI-GASPI
+        else if (item.etat === 'Tup') {
+            if (lt) {
+                const joursPasses = Math.floor((new Date() - new Date(item.emplacement)) / 86400000);
+                let couleur = "#48bb78", msg = "Frais";
+                if (joursPasses >= 3) { couleur = "#ed8936"; msg = "À consommer"; }
+                if (joursPasses >= 5) { couleur = "#e53e3e"; msg = "DANGER"; nbDanger++; }
+
+                lt.innerHTML += `
+                    <div class="item" style="border-left:6px solid ${couleur};">
+                        <div>
+                            <b>🍱 ${item.nom}</b><br>
+                            <small style="color:gray;">Il y a ${joursPasses} jour(s)</small>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <span style="background:${couleur}; color:white; font-size:10px; padding:2px 8px; border-radius:10px; font-weight:bold;">${msg}</span>
+                            <button onclick="supprimerDefinitif(${item.id})" style="background:none; border:none; color:#9b2c2c; cursor:pointer; font-size:18px;">🗑️</button>
+                        </div>
+                    </div>`;
             }
         }
 
-        document.getElementById('statut-scan').innerText = "✅ " + articles.length + " articles traités !";
-        chargerTout();
+        // CAS C : STOCK CLASSIQUE
+        else {
+            const containerId = mapping[item.emplacement] || 'list-Placard';
+            const container = document.getElementById(containerId);
+            if (!container) return;
 
-    } catch(e) { 
-        console.error("Erreur dans traiterRetourGemini :", e);
-        document.getElementById('statut-scan').innerText = "❌ Erreur de traitement."; 
+            const couleurEtat = item.etat === 'Entamé' ? '#ef6c00' : '#333';
+            const labelEtat = item.etat === 'Entamé' ? '⚠️ Entamé' : '📦 Plein';
+
+            let alerteHtml = "";
+            if (item.date_peremption && item.emplacement === 'FRIGO') {
+                const diff = Math.ceil((new Date(item.date_peremption) - new Date()) / 86400000);
+                const icone = diff <= 1 ? "🔴" : diff <= 3 ? "🟠" : "🟢";
+                alerteHtml = `
+                    <div style="display:flex; align-items:center; gap:5px; margin-top:2px;">
+                        <span>${icone}</span>
+                        <small style="font-size:10px; color:#718096;">Exp: ${item.date_peremption}</small>
+                        <button onclick="prolongerDate(${item.id}, '${item.date_peremption}')"
+                                style="font-size:9px; background:#edf2f7; border:1px solid #cbd5e0; border-radius:3px; padding:0 4px; cursor:pointer;">+2j</button>
+                    </div>`;
+            }
+
+            const destinations = ['FRIGO', 'CONGELATEUR', 'PLACARD', 'ANIMAUX', 'SALLE_DE_BAIN', 'AUTRES'];
+            const optionsHtml = destinations.map(d =>
+                `<option value="${d}" ${d === item.emplacement ? 'selected' : ''}>${d}</option>`
+            ).join('');
+
+           container.innerHTML += `
+    <div class="item" style="border-left:4px solid ${item.etat === 'Entamé' ? '#ef6c00' : '#4a5568'}; width:100%; box-sizing:border-box; justify-content:space-between;">
+        <div style="flex:1;">
+            <b style="color:${couleurEtat};">${item.nom}</b>
+            ${alerteHtml}
+            <div style="display:flex; align-items:center; gap:8px; margin-top:4px;">
+                <select onchange="changerEmplacement(${item.id}, this.value)"
+                        style="font-size:10px; border:1px solid #ddd; border-radius:4px; background:#f7fafc; color:#4a5568; cursor:pointer; padding:2px;">
+                    ${optionsHtml}
+                </select>
+                <small style="cursor:pointer; color:gray;" onclick="basculerEtat(${item.id}, '${item.etat}')">${labelEtat}</small>
+            </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:5px;">
+            <button class="qte-btn" onclick="modifierQuantite(${item.id}, ${item.quantite}, -1)">−</button>
+            <b style="width:28px; text-align:center;">${item.quantite}</b>
+            <button class="qte-btn" onclick="modifierQuantite(${item.id}, ${item.quantite}, 1)">+</button>
+            <button onclick="basculerEtat(${item.id}, '${item.etat}')"
+                    style="background:none; border:none; font-size:20px; cursor:pointer;">
+                ${item.etat === 'Entamé' ? '🍴' : '🍽️'}
+            </button>
+        </div>
+    </div>`;
+        }
+    });
+
+    // Badge danger
+    const badge = document.getElementById('badge-danger');
+    if (badge) {
+        badge.innerText = nbDanger;
+        badge.style.display = nbDanger > 0 ? "inline-block" : "none";
+    }
+
+    remplirSuggestions();
+}
+
+// ============================================================
+// 14. AJOUT MANUEL
+// ============================================================
+async function ajouterManuel() {
+    if (!utilisateurActuel) { alert("⚠️ Tu n'es pas connecté."); return; }
+ 
+    const n = document.getElementById('add-nom').value.trim().replace(/\s+/g, ' ');
+    const e = document.getElementById('add-emplacement').value;
+    const q = parseInt(document.getElementById('add-qte').value) || 1;
+ 
+    if (!n) return;
+ 
+    // Chercher si le produit existe déjà
+    const { data: existant } = await monSupabase
+        .from('inventaire2')
+        .select('*')
+        .ilike('nom', n)
+        .eq('emplacement', e)
+        .eq('proprietaire', utilisateurActuel)
+        .neq('etat', 'Vide')
+        .maybeSingle();
+ 
+    if (existant) {
+        // Produit existant → update quantité
+        await monSupabase
+            .from('inventaire2')
+            .update({ quantite: (parseInt(existant.quantite) || 0) + q, etat: 'Plein' })
+            .eq('id', existant.id);
+    } else {
+        // Nouveau produit → générer nom_alexa puis insérer
+        let nAlexa = n;
+        try {
+            const reponseIA = await appelGemini(
+                `En 2-3 mots max, nom simplifié prononçable pour Alexa. Supprime marques, poids, détails.
+Exemples: "Litière Catsan 10L" → "litière", "Yaourt Danone x8" → "yaourt"
+Produit: "${n}"
+Réponds UNIQUEMENT le nom simplifié en minuscules, sans ponctuation.`
+            );
+            if (reponseIA) nAlexa = reponseIA.trim().toLowerCase();
+        } catch(err) {
+            nAlexa = n.split(' ').slice(0, 2).join(' ').toLowerCase();
+        }
+ 
+        const { error } = await monSupabase
+            .from('inventaire2')
+            .insert([{
+                nom: n,
+                nom_alexa: nAlexa,
+                emplacement: e,
+                quantite: q,
+                etat: 'Plein',
+                proprietaire: utilisateurActuel
+            }]);
+ 
+        if (error) { alert("Erreur : " + error.message); return; }
+    }
+ 
+    document.getElementById('add-nom').value = "";
+    document.getElementById('add-qte').value = "1";
+    await chargerTout();
+}
+// ============================================================
+// 15. ACTIONS INVENTAIRE
+// ============================================================
+async function supprimerDefinitif(id) {
+    if (!utilisateurActuel) return;
+    if (confirm("Supprimer cet article définitivement ?")) {
+        await monSupabase.from('inventaire2').delete().eq('id', id).eq('proprietaire', utilisateurActuel);
+        await chargerTout();
     }
 }
 
-// --- 3. SUPPRIMER DÉFINITIF ---
-async function supprimerDefinitif(id) { 
-    if (!utilisateurActuel) return; // Sécurité
-
-    if(confirm("Supprimer cet article de la base ?")) { 
-        await monSupabase
-            .from('inventaire2')
-            .delete()
-            .eq('id', id)
-            .eq('proprietaire', utilisateurActuel); // Sécurité double : ne peut supprimer que SES articles
-        
-        chargerTout(); 
-    } 
-}
-
-// --- 4. BASCULER ÉTAT (Plein / Entamé) ---
 async function basculerEtat(id, etatActuel) {
-    if (!utilisateurActuel) return; // Sécurité
-
-    const nouvelEtat = (etatActuel === 'Plein') ? 'Entamé' : 'Plein';
-    await monSupabase
-        .from('inventaire2')
-        .update({ etat: nouvelEtat })
-        .eq('id', id)
-        .eq('proprietaire', utilisateurActuel); // Sécurité double
-        
-    chargerTout();
+    if (!utilisateurActuel) return;
+    const nouvelEtat = etatActuel === 'Plein' ? 'Entamé' : 'Plein';
+    await monSupabase.from('inventaire2').update({ etat: nouvelEtat }).eq('id', id).eq('proprietaire', utilisateurActuel);
+    await chargerTout();
 }
 
-										async function chargerGrimoire() {
-    // SÉCURITÉ : On ne charge rien si l'utilisateur est inconnu
+async function modifierQuantite(id, qte, delta) {
+    if (!utilisateurActuel) return;
+    const nv = qte + delta;
+
+    if (nv <= 0) {
+        if (confirm("Article épuisé !\nOK = Ajouter à la liste de courses\nAnnuler = Supprimer définitivement")) {
+            await monSupabase.from('inventaire2').update({ etat: 'Vide', quantite: 0 }).eq('id', id).eq('proprietaire', utilisateurActuel);
+        } else {
+            await monSupabase.from('inventaire2').delete().eq('id', id).eq('proprietaire', utilisateurActuel);
+        }
+    } else {
+        await monSupabase.from('inventaire2').update({ quantite: nv, etat: 'Plein' }).eq('id', id).eq('proprietaire', utilisateurActuel);
+    }
+    await chargerTout();
+}
+
+async function changerEmplacement(id, nouvelEmplacement) {
+    if (!utilisateurActuel) return;
+    await monSupabase.from('inventaire2').update({ emplacement: nouvelEmplacement }).eq('id', id).eq('proprietaire', utilisateurActuel);
+    await chargerTout();
+}
+
+async function prolongerDate(id, dateActuelle) {
+    if (!utilisateurActuel) return;
+    const base = dateActuelle ? new Date(dateActuelle) : new Date();
+    base.setDate(base.getDate() + 2);
+    await monSupabase.from('inventaire2')
+        .update({ date_peremption: base.toISOString().split('T')[0] })
+        .eq('id', id)
+        .eq('proprietaire', utilisateurActuel);
+    await chargerTout();
+}
+
+async function supprimerProduitVocal(nomRecherche) {
+    if (!utilisateurActuel) { faireParlerIA("Je ne sais pas qui tu es."); return; }
+
+    const { data: produits } = await monSupabase
+        .from('inventaire2')
+        .select('*')
+        .eq('proprietaire', utilisateurActuel)
+        .neq('etat', 'Vide')
+        .ilike('nom', `%${nomRecherche}%`);
+
+    if (!produits || produits.length === 0) {
+        faireParlerIA("Désolé, je n'ai pas trouvé de " + nomRecherche + " dans ton stock.");
+        return;
+    }
+
+    if (produits.length === 1) {
+        await executerLogiqueSuppression(produits[0]);
+    } else {
+        window.produitsPossibles = produits;
+        window.attenteChoixProduit = true;
+        faireParlerIA("J'ai trouvé plusieurs produits : " + produits.map(x => x.nom).join(" ou ") + ". Lequel veux-tu retirer ?");
+    }
+}
+
+async function executerLogiqueSuppression(p) {
+    if (!utilisateurActuel || p.proprietaire !== utilisateurActuel) return;
+
+    if (p.quantite > 1) {
+        const nouvelleQte = p.quantite - 1;
+        await monSupabase.from('inventaire2')
+            .update({ quantite: nouvelleQte })
+            .eq('id', p.id)
+            .eq('proprietaire', utilisateurActuel);
+        await chargerTout();
+        faireParlerIA(`C'est fait. Il reste ${nouvelleQte} ${p.nom}.`);
+    } else {
+        window.dernierProduitSupprime = p;
+        window.attenteReponseIA = true;
+        faireParlerIA(`C'était le dernier ${p.nom}. Veux-tu que je l'ajoute à ta liste de courses ?`);
+    }
+}
+
+// ============================================================
+// 16. LISTE DE COURSES & MUR
+// ============================================================
+async function ajouterAuMur() {
+    if (!utilisateurActuel) { afficherToast("Session expirée !"); return; }
+    const input = document.getElementById('nouvelArticleFamille');
+    const nom = input.value.trim();
+    if (!nom) return;
+
+    const { error } = await monSupabase.from('inventaire2').insert([{
+        nom: nom,
+        etat: 'Vide',
+        emplacement: 'PLACARD',
+        quantite: 1,
+        proprietaire: utilisateurActuel
+    }]);
+
+    if (!error) { input.value = ""; await chargerTout(); }
+    else afficherToast("❌ Erreur : " + error.message);
+}
+
+async function viderTouteLaListe() {
+    if (!utilisateurActuel) return;
+    if (confirm("Vider TOUTE votre liste de courses ?")) {
+        await monSupabase.from('inventaire2').delete().eq('etat', 'Vide').eq('proprietaire', utilisateurActuel);
+        await chargerTout();
+    }
+}
+
+function copierNom(nom, btn) {
+    navigator.clipboard.writeText(nom).then(() => {
+        const orig = btn.innerText;
+        btn.innerText = "✅ Copié !";
+        btn.style.background = "#48bb78";
+        setTimeout(() => { btn.innerText = orig; btn.style.background = "#4a5568"; }, 1500);
+    });
+}
+
+// ============================================================
+// 17. ANTI-GASPI
+// ============================================================
+async function ajouterTup() {
+    if (!utilisateurActuel) { afficherToast("Session expirée !"); return; }
+    const input = document.getElementById('nomTup');
+    const nom = input.value.trim();
+    if (!nom) return;
+
+    const { error } = await monSupabase.from('inventaire2').insert([{
+        nom: nom,
+        etat: 'Tup',
+        emplacement: new Date().toISOString().split('T')[0],
+        quantite: 1,
+        proprietaire: utilisateurActuel
+    }]);
+
+    if (!error) { input.value = ""; await chargerTout(); }
+    else afficherToast("❌ Erreur : " + error.message);
+}
+
+// ============================================================
+// 18. GRIMOIRE
+// ============================================================
+let toutesLesRecettes = [];
+
+async function chargerGrimoire() {
     if (!utilisateurActuel) return;
 
     const { data, error } = await monSupabase
         .from('recettes_sauvees')
         .select('*')
-        .eq('proprietaire', utilisateurActuel) // 👈 SÉCURITÉ : Uniquement mes recettes
-        .order('created_at', {ascending: false});
+        .eq('proprietaire', utilisateurActuel)
+        .order('created_at', { ascending: false });
 
+    if (error) { console.error("Erreur Grimoire :", error.message); return; }
+
+    toutesLesRecettes = data || [];
+    afficherGrimoire(toutesLesRecettes);
+}
+
+function afficherGrimoire(recettes) {
     const g = document.getElementById('grimoire-zone');
     if (!g) return;
-    
-    if (error) return console.error("Erreur Grimoire:", error.message);
 
-    if (data) {
-        g.innerHTML = data.map(r => `
-            <div style="background: white; padding: 15px; border-radius: 10px; margin-bottom: 10px; border: 1px solid #ddd; position: relative;">
-                <button onclick="supprimerRecette(${r.id})" 
-                        style="position: absolute; top: 10px; right: 10px; background: #ea4335; color: white; border: none; border-radius: 5px; cursor: pointer; padding: 5px 10px; font-weight: bold; font-size: 11px;">
-                    🗑️
-                </button>
-                <div style="padding-right: 40px;">
-                    <b style="color:var(--chef); display: block; margin-bottom: 5px;">${r.titre}</b>
-                    <p style="font-size: 12px; margin: 0; white-space: pre-wrap; color: #555;">${r.contenu}</p>
-                </div>
-            </div>`).join('');
+    if (!recettes.length) {
+        g.innerHTML = "<p style='color:gray; text-align:center;'>Aucune recette sauvée.</p>";
+        return;
     }
+
+    g.innerHTML = recettes.map(r => `
+        <div style="background:white; padding:15px; border-radius:10px; margin-bottom:10px; border:1px solid #ddd; position:relative;">
+            <button onclick="supprimerRecette(${r.id})"
+                    style="position:absolute; top:10px; right:10px; background:#ea4335; color:white; border:none; border-radius:5px; cursor:pointer; padding:5px 10px; font-size:11px;">🗑️</button>
+            <div style="padding-right:50px;">
+                <b style="color:var(--chef); display:block; margin-bottom:5px;">${r.titre}</b>
+                <p style="font-size:12px; margin:0; white-space:pre-wrap; color:#555;">${r.contenu}</p>
+            </div>
+        </div>`).join('');
 }
 
-										async function supprimerRecette(id) {
-    if (!utilisateurActuel) return;
+function filtrerGrimoire() {
+    const terme = document.getElementById('search-grimoire').value.toLowerCase().trim();
+    const filtrees = terme
+        ? toutesLesRecettes.filter(r =>
+            r.titre.toLowerCase().includes(terme) ||
+            r.contenu.toLowerCase().includes(terme))
+        : toutesLesRecettes;
+    afficherGrimoire(filtrees);
+}
 
+async function supprimerRecette(id) {
+    if (!utilisateurActuel) return;
     if (confirm("Supprimer cette recette ?")) {
-        const { error } = await monSupabase
-            .from('recettes_sauvees')
-            .delete()
-            .eq('id', id)
-            .eq('proprietaire', utilisateurActuel); // 👈 SÉCURITÉ : Empêche de supprimer la recette d'un ami
-
-        if (error) {
-            console.error("Erreur suppression:", error.message);
-        } else {
-            chargerGrimoire();
-        }
+        await monSupabase.from('recettes_sauvees').delete().eq('id', id).eq('proprietaire', utilisateurActuel);
+        await chargerGrimoire();
     }
 }
 
-										async function viderTouteLaListe() {
-    if (!utilisateurActuel) return;
-
-    if (confirm("Voulez-vous vraiment vider TOUTE VOTRE liste de courses ?")) {
-        const { error } = await monSupabase
-            .from('inventaire2')
-            .delete()
-            .eq('etat', 'Vide')
-            .eq('proprietaire', utilisateurActuel); // 👈 SÉCURITÉ : Ne vide QUE MA liste
-
-        if (error) {
-            console.error("Erreur lors du vidage :", error.message);
-            alert("Erreur lors de la suppression.");
-        } else {
-            chargerTout(); 
-        }
-    }
-}
-
-										function copierNom(nom, btn) {
-											// 1. On copie le texte dans le presse-papier
-											navigator.clipboard.writeText(nom).then(() => {
-												// 2. Petit effet visuel pour confirmer la copie
-												const texteOriginal = btn.innerText;
-												btn.innerText = "✅ Copié !";
-												btn.style.background = "#48bb78"; // Devient vert
-												btn.style.color = "white";
-												
-												// 3. On remet le bouton à la normale après 1.5 seconde
-												setTimeout(() => {
-													btn.innerText = texteOriginal;
-													btn.style.background = "#4a5568"; // Gris foncé
-												}, 1500);
-											}).catch(err => {
-												console.error("Erreur de copie : ", err);
-												alert("Impossible de copier le texte.");
-											});
-										}
-										async function ajouterAuMur() {
-    const input = document.getElementById('nouvelArticleFamille');
-    const nom = input.value.trim();
-
-    // 1. On vérifie si l'utilisateur est bien défini
-    if (!utilisateurActuel) {
-        console.error("Impossible d'ajouter : utilisateurActuel est vide.");
-        alert("Session expirée ou utilisateur inconnu. Reconnecte-toi !");
-        return;
-    }
-
-    if (nom === "") return; // On n'ajoute pas de vide
-
-    // 2. On envoie à Supabase avec le propriétaire
-    const { error } = await monSupabase
-        .from('inventaire2')
-        .insert([{ 
-            nom: nom, 
-            etat: 'Vide', 
-            emplacement: 'PLACARD', // Par défaut
-            quantite: 1,
-            proprietaire: utilisateurActuel // <--- SIGNATURE
-        }]);
-
-    if (error) {
-        console.error("Erreur ajout famille:", error.message);
-        alert("Zut, ça n'a pas marché !");
-    } else {
-        input.value = ""; // On vide le champ
-        chargerTout();    // On rafraîchit la liste
-    }
-}
-
-										// Optionnel : Permettre d'ajouter en appuyant sur "Entrée"
-										document.getElementById('nouvelArticleFamille')?.addEventListener('keypress', function (e) {
-											if (e.key === 'Enter') {
-												ajouterAuMur();
-											}
-										});
-
-										async function ajouterTup() {
-    const input = document.getElementById('nomTup');
-    const nomBase = input.value.trim();
-
-    // 1. SÉCURITÉ : On vérifie l'utilisateur avant tout
-    if (!utilisateurActuel) {
-        alert("Session expirée. Reconnecte-toi pour ajouter un Tupperware.");
-        console.error("Ajout Tup impossible : utilisateurActuel est vide.");
-        return;
-    }
-
-    if (nomBase === "") return;
-
-    // 2. Préparation de la date
-    const dateAujourdhui = new Date().toISOString().split('T')[0];
-    
-    // 3. Envoi à Supabase avec la "signature" du propriétaire
-    const { error } = await monSupabase
-        .from('inventaire2')
-        .insert([{ 
-            nom: nomBase, 
-            etat: 'Tup', 
-            emplacement: dateAujourdhui, 
-            quantite: 1,
-            proprietaire: utilisateurActuel // <--- INDISPENSABLE pour qu'il apparaisse dans ta liste
-        }]);
-
-    if (!error) {
-        input.value = "";
-        chargerTout();
-    } else {
-        console.error("Erreur ajout Tup :", error.message);
-        alert("Erreur lors de l'enregistrement.");
-    }
-}
-// 5. FONCTIONS DU PLANNING DE LA SEMAINE
-// ==========================================================
-const joursDeLaSemaine = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
-
+// ============================================================
+// 19. PLANNING
+// ============================================================
 async function chargerPlanning() {
     const grid = document.getElementById('planning-grid');
-    if (!grid) return;
+    if (!grid || !utilisateurActuel) return;
 
-    // --- CORRECTION : AJOUT DU FILTRE ---
-    // On s'assure de ne récupérer QUE les données appartenant à l'utilisateur actif
     const { data, error } = await monSupabase
         .from('planning')
         .select('*')
-        .eq('proprietaire', utilisateurActuel); // <-- C'est LA ligne qui manque !
+        .eq('proprietaire', utilisateurActuel);
 
-    if (error) { 
-        console.error("Erreur planning :", error); 
-        return; 
-    }
+    if (error) { console.error("Erreur planning :", error); return; }
 
-    // 2. On construit l'affichage jour par jour
-    let html = '';
-    joursDeLaSemaine.forEach(jour => {
-        html += `
-        <div style="background: white; padding: 10px; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
-            <h3 style="margin: 0 0 10px 0; font-size: 16px; color: #4a5568; text-align: center;">${jour}</h3>
-            <div style="display: flex; gap: 10px;">
-                ${genererCasePlanning(data, jour, 'Midi')}
-                ${genererCasePlanning(data, jour, 'Soir')}
+    grid.innerHTML = joursDeLaSemaine.map(jour => `
+        <div style="background:white; padding:10px; border-radius:12px; border:1px solid #e2e8f0; box-shadow:0 2px 4px rgba(0,0,0,0.05);">
+            <h3 style="margin:0 0 10px 0; font-size:15px; color:#4a5568; text-align:center;">${jour}</h3>
+            <div style="display:flex; gap:8px;">
+                ${genererCasePlanning(data || [], jour, 'Midi')}
+                ${genererCasePlanning(data || [], jour, 'Soir')}
             </div>
-        </div>`;
-    });
-    grid.innerHTML = html;
+        </div>`).join('');
 }
 
-function genererCasePlanning(dataPlanning, jour, moment) {
-    // On cherche si un repas est déjà enregistré pour ce jour/moment
-    const repas = dataPlanning.find(r => r.jour === jour && r.moment === moment);
-    
-    const nomPlat = repas ? repas.plat : "+ Ajouter";
-    const bgCouleur = repas ? "#e6fffa" : "#f7fafc"; // Vert pastel si rempli, gris clair si vide
-    const texteCouleur = repas ? "#285e61" : "#a0aec0";
+function genererCasePlanning(data, jour, moment) {
+    const repas = data.find(r => r.jour === jour && r.moment === moment);
+    const bg = repas ? "#e6fffa" : "#f7fafc";
+    const couleur = repas ? "#285e61" : "#a0aec0";
+    const texte = repas ? repas.plat : "+ Ajouter";
+    const id = repas ? repas.id : '';
 
     return `
-    <div onclick="modifierPlanning('${jour}', '${moment}', '${repas ? repas.id : ''}')" 
-         style="flex: 1; background: ${bgCouleur}; padding: 15px 5px; border-radius: 8px; text-align: center; cursor: pointer; border: 1px dashed #cbd5e0; transition: 0.2s;">
-        <b style="font-size: 12px; color: #718096; text-transform: uppercase;">${moment}</b><br>
-        <span style="font-size: 14px; font-weight: bold; color: ${texteCouleur}; display: block; margin-top: 5px;">${nomPlat}</span>
-    </div>`;
+        <div onclick="ouvrirModal('${jour}', '${moment}', '${id}', '${repas ? repas.plat.replace(/'/g, "\\'") : ''}')"
+             style="flex:1; background:${bg}; padding:12px 5px; border-radius:8px; text-align:center; cursor:pointer; border:1px dashed #cbd5e0;">
+            <b style="font-size:11px; color:#718096; text-transform:uppercase;">${moment}</b><br>
+            <span style="font-size:13px; font-weight:bold; color:${couleur}; display:block; margin-top:4px;">${texte}</span>
+        </div>`;
 }
 
-async function modifierPlanning(jour, moment, idExistant) {
-    // 1. On vérifie si l'utilisateur est bien reconnu par l'appli
-    if (!utilisateurActuel) {
-        console.error("ERREUR : utilisateurActuel est vide !");
-        alert("Tu ne peux pas enregistrer car tu n'es pas identifié.");
-        return;
-    }
+function ouvrirModal(jour, moment, id, platActuel) {
+    window.modalJour = jour;
+    window.modalMoment = moment;
+    window.modalIdExistant = id;
+    document.getElementById('modal-titre').innerText = `${jour} — ${moment}`;
+    document.getElementById('modal-input').value = platActuel || '';
+    document.getElementById('modal-planning').classList.add('show');
+    document.getElementById('modal-input').focus();
+}
 
-    const nouveauPlat = prompt(`Que veux-tu manger ${jour} ${moment} ?\n(Laisse vide pour effacer)`);
-    if (nouveauPlat === null) return;
+function fermerModal() {
+    document.getElementById('modal-planning').classList.remove('show');
+}
 
-    let resultat; // Pour stocker la réponse de Supabase
+async function validerPlanning() {
+    const plat = document.getElementById('modal-input').value.trim();
+    const { modalJour: jour, modalMoment: moment, modalIdExistant: id } = window;
 
-    if (nouveauPlat.trim() === "") {
-        // --- SUPPRESSION ---
-        if (idExistant) {
-            resultat = await monSupabase.from('planning').delete().eq('id', idExistant);
-        }
+    if (!plat) { await supprimerPlanning(); return; }
+
+    if (id) {
+        await monSupabase.from('planning').update({ plat, proprietaire: utilisateurActuel }).eq('id', id);
     } else {
-        if (idExistant) {
-            // --- MISE À JOUR ---
-            resultat = await monSupabase.from('planning')
-                .update({ 
-                    plat: nouveauPlat, 
-                    proprietaire: utilisateurActuel 
-                })
-                .eq('id', idExistant);
-        } else {
-            // --- INSERTION ---
-            resultat = await monSupabase.from('planning')
-                .insert([{ 
-                    jour: jour, 
-                    moment: moment, 
-                    plat: nouveauPlat, 
-                    proprietaire: utilisateurActuel 
-                }]);
-        }
+        await monSupabase.from('planning').insert([{ jour, moment, plat, proprietaire: utilisateurActuel }]);
     }
 
-    // --- ANALYSE DE L'ERREUR ---
-    if (resultat && resultat.error) {
-        console.error("❌ Erreur Supabase :", resultat.error.message);
-        console.error("Détails :", resultat.error.details);
-        alert("Erreur de sauvegarde : " + resultat.error.message);
-    } else {
-        console.log("✅ Opération réussie !");
-        chargerPlanning(); // Rafraîchit l'affichage
-    }
+    fermerModal();
+    await chargerPlanning();
 }
-										function faireParlerIA(message) {
-    // 1. SÉCURITÉ : On arrête toute voix en cours avant de lancer la nouvelle
-    window.speechSynthesis.cancel();
 
-    // 2. NETTOYAGE DU TEXTE
-    const textePropre = message.replace(/[*#]/g, '').replace(/-/g, ' ');
-
-    const synthese = window.speechSynthesis;
-    const énoncé = new SpeechSynthesisUtterance(textePropre);
-    énoncé.lang = 'fr-FR';
-    
-    // Optionnel : ajuster un peu la vitesse pour que ce soit plus naturel
-    énoncé.rate = 1.1; 
-
-    énoncé.onend = function() {
-        console.log("L'IA a fini de parler.");
-        // Relance du micro seulement si on attend une réponse et si l'utilisateur est là
-        if (utilisateurActuel && (window.attenteChoixRecette || window.attenteChoixProduit || window.attenteReponseIA)) {
-            try {
-                recognition.start(); 
-            } catch(e) {
-                console.log("Le micro est déjà actif.");
-            }
-        }
-    };
-
-    synthese.speak(énoncé);
+async function supprimerPlanning() {
+    const id = window.modalIdExistant;
+    if (id) await monSupabase.from('planning').delete().eq('id', id);
+    fermerModal();
+    await chargerPlanning();
 }
-										async function supprimerProduitVocal(nomRecherche) {
-    // SÉCURITÉ : On vérifie l'utilisateur avant de chercher
-    if (!utilisateurActuel) {
-        faireParlerIA("Je ne peux pas supprimer de produit car je ne sais pas qui tu es.");
-        return;
-    }
 
-    // On cherche UNIQUEMENT les produits de l'utilisateur qui sont en stock
-    const { data: produits } = await monSupabase
-        .from('inventaire2')
-        .select('*')
-        .eq('proprietaire', utilisateurActuel) // 👈 SÉCURITÉ : Uniquement mes produits
-        .neq('etat', 'Vide') 
-        .ilike('nom', `%${nomRecherche}%`);
+// Fermer modal en cliquant dehors
+document.getElementById('modal-planning')?.addEventListener('click', (e) => {
+    if (e.target === document.getElementById('modal-planning')) fermerModal();
+});
 
-    if (!produits || produits.length === 0) {
-        faireParlerIA("Désolé, je n'ai pas trouvé de " + nomRecherche + " dans ton stock actuel.");
-        window.attenteReponseIA = false;
-        window.attenteChoixProduit = false;
-        return;
-    }
-
-    // CAS 1 : On en trouve un seul (parfait !)
-    if (produits.length === 1) {
-        const p = produits[0];
-        // On s'assure que la logique de suppression connaît l'utilisateur
-        await executerLogiqueSuppression(p);
-    } 
-    // CAS 2 : On en trouve plusieurs (ambiguïté)
-    else {
-        window.produitsPossibles = produits;
-        window.attenteChoixProduit = true; 
-        let noms = produits.map(x => x.nom).join(" ou ");
-        faireParlerIA("J'ai trouvé plusieurs correspondances : " + noms + ". Lequel veux-tu retirer ?");
-    }
-}
-// --- FONCTION POUR AJOUTER UN ALIMENT AU FRIGO/TUP (Version Multi-utilisateurs) ---
-async function ajouterAuFrigoVocal(nomAliment) {
-    // 1. On vérifie d'abord qu'on sait à qui appartient le plat
-    if (!utilisateurActuel) {
-        console.error("Session perdue : impossible d'ajouter l'article.");
-        faireParlerIA("Je ne peux pas l'ajouter car tu n'es plus connecté.");
-        return;
-    }
-
-    try {
-        const { error } = await monSupabase
-            .from('inventaire2')
-            .insert([
-                { 
-                    nom: nomAliment, 
-                    etat: 'Plein',
-                    emplacement: 'TUP', 
-                    proprietaire: utilisateurActuel // <--- SIGNATURE
-                } 
-            ]);
-
-        if (!error) {
-            // Succès : L'IA confirme et on rafraîchit la liste
-            faireParlerIA("C'est noté ! J'ai ajouté " + nomAliment + " dans tes restes.");
-            if (typeof chargerTout === "function") chargerTout(); 
-        } else {
-            // En cas de refus de la base (ex: problème réseau)
-            console.error("Erreur Supabase :", error);
-            faireParlerIA("Mince, je n'ai pas réussi à l'enregistrer.");
-        }
-    } catch (err) {
-        console.error("Erreur globale ajout :", err);
-    }
-}
-										function gererReponseOuiNon(phrase) {
-    if (!utilisateurActuel) return;
-
-    if (phrase.includes("oui") || phrase.includes("vas-y") || phrase.includes("ajoute") || phrase.includes("d'accord")) {
-        const p = window.dernierProduitSupprime;
-        
-        // On vérifie que le produit appartient bien à l'utilisateur actuel
-        if (p && p.proprietaire === utilisateurActuel) {
-            monSupabase.from('inventaire2')
-                .update({ etat: 'Vide', quantite: 0 }) // On vide aussi la quantité
-                .eq('id', p.id)
-                .eq('proprietaire', utilisateurActuel) // 👈 SÉCURITÉ
-                .then(({ error }) => {
-                    if (!error) {
-                        faireParlerIA("C'est noté, je l'ai ajouté aux courses.");
-                        if (typeof chargerTout === 'function') chargerTout();
-                    }
-                });
-        }
-    } else {
-        faireParlerIA("Entendu, je ne l'ajoute pas.");
-    }
-    window.attenteReponseIA = false;
-    window.dernierProduitSupprime = null;
-}
-										async function executerLogiqueSuppression(p) {
-    if (!utilisateurActuel) return;
-
-    // Double vérification de sécurité
-    if (p.proprietaire !== utilisateurActuel) {
-        console.error("Tentative de suppression d'un produit non autorisé.");
-        return;
-    }
-
-    if (p.quantite > 1) {
-        const nouvelleQte = p.quantite - 1;
-        // On update avec l'ID et le PROPRIÉTAIRE
-        await monSupabase.from('inventaire2')
-            .update({ quantite: nouvelleQte })
-            .eq('id', p.id)
-            .eq('proprietaire', utilisateurActuel); // 👈 SÉCURITÉ
-
-        if (typeof chargerTout === 'function') await chargerTout();
-        
-        window.attenteReponseIA = false;
-        faireParlerIA("C'est fait, il reste désormais " + nouvelleQte + " " + p.nom);
-    } else {
-        // C'était le dernier
-        window.dernierProduitSupprime = p;
-        window.attenteReponseIA = true; 
-        
-        faireParlerIA("C'était le dernier " + p.nom + ". Veux-tu que je le rajoute à ta liste de courses ?");
-    }
-}
-										
+// ============================================================
+// 20. RECHERCHE & SUGGESTIONS
+// ============================================================
 function rechercherArticle() {
-    const barre = document.getElementById('mon-filtre-texte');
-    if (!barre) return;
-    
-    const motCle = barre.value.toLowerCase().trim();
-    const tousLesItems = document.querySelectorAll('.item');
-
-    tousLesItems.forEach(ligne => {
-        const texteLigne = ligne.innerText.toLowerCase();
-        if (texteLigne.includes(motCle)) {
-            ligne.style.setProperty('display', 'flex', 'important');
-        } else {
-            ligne.style.setProperty('display', 'none', 'important');
-        }
+    const motCle = document.getElementById('mon-filtre-texte').value.toLowerCase().trim();
+    document.querySelectorAll('.item').forEach(ligne => {
+        const visible = ligne.innerText.toLowerCase().includes(motCle);
+        ligne.style.setProperty('display', visible ? 'flex' : 'none', 'important');
     });
 }
 
-
-// ==========================================
-// 3. LA FONCTION SUGGESTIONS (Indépendante)
-// ==========================================
 function remplirSuggestions() {
     const datalist = document.getElementById('liste-suggestions');
-    const tousLesItems = document.querySelectorAll('.item');
     if (!datalist) return;
-
-    datalist.innerHTML = ""; 
-    const nomsUniques = new Set();
-
-    tousLesItems.forEach(item => {
-        // On prend la première ligne de texte et on nettoie les emojis
-        let nom = item.innerText.split('\n')[0].replace(/[🛒🗑️✅⚠️]/g, '').trim();
-        if (nom) nomsUniques.add(nom);
+    datalist.innerHTML = "";
+    const noms = new Set();
+    document.querySelectorAll('.item b').forEach(el => {
+        const nom = el.innerText.trim();
+        if (nom) noms.add(nom);
     });
-
-    nomsUniques.forEach(nom => {
-        const option = document.createElement('option');
-        option.value = nom;
-        datalist.appendChild(option);
+    noms.forEach(nom => {
+        const opt = document.createElement('option');
+        opt.value = nom;
+        datalist.appendChild(opt);
     });
 }
-async function modifierQuantite(id, qte, delta) {
-    if (!utilisateurActuel) return;
-    const nv = qte + delta;
-    
-    if (nv <= 0) {
-        const ajouterAuxCourses = confirm("Article épuisé !\nVoulez-vous l'ajouter à la LISTE DE COURSES ?\n\n(OK = Liste de courses / ANNULER = Supprimer définitivement)");
-        
-        if (ajouterAuxCourses) {
-            // Cas OUI : Basculement sécurisé
-            await monSupabase.from('inventaire2')
-                .update({ etat: 'Vide', quantite: 0 })
-                .eq('id', id)
-                .eq('proprietaire', utilisateurActuel); // 👈 SÉCURITÉ
-        } else {
-            // Cas NON : Suppression sécurisée
-            await monSupabase.from('inventaire2')
-                .delete()
-                .eq('id', id)
-                .eq('proprietaire', utilisateurActuel); // 👈 SÉCURITÉ
-        }
-    } else {
-        // Mise à jour classique sécurisée
-        await monSupabase.from('inventaire2')
-            .update({ quantite: nv, etat: 'Plein' })
-            .eq('id', id)
-            .eq('proprietaire', utilisateurActuel); // 👈 SÉCURITÉ
-    }
-    
-    chargerTout();
-}
-async function simplifierNomPourAlexa(nomBrut) {
-    try {
-        const prompt = `Tu es un assistant de cuisine. simplifie ce nom de produit pour qu'il soit facile à dire à haute voix à Alexa.
-        Garde uniquement le nom principal (le "nom commun"). 
-        Supprime les marques (sauf si c'est indispensable), les poids, les codes et les adjectifs inutiles.
-        
-        Exemple : "Litière minérale Catsan - Hygiène plus - 10L" -> "Litière"
-        Exemple : "Pâtes Penne Rigate Barilla 500g" -> "Pâtes"
-        Exemple : "Yaourt Velouté Danone pack de 8" -> "Yaourt"
-        
-        Produit : "${nomBrut}"
-        Retourne UNIQUEMENT le nom simplifié, sans ponctuation.`;
-
-        // Ici, utilise TA fonction habituelle pour appeler l'API Gemini
-        // Je l'appelle 'appelerGemini' pour l'exemple
-        const reponse = await appelerGemini(prompt); 
-        return reponse.trim();
-    } catch (e) {
-        // En cas d'erreur, on coupe juste au premier espace pour pas bloquer
-        return nomBrut.split(' ')[0];
-    }
-}
-async function changerEmplacement(id, nouvelEmplacement) {
-    if (!utilisateurActuel) return;
-
-    const { error } = await monSupabase
-        .from('inventaire2')
-        .update({ emplacement: nouvelEmplacement })
-        .eq('id', id)
-        .eq('proprietaire', utilisateurActuel); // 👈 SÉCURITÉ
-
-    if (!error) {
-        chargerTout();
-    } else {
-        alert("Erreur lors du déplacement de l'article");
-    }
-}
-async function prolongerDate(id, dateActuelle) {
-    if (!utilisateurActuel) return;
-
-    let base = dateActuelle ? new Date(dateActuelle) : new Date();
-    base.setDate(base.getDate() + 2);
-    const nouvelleDate = base.toISOString().split('T')[0];
-
-    const { error } = await monSupabase
-        .from('inventaire2')
-        .update({ date_peremption: nouvelleDate })
-        .eq('id', id)
-        .eq('proprietaire', utilisateurActuel); // 👈 SÉCURITÉ
-
-    if (!error) {
-        chargerTout();
-    }
-}
-
-										</script>
-										</body>
-										</html>
+</script>
+</body>
+</html>
