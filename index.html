@@ -597,92 +597,88 @@ async function lancerChefMode(mode) {
         // ============================================================
         // PROMPTS PAR MODE
         // ============================================================
-        let promptChef = "";
+       let promptChef = "";
 
-        if (mode === 'quotidien') {
+// Calcul de l'historique AVANT les templates pour éviter les backticks imbriqués
+const historiqueTxt = window.historiqueChef?.length
+    ? `CES PLATS ONT DÉJÀ ÉTÉ PROPOSÉS — INTERDICTION ABSOLUE de les reproposer : ${window.historiqueChef.join(' | ')}. Tu DOIS proposer 3 plats COMPLÈTEMENT DIFFÉRENTS.`
+    : '';
+
+if (mode === 'quotidien') {
     promptChef = `Tu es un assistant cuisine pratique.
 STOCK DISPONIBLE : ${listeProduits}
 Ta mission : Regarde ce stock et propose 3 façons simples de l'utiliser ce soir.
 Pas d'invention — utilise UNIQUEMENT ce qui EST dans le stock.
 RÈGLE ABSOLUE : Le nom exact du produit du stock DOIT apparaître dans chaque proposition.
 Exemples :
-- Stock contient "boulettes de bœuf" → propose "boulettes de bœuf avec des pâtes"
-- Stock contient "poisson pané" → propose "poisson pané avec du riz"
-- Stock contient "frites" → propose "frites maison"
-- Stock contient "cordon bleu" → propose "cordon bleu avec des haricots"
+- Stock contient "boulettes de boeuf" -> propose "boulettes de boeuf avec des pates"
+- Stock contient "poisson pane" -> propose "poisson pane avec du riz"
+- Stock contient "frites" -> propose "frites maison"
+- Stock contient "cordon bleu" -> propose "cordon bleu avec des haricots"
 Invisibles autorisés : eau, sel, poivre, huile, beurre.
-Priorise les produits du FRIGO — ils périment en premier.
-${window.historiqueChef?.length ? `CES PLATS ONT DÉJÀ ÉTÉ PROPOSÉS — INTERDICTION ABSOLUE de les reproposer : ${window.historiqueChef.join(' | ')} Tu DOIS proposer 3 plats COMPLÈTEMENT DIFFÉRENTS.` : ''}
+Priorise les produits du FRIGO.
+${historiqueTxt}
 FORMAT : Une seule phrase naturelle avec 3 propositions courtes.
-Termine OBLIGATOIREMENT par : "Lequel te tente ?"`; }
+Termine OBLIGATOIREMENT par : "Lequel te tente ?"`;
+}
 
-        else if (mode === 'monde') {promptChef = `Tu es un assistant cuisine pratique.
+else if (mode === 'monde') {
+    promptChef = `Tu es un assistant cuisine spécialisé dans les cuisines du monde.
 STOCK DISPONIBLE : ${listeProduits}
-Ta mission : Regarde ce stock et propose 3 façons simples de l'utiliser ce soir.
-Pas d'invention — utilise UNIQUEMENT ce qui EST dans le stock.
+Ta mission : Propose 3 plats inspirés de cuisines du monde réalisables avec ce stock.
 RÈGLE ABSOLUE : Le nom exact du produit du stock DOIT apparaître dans chaque proposition.
 Exemples :
-- Stock contient "boulettes de bœuf" → propose "boulettes de bœuf avec des pâtes"
-- Stock contient "poisson pané" → propose "poisson pané avec du riz"
-- Stock contient "frites" → propose "frites maison"
-- Stock contient "cordon bleu" → propose "cordon bleu avec des haricots"
+- Stock contient "riz" -> propose "riz sauté façon asiatique"
+- Stock contient "pates" -> propose "pates à l'italienne"
+- Stock contient "haricots" -> propose "haricots façon mexicaine"
 Invisibles autorisés : eau, sel, poivre, huile, beurre.
-Priorise les produits du FRIGO — ils périment en premier.
-${window.historiqueChef?.length ? `${window.historiqueChef?.length ? 
-    `\nCES PLATS ONT DÉJÀ ÉTÉ PROPOSÉS — INTERDICTION ABSOLUE de les reproposer : ${window.historiqueChef.join(' | ')}
-Tu DOIS proposer 3 plats COMPLÈTEMENT DIFFÉRENTS.` 
-    : ''}
+Reste SIMPLE et RAPIDE (moins de 25 min).
+${historiqueTxt}
+FORMAT : Une seule phrase naturelle avec 3 propositions courtes.
+Termine OBLIGATOIREMENT par : "Lequel te tente ?"`;
+}
 
-            promptChef = `Tu es un assistant cuisine spécialisé dans les cuisines du monde.
-STOCK : ${listeProduits}
-RÈGLES :
-1. Propose 3 plats inspirés de cuisines différentes (italienne, asiatique, mexicaine, etc.).
-2. UNIQUEMENT avec le stock disponible. Invisibles : eau, sel, poivre, huile, beurre.
-3. Adapte la recette au stock — si l'ingrédient typique manque, propose une version adaptée.
-4. Noms clairs : "riz sauté façon asiatique", "pâtes à l'italienne", "bowl mexicain".
-5. Reste SIMPLE et RAPIDE (moins de 25 min).
-${historique ? `ÉVITE : ${historique}` : ''}
-FORMAT : Une phrase naturelle avec 3 noms courts. Termine par "Lequel te tente ?"`;
-        }
+else if (mode === 'healthy') {
+    promptChef = `Tu es un assistant cuisine orienté alimentation saine.
+STOCK DISPONIBLE : ${listeProduits}
+Ta mission : Propose 3 plats légers et équilibrés avec ce stock.
+RÈGLE ABSOLUE : Le nom exact du produit du stock DOIT apparaître dans chaque proposition.
+Exemples :
+- Stock contient "haricots verts" -> propose "salade de haricots verts"
+- Stock contient "poulet" -> propose "poulet grillé avec légumes"
+Invisibles autorisés : eau, sel, poivre, huile d'olive.
+Privilégie légumes et protéines maigres.
+${historiqueTxt}
+FORMAT : Une seule phrase naturelle avec 3 propositions courtes.
+Termine OBLIGATOIREMENT par : "Lequel te tente ?"`;
+}
 
-        else if (mode === 'healthy') {
-            promptChef = `Tu es un assistant cuisine orienté alimentation saine et équilibrée.
-STOCK : ${listeProduits}
-RÈGLES :
-1. Propose 3 plats légers, équilibrés et nutritifs.
-2. UNIQUEMENT avec le stock disponible. Invisibles : eau, sel, poivre, huile d'olive.
-3. Privilégie : légumes, protéines maigres, céréales. Évite les plats trop gras.
-4. Si le stock ne permet pas de plat très healthy, propose le plus équilibré possible.
-5. Noms simples : "salade composée", "poêlée de légumes protéinée", "bowl de riz".
-${historique ? `ÉVITE : ${historique}` : ''}
-FORMAT : Une phrase naturelle avec 3 noms courts. Termine par "Lequel te tente ?"`;
-        }
+else if (mode === 'dessert') {
+    promptChef = `Tu es un assistant pâtisserie et desserts.
+STOCK DISPONIBLE : ${listeProduits}
+Ta mission : Propose 3 desserts ou goûters réalisables avec ce stock.
+RÈGLE ABSOLUE : Le nom exact du produit du stock DOIT apparaître dans chaque proposition.
+Exemples :
+- Stock contient "yaourt" -> propose "yaourt au miel"
+- Stock contient "chocolat" -> propose "mousse au chocolat rapide"
+Invisibles autorisés : eau, sel, sucre, beurre.
+Reste SIMPLE (moins de 20 min ou sans cuisson).
+${historiqueTxt}
+FORMAT : Une seule phrase naturelle avec 3 propositions courtes.
+Termine OBLIGATOIREMENT par : "Lequel te tente ?"`;
+}
 
-        else if (mode === 'dessert') {
-            promptChef = `Tu es un assistant pâtisserie et desserts.
-STOCK : ${listeProduits}
-RÈGLES :
-1. Propose 3 desserts ou goûters réalisables avec le stock.
-2. UNIQUEMENT avec le stock disponible. Invisibles : eau, sel, sucre, beurre.
-3. Si peu d'ingrédients sucrés, propose des options simples (yaourt + miel, pain + confiture...).
-4. Noms simples : "yaourt au miel", "crumble aux fruits", "mousse au chocolat rapide".
-5. Reste SIMPLE (moins de 20 min ou sans cuisson).
-${historique ? `ÉVITE : ${historique}` : ''}
-FORMAT : Une phrase naturelle avec 3 noms courts. Termine par "Lequel te tente ?"`;
-        }
-
-        else if (mode === 'antigaspi') {
-            promptChef = `Tu es un assistant anti-gaspi spécialisé dans l'utilisation des restes.
-STOCK : ${listeProduits}
-RÈGLES :
-1. Priorise ABSOLUMENT les produits ENTAMÉ et du FRIGO — ils doivent être utilisés en premier.
-2. L'objectif est de VIDER le frigo intelligemment sans gaspiller.
-3. UNIQUEMENT avec le stock disponible. Invisibles : eau, sel, poivre, huile, beurre.
-4. Propose des plats qui utilisent un maximum de produits déjà ouverts.
-5. Noms simples et directs.
-${historique ? `ÉVITE : ${historique}` : ''}
-FORMAT : Une phrase naturelle avec 3 noms courts. Termine par "Lequel te tente ?"`;
-        }
+else if (mode === 'antigaspi') {
+    promptChef = `Tu es un assistant anti-gaspi.
+STOCK DISPONIBLE : ${listeProduits}
+Ta mission : Propose 3 plats qui utilisent en priorité les produits ENTAMÉ et du FRIGO.
+RÈGLE ABSOLUE : Le nom exact du produit du stock DOIT apparaître dans chaque proposition.
+L'objectif est de VIDER le frigo intelligemment sans gaspiller.
+Invisibles autorisés : eau, sel, poivre, huile, beurre.
+${historiqueTxt}
+FORMAT : Une seule phrase naturelle avec 3 propositions courtes.
+Termine OBLIGATOIREMENT par : "Lequel te tente ?"`;
+}
 
         if (statut) statut.innerText = "🧠 Le Chef réfléchit...";
 
@@ -1270,29 +1266,17 @@ async function chargerTout() {
 
         // CAS A : LISTE DE COURSES
         if (item.etat === 'Vide') {
-            container.innerHTML += `
-    <div class="item" style="border-left:4px solid ${item.etat === 'Entamé' ? '#ef6c00' : '#4a5568'}; width:100%; box-sizing:border-box; justify-content:space-between;">
-        <div style="flex:1;">
-            <b style="color:${couleurEtat};">${item.nom}</b>
-            ${alerteHtml}
-            <div style="display:flex; align-items:center; gap:8px; margin-top:4px;">
-                <select onchange="changerEmplacement(${item.id}, this.value)"
-                        style="font-size:10px; border:1px solid #ddd; border-radius:4px; background:#f7fafc; color:#4a5568; cursor:pointer; padding:2px;">
-                    ${optionsHtml}
-                </select>
-                <small style="cursor:pointer; color:gray;" onclick="basculerEtat(${item.id}, '${item.etat}')">${labelEtat}</small>
-            </div>
-        </div>
-        <div style="display:flex; align-items:center; gap:5px;">
-            <button class="qte-btn" onclick="modifierQuantite(${item.id}, ${item.quantite}, -1)">−</button>
-            <b style="width:28px; text-align:center;">${item.quantite}</b>
-            <button class="qte-btn" onclick="modifierQuantite(${item.id}, ${item.quantite}, 1)">+</button>
-            <button onclick="basculerEtat(${item.id}, '${item.etat}')"
-                    style="background:none; border:none; font-size:20px; cursor:pointer;">
-                ${item.etat === 'Entamé' ? '🍴' : '🍽️'}
-            </button>
-        </div>
-    </div>`;
+            if (sl) sl.innerHTML += `
+                <div class="item" style="background:#fff5f5; border:1px solid #fed7d7;">
+                    <span style="font-weight:600; color:#c53030;">🛒 ${item.nom}</span>
+                    <div style="display:flex; gap:8px; align-items:center;">
+                        <button onclick="copierNom('${item.nom.replace(/'/g, "\\'")}', this)"
+                                style="background:#4a5568; color:white; border:none; border-radius:6px; padding:6px 12px; cursor:pointer; font-size:12px;">Copier</button>
+                        <button onclick="supprimerDefinitif(${item.id})"
+                                style="background:none; border:none; color:#9b2c2c; cursor:pointer; font-size:18px;">🗑️</button>
+                    </div>
+                </div>`;
+        }
 
         // CAS B : ANTI-GASPI
         else if (item.etat === 'Tup') {
@@ -1343,7 +1327,7 @@ async function chargerTout() {
                 `<option value="${d}" ${d === item.emplacement ? 'selected' : ''}>${d}</option>`
             ).join('');
 
-           container.innerHTML += `
+            container.innerHTML += `
     <div class="item" style="border-left:4px solid ${item.etat === 'Entamé' ? '#ef6c00' : '#4a5568'}; width:100%; box-sizing:border-box; justify-content:space-between;">
         <div style="flex:1;">
             <b style="color:${couleurEtat};">${item.nom}</b>
