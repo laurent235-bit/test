@@ -601,92 +601,121 @@ async function lancerChefMode(mode) {
 
 // Calcul de l'historique AVANT les templates pour éviter les backticks imbriqués
 const historiqueTxt = window.historiqueChef?.length
-    ? `CES PLATS ONT DÉJÀ ÉTÉ PROPOSÉS — INTERDICTION ABSOLUE de les reproposer : ${window.historiqueChef.join(' | ')}. Tu DOIS proposer 3 plats COMPLÈTEMENT DIFFÉRENTS.`
+    ? `INTERDICTION ABSOLUE de reproposer ces plats : ${window.historiqueChef.join(' | ')}.`
     : '';
 
 if (mode === 'quotidien') {
-    promptChef = `Tu es un assistant cuisine pratique.
+    promptChef = `Tu es un assistant cuisine du quotidien.
 STOCK DISPONIBLE : ${listeProduits}
-Ta mission : Regarde ce stock et propose 3 façons simples de l'utiliser ce soir.
-Pas d'invention — utilise UNIQUEMENT ce qui EST dans le stock.
-RÈGLE ABSOLUE : Le nom exact du produit du stock DOIT apparaître dans chaque proposition.
-Exemples :
-- Stock contient "boulettes de boeuf" -> propose "boulettes de boeuf avec des pates"
-- Stock contient "poisson pane" -> propose "poisson pane avec du riz"
-- Stock contient "frites" -> propose "frites maison"
-- Stock contient "cordon bleu" -> propose "cordon bleu avec des haricots"
-Invisibles autorisés : eau, sel, poivre, huile, beurre.
-Priorise les produits du FRIGO.
+
+Ta mission : Regarde ce stock et propose 3 NOMS DE PLATS simples réalisables ce soir.
+RÈGLES :
+1. Donne UNIQUEMENT le nom du plat — pas les ingrédients, pas de liste.
+2. Le plat doit être faisable avec le stock. Invisibles : eau, sel, poivre, huile, beurre.
+3. Noms simples et naturels : "spaghetti carbonara", "omelette au lard", "gratin de pommes de terre"
+4. PAS de noms de marques ni de codes produits dans le nom du plat.
+5. PAS de markdown, PAS de gras, PAS d'astérisques.
+6. Priorise les produits FRIGO.
 ${historiqueTxt}
-FORMAT : Une seule phrase naturelle avec 3 propositions courtes.
+
+FORMAT STRICT : Une seule phrase avec exactement 3 noms de plats courts.
+Exemple : "Ce soir je peux faire des spaghetti carbonara, un gratin dauphinois, ou une omelette au lard. Lequel te tente ?"
 Termine OBLIGATOIREMENT par : "Lequel te tente ?"`;
 }
 
 else if (mode === 'monde') {
-    promptChef = `Tu es un assistant cuisine spécialisé dans les cuisines du monde.
+    promptChef = `Tu es un assistant cuisine du monde.
 STOCK DISPONIBLE : ${listeProduits}
-Ta mission : Propose 3 plats inspirés de cuisines du monde réalisables avec ce stock.
-RÈGLE ABSOLUE : Le nom exact du produit du stock DOIT apparaître dans chaque proposition.
-Exemples :
-- Stock contient "riz" -> propose "riz sauté façon asiatique"
-- Stock contient "pates" -> propose "pates à l'italienne"
-- Stock contient "haricots" -> propose "haricots façon mexicaine"
-Invisibles autorisés : eau, sel, poivre, huile, beurre.
-Reste SIMPLE et RAPIDE (moins de 25 min).
+
+Ta mission : Propose 3 NOMS DE PLATS inspirés de cuisines du monde réalisables avec ce stock.
+RÈGLES :
+1. Donne UNIQUEMENT le nom du plat — pas les ingrédients.
+2. Adapte les recettes du monde au stock disponible.
+3. Noms naturels : "riz sauté thaï", "pasta arrabiata", "tacos au bœuf"
+4. PAS de noms de marques ni codes produits.
+5. PAS de markdown, PAS de gras, PAS d'astérisques.
+6. Simple et rapide (moins de 25 min).
 ${historiqueTxt}
-FORMAT : Une seule phrase naturelle avec 3 propositions courtes.
+
+FORMAT STRICT : Une seule phrase avec exactement 3 noms de plats courts.
+Exemple : "Je peux faire des pâtes à l'italienne, un riz sauté façon asiatique, ou des tacos au bœuf. Lequel te tente ?"
 Termine OBLIGATOIREMENT par : "Lequel te tente ?"`;
 }
 
 else if (mode === 'healthy') {
-    promptChef = `Tu es un assistant cuisine orienté alimentation saine.
+    promptChef = `Tu es un assistant cuisine healthy.
 STOCK DISPONIBLE : ${listeProduits}
-Ta mission : Propose 3 plats légers et équilibrés avec ce stock.
-RÈGLE ABSOLUE : Le nom exact du produit du stock DOIT apparaître dans chaque proposition.
-Exemples :
-- Stock contient "haricots verts" -> propose "salade de haricots verts"
-- Stock contient "poulet" -> propose "poulet grillé avec légumes"
-Invisibles autorisés : eau, sel, poivre, huile d'olive.
-Privilégie légumes et protéines maigres.
+
+Ta mission : Propose 3 NOMS DE PLATS légers et équilibrés réalisables avec ce stock.
+RÈGLES :
+1. Donne UNIQUEMENT le nom du plat — pas les ingrédients.
+2. Privilégie légumes et protéines maigres.
+3. Noms naturels : "salade composée", "poêlée de légumes", "bowl de riz"
+4. PAS de noms de marques ni codes produits.
+5. PAS de markdown, PAS de gras, PAS d'astérisques.
 ${historiqueTxt}
-FORMAT : Une seule phrase naturelle avec 3 propositions courtes.
+
+FORMAT STRICT : Une seule phrase avec exactement 3 noms de plats courts.
+Exemple : "Je peux faire une salade composée, une poêlée de légumes protéinée, ou un bowl de riz. Lequel te tente ?"
 Termine OBLIGATOIREMENT par : "Lequel te tente ?"`;
 }
 
 else if (mode === 'dessert') {
-    promptChef = `Tu es un assistant pâtisserie et desserts.
+    promptChef = `Tu es un assistant desserts et goûters.
 STOCK DISPONIBLE : ${listeProduits}
-Ta mission : Propose 3 desserts ou goûters réalisables avec ce stock.
-RÈGLE ABSOLUE : Le nom exact du produit du stock DOIT apparaître dans chaque proposition.
-Exemples :
-- Stock contient "yaourt" -> propose "yaourt au miel"
-- Stock contient "chocolat" -> propose "mousse au chocolat rapide"
-Invisibles autorisés : eau, sel, sucre, beurre.
-Reste SIMPLE (moins de 20 min ou sans cuisson).
+
+Ta mission : Propose 3 NOMS DE DESSERTS réalisables avec ce stock.
+RÈGLES :
+1. Donne UNIQUEMENT le nom du dessert — pas les ingrédients.
+2. Invisibles autorisés : sucre, beurre, eau.
+3. Noms naturels : "mousse au chocolat", "yaourt maison", "crumble aux fruits"
+4. PAS de noms de marques ni codes produits.
+5. PAS de markdown, PAS de gras, PAS d'astérisques.
+6. Simple (moins de 20 min ou sans cuisson).
 ${historiqueTxt}
-FORMAT : Une seule phrase naturelle avec 3 propositions courtes.
+
+FORMAT STRICT : Une seule phrase avec exactement 3 noms de desserts courts.
+Exemple : "Je peux faire une mousse au chocolat, un crumble aux pommes, ou des yaourts maison. Lequel te tente ?"
 Termine OBLIGATOIREMENT par : "Lequel te tente ?"`;
 }
 
 else if (mode === 'antigaspi') {
     promptChef = `Tu es un assistant anti-gaspi.
 STOCK DISPONIBLE : ${listeProduits}
-Ta mission : Propose 3 plats qui utilisent en priorité les produits ENTAMÉ et du FRIGO.
-RÈGLE ABSOLUE : Le nom exact du produit du stock DOIT apparaître dans chaque proposition.
-L'objectif est de VIDER le frigo intelligemment sans gaspiller.
-Invisibles autorisés : eau, sel, poivre, huile, beurre.
+
+Ta mission : Propose 3 NOMS DE PLATS qui utilisent en priorité les produits ENTAMÉ et du FRIGO.
+RÈGLES :
+1. Donne UNIQUEMENT le nom du plat — pas les ingrédients.
+2. Priorise ABSOLUMENT les produits marqués ENTAMÉ.
+3. Noms naturels et simples.
+4. PAS de noms de marques ni codes produits.
+5. PAS de markdown, PAS de gras, PAS d'astérisques.
 ${historiqueTxt}
-FORMAT : Une seule phrase naturelle avec 3 propositions courtes.
+
+FORMAT STRICT : Une seule phrase avec exactement 3 noms de plats courts.
+Exemple : "Pour ne rien gaspiller je peux faire une quiche lorraine, un gratin de restes, ou une soupe de légumes. Lequel te tente ?"
 Termine OBLIGATOIREMENT par : "Lequel te tente ?"`;
 }
 
-        if (statut) statut.innerText = "🧠 Le Chef réfléchit...";
-
-        // Appel Gemini
-        const reponse = await appelGemini({
-    contents: [{ parts: [{ text: promptChef }] }],
-    generationConfig: { temperature: 0.9 }
-});
+        // Appel Gemini avec retry automatique
+let reponse = null;
+let tentatives = 0;
+while (!reponse && tentatives < 3) {
+    try {
+        reponse = await appelGemini({
+            contents: [{ parts: [{ text: promptChef }] }],
+            generationConfig: { temperature: 0.9 }
+        });
+    } catch(e) {
+        tentatives++;
+        if (tentatives < 3) {
+            if (statut) statut.innerText = `⏳ Le Chef est débordé, réessai ${tentatives}/3...`;
+            await new Promise(r => setTimeout(r, 3000));
+        } else {
+            throw e;
+        }
+    }
+}
 
         // Mémoriser pour éviter les répétitions
         if (!window.historiqueChef) window.historiqueChef = [];
