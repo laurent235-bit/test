@@ -579,185 +579,115 @@ async function lancerChefMode(mode) {
     if (resultats) resultats.innerHTML = "";
 
     try {
-        // Récupérer le stock
-        const { data: produits, error } = await monSupabase
+        // 1. Récupérer le stock
+        const { data: produits, error: errProduits } = await monSupabase
             .from('inventaire2')
             .select('nom, quantite, emplacement, etat')
             .eq('proprietaire', utilisateurActuel)
             .neq('etat', 'Vide');
 
-        if (error) throw error;
+        if (errProduits) throw errProduits;
 
-        const listeProduits = produits?.length > 0
-            ? produits.map(p => `${p.nom} (Qté:${p.quantite}, ${p.emplacement}${p.etat === 'Entamé' ? ', ENTAMÉ' : ''})`).join(', ')
-            : "Stock vide";
+        // 2. Récupérer les recettes du bon mode
+        const { data: recettes, error: errRecettes } = await monSupabase
+            .from('recettes_chef')
+            .select('id, nom, ingredients_cles, temps_minutes')
+            .eq('mode', mode)
+            .eq('actif', true);
 
-        const historique = window.historiqueChef?.slice(-5).join(', ') || '';
+        if (errRecettes) throw errRecettes;
 
-        // ============================================================
-        // PROMPTS PAR MODE
-        // ============================================================
-       let promptChef = "";
-	   
-const historiqueTxt = window.historiqueChef?.length
-    ? `INTERDICTION ABSOLUE de reproposer ces plats : ${window.historiqueChef.join(' | ')}.`
-    : '';
- 
-if (mode === 'quotidien') {
-    promptChef = `Tu es un assistant cuisine du quotidien.
-STOCK DISPONIBLE : ${listeProduits}
- 
-Ta mission : Propose 3 NOMS DE PLATS simples et différents réalisables ce soir.
- 
+        if (!produits?.length) {
+            if (statut) statut.innerText = "❌ Stock vide !";
+            return;
+        }
+
+        if (!recettes?.length) {
+            if (statut) statut.innerText = "❌ Aucune recette disponible.";
+            return;
+        }
+
+        // 3. Préparer le stock pour Gemini — noms normalisés
+        const nomsProduits = produits.map(p => p.nom.toLowerCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+        );
+
+        // 4. Pré-filtrer les recettes réalisables
+        // Une recette est "candidate" si au moins 1 ingrédient clé est dans le stock
+        const recettesCandidates = recettes.filter(r => {
+            return r.ingredients_cles.some(ingredient => {
+                return nomsProduits.some(nom => nom.includes(ingredient));
+            });
+        });
+
+        // Si pas assez de candidates, prendre toutes les recettes
+        const recettesAEnvoyer = recettesCandidates.length >= 3 
+            ? recettesCandidates 
+            : recettes;
+
+        // 5. Historique
+        const historiqueTxt = window.historiqueChef?.length
+            ? `INTERDICTION ABSOLUE de reproposer ces plats : ${window.historiqueChef.join(' | ')}.`
+            : '';
+
+        // 6. Préparer les listes pour Gemini
+        const listeRecettes = recettesAEnvoyer
+            .map(r => `- ${r.nom} (${r.temps_minutes} min) [ingrédients: ${r.ingredients_cles.join(', ')}]`)
+            .join('\n');
+
+        const listeStock = produits
+            .map(p => `${p.nom} (${p.emplacement}${p.etat === 'Entamé' ? ', ENTAMÉ' : ''})`)
+            .join(', ');
+
+        // 7. Prompt Gemini
+        const prompt = `Tu es un assistant cuisine pratique.
+
+STOCK DISPONIBLE : ${listeStock}
+
+RECETTES POSSIBLES (choisir parmi cette liste UNIQUEMENT) :
+${listeRecettes}
+
+Ta mission : Choisir les 3 meilleures recettes de cette liste qui correspondent le mieux au stock disponible.
+
 RÈGLES :
-1. Donne UNIQUEMENT le nom du plat — pas les ingrédients, pas de liste.
-2. Le plat doit être faisable avec le stock. Invisibles : eau, sel, poivre, huile, beurre.
-3. Noms simples et naturels : "spaghetti carbonara", "omelette au lard", "gratin de pommes de terre".
-4. PAS de noms de marques ni de codes produits.
-5. PAS de markdown, PAS de gras, PAS d'astérisques.
-6. Priorise les produits FRIGO.
- 
-RÈGLE VARIÉTÉ ABSOLUE — les 3 plats DOIVENT être différents :
-- Ingrédients principaux différents pour chaque plat
-- Si plat 1 = pâtes → plat 2 et 3 ne peuvent PAS être des pâtes
-- Si plat 1 = lardons → lardons ne peut PAS être l'ingrédient principal des plats 2 et 3
-- Objectif : 1 plat à base de viande/poisson, 1 plat à base de féculent, 1 plat à base de légumes ou œufs
- 
+1. Choisis UNIQUEMENT parmi les recettes listées ci-dessus — pas d'invention.
+2. Les 3 recettes doivent être DIFFÉRENTES — pas de variantes du même plat.
+3. Vérifie que les ingrédients principaux sont bien dans le stock.
+4. Priorise les recettes qui utilisent les produits du FRIGO et les produits ENTAMÉ.
+5. Priorise les recettes les plus rapides (moins de 20 min).
+6. PAS de markdown, PAS de gras, PAS d'astérisques.
 ${historiqueTxt}
- 
-FORMAT STRICT : Une seule phrase naturelle avec exactement 3 noms de plats courts.
+
+FORMAT STRICT : Une seule phrase naturelle avec exactement 3 noms de recettes courts.
 Exemple : "Ce soir je peux faire des spaghetti carbonara, un gratin dauphinois, ou une omelette au lard. Lequel te tente ?"
 Termine OBLIGATOIREMENT par : "Lequel te tente ?"`;
-}
- 
-else if (mode === 'monde') {
-    promptChef = `Tu es un assistant cuisine du monde.
-STOCK DISPONIBLE : ${listeProduits}
- 
-Ta mission : Propose 3 NOMS DE PLATS inspirés de cuisines du monde différentes réalisables avec ce stock.
- 
-RÈGLES :
-1. Donne UNIQUEMENT le nom du plat — pas les ingrédients.
-2. Adapte les recettes du monde au stock disponible.
-3. Noms naturels : "riz sauté thaï", "pasta arrabiata", "tacos au bœuf".
-4. PAS de noms de marques ni codes produits.
-5. PAS de markdown, PAS de gras, PAS d'astérisques.
-6. Simple et rapide (moins de 25 min).
- 
-RÈGLE VARIÉTÉ ABSOLUE — les 3 plats DOIVENT venir de cuisines différentes :
-- 1 plat cuisine européenne (italienne, espagnole, grecque...)
-- 1 plat cuisine asiatique (chinoise, thaï, japonaise...)
-- 1 plat cuisine américaine ou autre (mexicaine, américaine...)
-- Ingrédients principaux différents pour chaque plat
- 
-${historiqueTxt}
- 
-FORMAT STRICT : Une seule phrase naturelle avec exactement 3 noms de plats courts.
-Exemple : "Je peux faire des pâtes à l'italienne, un riz sauté façon asiatique, ou des tacos au bœuf. Lequel te tente ?"
-Termine OBLIGATOIREMENT par : "Lequel te tente ?"`;
-}
- 
-else if (mode === 'healthy') {
-    promptChef = `Tu es un assistant cuisine healthy.
-STOCK DISPONIBLE : ${listeProduits}
- 
-Ta mission : Propose 3 NOMS DE PLATS légers et équilibrés réalisables avec ce stock.
- 
-RÈGLES :
-1. Donne UNIQUEMENT le nom du plat — pas les ingrédients.
-2. Privilégie légumes et protéines maigres.
-3. Noms naturels : "salade composée", "poêlée de légumes", "bowl de riz".
-4. PAS de noms de marques ni codes produits.
-5. PAS de markdown, PAS de gras, PAS d'astérisques.
- 
-RÈGLE VARIÉTÉ ABSOLUE — les 3 plats DOIVENT être différents :
-- 1 plat à base de légumes
-- 1 plat à base de protéines maigres (poisson, poulet, œufs)
-- 1 plat à base de céréales ou légumineuses
-- Ingrédients principaux différents pour chaque plat
- 
-${historiqueTxt}
- 
-FORMAT STRICT : Une seule phrase naturelle avec exactement 3 noms de plats courts.
-Exemple : "Je peux faire une salade composée, du poulet grillé aux légumes, ou un bowl de riz aux légumineuses. Lequel te tente ?"
-Termine OBLIGATOIREMENT par : "Lequel te tente ?"`;
-}
- 
-else if (mode === 'dessert') {
-    promptChef = `Tu es un assistant desserts et goûters.
-STOCK DISPONIBLE : ${listeProduits}
- 
-Ta mission : Propose 3 NOMS DE DESSERTS différents réalisables avec ce stock.
- 
-RÈGLES :
-1. Donne UNIQUEMENT le nom du dessert — pas les ingrédients.
-2. Invisibles autorisés : sucre, beurre, eau, farine.
-3. Noms naturels : "mousse au chocolat", "crumble aux fruits", "yaourt maison".
-4. PAS de noms de marques ni codes produits.
-5. PAS de markdown, PAS de gras, PAS d'astérisques.
-6. Simple (moins de 20 min ou sans cuisson).
- 
-RÈGLE VARIÉTÉ ABSOLUE — les 3 desserts DOIVENT être différents :
-- 1 dessert chaud (gâteau, crumble, fondant...)
-- 1 dessert froid (mousse, yaourt, crème...)
-- 1 dessert rapide sans cuisson
-- Ingrédients principaux différents pour chaque dessert
- 
-${historiqueTxt}
- 
-FORMAT STRICT : Une seule phrase naturelle avec exactement 3 noms de desserts courts.
-Exemple : "Je peux faire une mousse au chocolat, un crumble aux pommes, ou des yaourts maison. Lequel te tente ?"
-Termine OBLIGATOIREMENT par : "Lequel te tente ?"`;
-}
- 
-else if (mode === 'antigaspi') {
-    promptChef = `Tu es un assistant anti-gaspi.
-STOCK DISPONIBLE : ${listeProduits}
- 
-Ta mission : Propose 3 NOMS DE PLATS qui utilisent en priorité les produits ENTAMÉ et du FRIGO.
- 
-RÈGLES :
-1. Donne UNIQUEMENT le nom du plat — pas les ingrédients.
-2. Priorise ABSOLUMENT les produits marqués ENTAMÉ — ils doivent être utilisés en premier.
-3. Noms naturels et simples.
-4. PAS de noms de marques ni codes produits.
-5. PAS de markdown, PAS de gras, PAS d'astérisques.
- 
-RÈGLE VARIÉTÉ ABSOLUE — les 3 plats DOIVENT être différents :
-- Ingrédients principaux différents pour chaque plat
-- Types de plats différents (soupe, gratin, poêlée, tarte...)
-- Évite de proposer 3 variations du même plat
- 
-${historiqueTxt}
- 
-FORMAT STRICT : Une seule phrase naturelle avec exactement 3 noms de plats courts.
-Exemple : "Pour ne rien gaspiller je peux faire une quiche lorraine, un gratin de restes, ou une soupe de légumes. Lequel te tente ?"
-Termine OBLIGATOIREMENT par : "Lequel te tente ?"`;
-}
 
-        // Appel Gemini avec retry automatique
-let reponse = null;
-let tentatives = 0;
-while (!reponse && tentatives < 3) {
-    try {
-        reponse = await appelGemini({
-            contents: [{ parts: [{ text: promptChef }] }],
-            generationConfig: { temperature: 0.9 }
-        });
-    } catch(e) {
-        tentatives++;
-        if (tentatives < 3) {
-            if (statut) statut.innerText = `⏳ Le Chef est débordé, réessai ${tentatives}/3...`;
-            await new Promise(r => setTimeout(r, 3000));
-        } else {
-            throw e;
+        if (statut) statut.innerText = "🧠 Le Chef choisit les meilleures recettes...";
+
+        // 8. Appel Gemini avec retry
+        let reponse = null;
+        let tentatives = 0;
+        while (!reponse && tentatives < 3) {
+            try {
+                reponse = await appelGemini({
+                    contents: [{ parts: [{ text: prompt }] }],
+                    generationConfig: { temperature: 0.5 }
+                });
+            } catch(e) {
+                tentatives++;
+                if (tentatives < 3) {
+                    if (statut) statut.innerText = `⏳ Le Chef est débordé, réessai ${tentatives}/3...`;
+                    await new Promise(r => setTimeout(r, 3000));
+                } else {
+                    throw e;
+                }
+            }
         }
-    }
-}
 
-        // Mémoriser pour éviter les répétitions
+        // 9. Mémoriser pour éviter les répétitions
         if (!window.historiqueChef) window.historiqueChef = [];
-        window.historiqueChef.push(reponse);
+        window.historiqueChef.push(reponse.substring(0, 200));
         if (window.historiqueChef.length > 10) window.historiqueChef.shift();
 
         window.dernieresPropositions = reponse;
@@ -766,7 +696,7 @@ while (!reponse && tentatives < 3) {
 
         if (statut) statut.innerText = "🎤 Dis-moi ton choix ou clique sur un plat !";
 
-        // Affichage des propositions
+        // 10. Affichage
         if (resultats) {
             resultats.innerHTML = `
                 <div style="background:white; padding:12px; border-radius:12px; border:1px solid #ddd; margin-top:5px;">
@@ -793,15 +723,16 @@ while (!reponse && tentatives < 3) {
         }
 
         // Lecture vocale
-       if (!document.getElementById('mode-silencieux')?.checked) {
-    faireParlerIA(reponse);
-}
+        if (!document.getElementById('mode-silencieux')?.checked) {
+            faireParlerIA(reponse);
+        }
 
     } catch (err) {
         console.error("Erreur Chef :", err);
         if (statut) statut.innerText = "❌ Le Chef a eu un problème. Réessaie dans quelques secondes.";
     }
 }
+
 
 // ============================================================
 // RÉDIGER LA RECETTE APRÈS CHOIX DU PLAT
