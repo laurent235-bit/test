@@ -615,11 +615,11 @@ async function lancerChefMode(mode) {
  
         // 4. Scorer chaque recette selon le nombre d'ingrédients matchés
         const recettesScores = recettes.map(r => {
-            const score = r.ingredients_cles.filter(ingredient =>
-                nomsProduits.some(nom => nom.includes(ingredient))
-            ).length;
-            return { ...r, score };
-        });
+    const score = r.ingredients_cles.filter(ingredient =>
+        nomsProduits.some(nom => nom.includes(ingredient))
+    ).length;
+    return { ...r, score };
+});
  
         // Trier par score décroissant — les mieux couvertes en premier
         recettesScores.sort((a, b) => b.score - a.score);
