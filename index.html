@@ -598,18 +598,7 @@ async function lancerChefMode(mode) {
         // PROMPTS PAR MODE
         // ============================================================
        let promptChef = "";
-
-// Calcul de l'historique AVANT les templates pour éviter les backticks imbriqués
-const historiqueTxt = window.historiqueChef?.length
-    ? `INTERDICTION ABSOLUE de reproposer ces plats : ${window.historiqueChef.join(' | ')}.`
-    : '';
-
-if (mode === 'quotidien') {
-    
-// PROMPTS CHEF — Version avec variété forcée
-// Remplace tous les blocs if (mode === ...) dans lancerChefMode()
-// ============================================================
- 
+	   
 const historiqueTxt = window.historiqueChef?.length
     ? `INTERDICTION ABSOLUE de reproposer ces plats : ${window.historiqueChef.join(' | ')}.`
     : '';
