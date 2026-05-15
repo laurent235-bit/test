@@ -605,94 +605,143 @@ const historiqueTxt = window.historiqueChef?.length
     : '';
 
 if (mode === 'quotidien') {
+    
+// PROMPTS CHEF — Version avec variété forcée
+// Remplace tous les blocs if (mode === ...) dans lancerChefMode()
+// ============================================================
+ 
+const historiqueTxt = window.historiqueChef?.length
+    ? `INTERDICTION ABSOLUE de reproposer ces plats : ${window.historiqueChef.join(' | ')}.`
+    : '';
+ 
+if (mode === 'quotidien') {
     promptChef = `Tu es un assistant cuisine du quotidien.
 STOCK DISPONIBLE : ${listeProduits}
-
-Ta mission : Regarde ce stock et propose 3 NOMS DE PLATS simples réalisables ce soir.
+ 
+Ta mission : Propose 3 NOMS DE PLATS simples et différents réalisables ce soir.
+ 
 RÈGLES :
 1. Donne UNIQUEMENT le nom du plat — pas les ingrédients, pas de liste.
 2. Le plat doit être faisable avec le stock. Invisibles : eau, sel, poivre, huile, beurre.
-3. Noms simples et naturels : "spaghetti carbonara", "omelette au lard", "gratin de pommes de terre"
-4. PAS de noms de marques ni de codes produits dans le nom du plat.
+3. Noms simples et naturels : "spaghetti carbonara", "omelette au lard", "gratin de pommes de terre".
+4. PAS de noms de marques ni de codes produits.
 5. PAS de markdown, PAS de gras, PAS d'astérisques.
 6. Priorise les produits FRIGO.
+ 
+RÈGLE VARIÉTÉ ABSOLUE — les 3 plats DOIVENT être différents :
+- Ingrédients principaux différents pour chaque plat
+- Si plat 1 = pâtes → plat 2 et 3 ne peuvent PAS être des pâtes
+- Si plat 1 = lardons → lardons ne peut PAS être l'ingrédient principal des plats 2 et 3
+- Objectif : 1 plat à base de viande/poisson, 1 plat à base de féculent, 1 plat à base de légumes ou œufs
+ 
 ${historiqueTxt}
-
-FORMAT STRICT : Une seule phrase avec exactement 3 noms de plats courts.
+ 
+FORMAT STRICT : Une seule phrase naturelle avec exactement 3 noms de plats courts.
 Exemple : "Ce soir je peux faire des spaghetti carbonara, un gratin dauphinois, ou une omelette au lard. Lequel te tente ?"
 Termine OBLIGATOIREMENT par : "Lequel te tente ?"`;
 }
-
+ 
 else if (mode === 'monde') {
     promptChef = `Tu es un assistant cuisine du monde.
 STOCK DISPONIBLE : ${listeProduits}
-
-Ta mission : Propose 3 NOMS DE PLATS inspirés de cuisines du monde réalisables avec ce stock.
+ 
+Ta mission : Propose 3 NOMS DE PLATS inspirés de cuisines du monde différentes réalisables avec ce stock.
+ 
 RÈGLES :
 1. Donne UNIQUEMENT le nom du plat — pas les ingrédients.
 2. Adapte les recettes du monde au stock disponible.
-3. Noms naturels : "riz sauté thaï", "pasta arrabiata", "tacos au bœuf"
+3. Noms naturels : "riz sauté thaï", "pasta arrabiata", "tacos au bœuf".
 4. PAS de noms de marques ni codes produits.
 5. PAS de markdown, PAS de gras, PAS d'astérisques.
 6. Simple et rapide (moins de 25 min).
+ 
+RÈGLE VARIÉTÉ ABSOLUE — les 3 plats DOIVENT venir de cuisines différentes :
+- 1 plat cuisine européenne (italienne, espagnole, grecque...)
+- 1 plat cuisine asiatique (chinoise, thaï, japonaise...)
+- 1 plat cuisine américaine ou autre (mexicaine, américaine...)
+- Ingrédients principaux différents pour chaque plat
+ 
 ${historiqueTxt}
-
-FORMAT STRICT : Une seule phrase avec exactement 3 noms de plats courts.
+ 
+FORMAT STRICT : Une seule phrase naturelle avec exactement 3 noms de plats courts.
 Exemple : "Je peux faire des pâtes à l'italienne, un riz sauté façon asiatique, ou des tacos au bœuf. Lequel te tente ?"
 Termine OBLIGATOIREMENT par : "Lequel te tente ?"`;
 }
-
+ 
 else if (mode === 'healthy') {
     promptChef = `Tu es un assistant cuisine healthy.
 STOCK DISPONIBLE : ${listeProduits}
-
+ 
 Ta mission : Propose 3 NOMS DE PLATS légers et équilibrés réalisables avec ce stock.
+ 
 RÈGLES :
 1. Donne UNIQUEMENT le nom du plat — pas les ingrédients.
 2. Privilégie légumes et protéines maigres.
-3. Noms naturels : "salade composée", "poêlée de légumes", "bowl de riz"
+3. Noms naturels : "salade composée", "poêlée de légumes", "bowl de riz".
 4. PAS de noms de marques ni codes produits.
 5. PAS de markdown, PAS de gras, PAS d'astérisques.
+ 
+RÈGLE VARIÉTÉ ABSOLUE — les 3 plats DOIVENT être différents :
+- 1 plat à base de légumes
+- 1 plat à base de protéines maigres (poisson, poulet, œufs)
+- 1 plat à base de céréales ou légumineuses
+- Ingrédients principaux différents pour chaque plat
+ 
 ${historiqueTxt}
-
-FORMAT STRICT : Une seule phrase avec exactement 3 noms de plats courts.
-Exemple : "Je peux faire une salade composée, une poêlée de légumes protéinée, ou un bowl de riz. Lequel te tente ?"
+ 
+FORMAT STRICT : Une seule phrase naturelle avec exactement 3 noms de plats courts.
+Exemple : "Je peux faire une salade composée, du poulet grillé aux légumes, ou un bowl de riz aux légumineuses. Lequel te tente ?"
 Termine OBLIGATOIREMENT par : "Lequel te tente ?"`;
 }
-
+ 
 else if (mode === 'dessert') {
     promptChef = `Tu es un assistant desserts et goûters.
 STOCK DISPONIBLE : ${listeProduits}
-
-Ta mission : Propose 3 NOMS DE DESSERTS réalisables avec ce stock.
+ 
+Ta mission : Propose 3 NOMS DE DESSERTS différents réalisables avec ce stock.
+ 
 RÈGLES :
 1. Donne UNIQUEMENT le nom du dessert — pas les ingrédients.
-2. Invisibles autorisés : sucre, beurre, eau.
-3. Noms naturels : "mousse au chocolat", "yaourt maison", "crumble aux fruits"
+2. Invisibles autorisés : sucre, beurre, eau, farine.
+3. Noms naturels : "mousse au chocolat", "crumble aux fruits", "yaourt maison".
 4. PAS de noms de marques ni codes produits.
 5. PAS de markdown, PAS de gras, PAS d'astérisques.
 6. Simple (moins de 20 min ou sans cuisson).
+ 
+RÈGLE VARIÉTÉ ABSOLUE — les 3 desserts DOIVENT être différents :
+- 1 dessert chaud (gâteau, crumble, fondant...)
+- 1 dessert froid (mousse, yaourt, crème...)
+- 1 dessert rapide sans cuisson
+- Ingrédients principaux différents pour chaque dessert
+ 
 ${historiqueTxt}
-
-FORMAT STRICT : Une seule phrase avec exactement 3 noms de desserts courts.
+ 
+FORMAT STRICT : Une seule phrase naturelle avec exactement 3 noms de desserts courts.
 Exemple : "Je peux faire une mousse au chocolat, un crumble aux pommes, ou des yaourts maison. Lequel te tente ?"
 Termine OBLIGATOIREMENT par : "Lequel te tente ?"`;
 }
-
+ 
 else if (mode === 'antigaspi') {
     promptChef = `Tu es un assistant anti-gaspi.
 STOCK DISPONIBLE : ${listeProduits}
-
+ 
 Ta mission : Propose 3 NOMS DE PLATS qui utilisent en priorité les produits ENTAMÉ et du FRIGO.
+ 
 RÈGLES :
 1. Donne UNIQUEMENT le nom du plat — pas les ingrédients.
-2. Priorise ABSOLUMENT les produits marqués ENTAMÉ.
+2. Priorise ABSOLUMENT les produits marqués ENTAMÉ — ils doivent être utilisés en premier.
 3. Noms naturels et simples.
 4. PAS de noms de marques ni codes produits.
 5. PAS de markdown, PAS de gras, PAS d'astérisques.
+ 
+RÈGLE VARIÉTÉ ABSOLUE — les 3 plats DOIVENT être différents :
+- Ingrédients principaux différents pour chaque plat
+- Types de plats différents (soupe, gratin, poêlée, tarte...)
+- Évite de proposer 3 variations du même plat
+ 
 ${historiqueTxt}
-
-FORMAT STRICT : Une seule phrase avec exactement 3 noms de plats courts.
+ 
+FORMAT STRICT : Une seule phrase naturelle avec exactement 3 noms de plats courts.
 Exemple : "Pour ne rien gaspiller je peux faire une quiche lorraine, un gratin de restes, ou une soupe de légumes. Lequel te tente ?"
 Termine OBLIGATOIREMENT par : "Lequel te tente ?"`;
 }
