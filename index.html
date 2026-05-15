@@ -505,67 +505,63 @@ function demarrerMicro() {
 // ============================================================
 // 7. TRAITEMENT VOCAL PRINCIPAL
 // ============================================================
-async function traiterResultatVocal(e) {
-    const phrase = e.results[0][0].transcript.toLowerCase().trim();
-    const statut = document.getElementById('statut-vocal');
-    if (statut) statut.innerText = "💬 J'ai entendu : " + phrase;
+// ============================================================
+// 1. HTML À REMPLACER — Section Chef
+// ============================================================
+/*
+<div class="card" style="padding:15px; background:#fff8e1; border:2px solid #ff9800;">
+    <b style="color:#ff9800; font-size:15px;">👨‍🍳 QUE VOULEZ-VOUS MANGER ?</b>
+    <p style="font-size:12px; color:#888; margin:5px 0 12px 0;">Le Chef propose 3 idées avec votre stock</p>
 
-    if (!utilisateurActuel) {
-        faireParlerIA("Je ne sais pas qui tu es. Reconnecte-toi.");
-        return;
-    }
+    <!-- Champ demande spécifique -->
+    <div style="display:flex; gap:5px; margin-bottom:12px;">
+        <input type="text" id="chef-envie" 
+               placeholder="🥦 Une envie particulière ? (ex: avec du brocolis...)" 
+               style="flex:1; padding:10px; border:1px solid #ffcc80; border-radius:8px; font-size:13px;"
+               onkeypress="if(event.key==='Enter') lancerChefMode('quotidien')">
+        <button onclick="document.getElementById('chef-envie').value=''"
+                style="background:#ffcc80; border:none; border-radius:8px; padding:0 12px; cursor:pointer; font-size:16px;">✕</button>
+    </div>
 
-    // STOP / ANNULE
-    if (phrase.includes("stop") || phrase.includes("annule")) {
-        window.speechSynthesis.cancel();
-        window.attenteChoixRecette = false;
-        window.attenteReponseIA = false;
-        window.attenteChoixProduit = false;
-        faireParlerIA("D'accord.");
-        return;
-    }
+    <!-- Mode silencieux -->
+    <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+        <input type="checkbox" id="mode-silencieux" style="width:18px; height:18px; cursor:pointer;">
+        <label for="mode-silencieux" style="font-size:13px; color:#555; cursor:pointer;">🔇 Mode silencieux</label>
+    </div>
 
-    // ATTENTE CHOIX RECETTE
-    if (window.attenteChoixRecette) {
-        await gererChoixRecette(phrase);
-        return;
-    }
+    <!-- Boutons modes -->
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+        <button onclick="lancerChefMode('quotidien')"
+                style="background:#ff9800; color:white; border:none; border-radius:12px; padding:14px 8px; cursor:pointer; font-size:13px; font-weight:bold;">
+            👨‍🍳 Quotidien
+        </button>
+        <button onclick="lancerChefMode('monde')"
+                style="background:#3182ce; color:white; border:none; border-radius:12px; padding:14px 8px; cursor:pointer; font-size:13px; font-weight:bold;">
+            🌍 Monde
+        </button>
+        <button onclick="lancerChefMode('healthy')"
+                style="background:#38a169; color:white; border:none; border-radius:12px; padding:14px 8px; cursor:pointer; font-size:13px; font-weight:bold;">
+            🥗 Healthy
+        </button>
+        <button onclick="lancerChefMode('dessert')"
+                style="background:#8e24aa; color:white; border:none; border-radius:12px; padding:14px 8px; cursor:pointer; font-size:13px; font-weight:bold;">
+            🍰 Dessert
+        </button>
+        <button onclick="lancerChefMode('antigaspi')"
+                style="background:#2d3748; color:white; border:none; border-radius:12px; padding:14px 8px; cursor:pointer; font-size:13px; font-weight:bold; grid-column:1/3;">
+            ♻️ Anti-gaspi (finir les restes)
+        </button>
+    </div>
 
-    // DEMANDE AU CHEF
-    if (phrase.includes("chef") || phrase.includes("propose") || phrase.includes("recette") ||
-        phrase.includes("mange") || phrase.includes("idée") || phrase.includes("cuisin")) {
-        await demanderAuChefVocal(phrase);
-        return;
-    }
-
-    // ATTENTE CHOIX PRODUIT (doublon)
-    if (window.attenteChoixProduit) {
-        await gererChoixProduit(phrase);
-        return;
-    }
-
-    // ATTENTE OUI/NON COURSES
-    if (window.attenteReponseIA) {
-        await gererReponseOuiNon(phrase);
-        return;
-    }
-
-    // AJOUT AU FRIGO
-    if (phrase.includes("frigo") && (phrase.includes("mis") || phrase.includes("ajoute") || phrase.includes("rangé"))) {
-        await ajouterAuFrigoVocal(phrase);
-        return;
-    }
-
-    // SUPPRESSION
-    if (phrase.includes("supprime") || phrase.includes("retire") || phrase.includes("enlève") || phrase.includes("j'ai utilisé") || phrase.includes("j'ai mangé")) {
-        await supprimerVocal(phrase);
-        return;
-    }
-
-    faireParlerIA("Je n'ai pas compris. Tu peux me demander de supprimer un produit, d'appeler le chef, ou d'ajouter quelque chose au frigo.");
-}
+    <div id="statut-chef" style="text-align:center; margin-top:10px; font-size:13px; font-weight:bold; min-height:20px;"></div>
+    <div id="chef-resultats" style="margin-top:5px;"></div>
+</div>
+*/
 
 // ============================================================
+// 2. FONCTION lancerChefMode — Gemini libre + historique persistant
+// ============================================================
+
 async function lancerChefMode(mode) {
     if (!utilisateurActuel) {
         alert("Je ne sais pas qui tu es ! Reconnecte-toi.");
@@ -574,6 +570,7 @@ async function lancerChefMode(mode) {
 
     const statut = document.getElementById('statut-chef');
     const resultats = document.getElementById('chef-resultats');
+    const envie = document.getElementById('chef-envie')?.value.trim() || '';
 
     if (statut) statut.innerText = "👨‍🍳 Le Chef regarde ton stock...";
     if (resultats) resultats.innerHTML = "";
@@ -581,10 +578,9 @@ async function lancerChefMode(mode) {
     try {
         // 1. Charger l'historique depuis localStorage (persiste entre sessions)
         if (!window.historiqueChef) {
-            window.historiqueChef = JSON.parse(localStorage.getItem(`chefHistorique_${utilisateurActuel}`) || '[]');
-        }
-        if (!window.historiqueIngredientsChef) {
-            window.historiqueIngredientsChef = JSON.parse(localStorage.getItem(`chefIngredients_${utilisateurActuel}`) || '[]');
+            window.historiqueChef = JSON.parse(
+                localStorage.getItem(`chefHistorique_${utilisateurActuel}`) || '[]'
+            );
         }
 
         // 2. Récupérer le stock
@@ -596,128 +592,77 @@ async function lancerChefMode(mode) {
 
         if (errProduits) throw errProduits;
 
-        // 3. Récupérer les recettes du bon mode
-        const { data: recettes, error: errRecettes } = await monSupabase
-            .from('recettes_chef')
-            .select('id, nom, ingredients_cles, temps_minutes')
-            .eq('mode', mode)
-            .eq('actif', true);
-
-        if (errRecettes) throw errRecettes;
-
         if (!produits?.length) {
             if (statut) statut.innerText = "❌ Stock vide !";
             return;
         }
 
-        if (!recettes?.length) {
-            if (statut) statut.innerText = "❌ Aucune recette disponible.";
-            return;
-        }
-
-        // 4. Noms produits normalisés
-        const nomsProduits = produits.map(p => p.nom.toLowerCase()
-            .normalize("NFD")
-            .replace(/[\u0300-\u036f]/g, "")
-        );
-
-        // 5. Scorer chaque recette
-        const recettesScores = recettes.map(r => {
-            const score = r.ingredients_cles.filter(ingredient =>
-                nomsProduits.some(nom => nom.includes(ingredient))
-            ).length;
-
-            // Vérifier que le PREMIER ingrédient clé est dans le stock
-            const ingredientPrincipalPresent = nomsProduits.some(nom =>
-                nom.includes(r.ingredients_cles[0])
-            );
-
-            // Pénaliser les recettes déjà proposées récemment
-            const dejaPropose = window.historiqueChef.some(h =>
-                h.toLowerCase().includes(r.nom.toLowerCase())
-            );
-
-            return { ...r, score, ingredientPrincipalPresent, dejaPropose };
-        });
-
-        // Trier : d'abord par non-proposé, puis par score
-        recettesScores.sort((a, b) => {
-            if (a.dejaPropose !== b.dejaPropose) return a.dejaPropose ? 1 : -1;
-            return b.score - a.score;
-        });
-
-        // Garder uniquement celles où l'ingrédient PRINCIPAL est dans le stock
-        const recettesCandidates = recettesScores.filter(r =>
-            r.score > 0 && r.ingredientPrincipalPresent
-        );
-
-        const recettesAEnvoyer = recettesCandidates.length >= 3
-            ? recettesCandidates
-            : recettesScores.filter(r => r.ingredientPrincipalPresent);
-
-        // 6. Textes historique pour Gemini
-        const platsDejaUtilises = window.historiqueChef?.length
-            ? `PLATS DÉJÀ PROPOSÉS — INTERDICTION ABSOLUE de les reproposer : ${window.historiqueChef.slice(-8).join(' | ')}.`
-            : '';
-
-        const ingredientsDejaUtilises = window.historiqueIngredientsChef?.length
-            ? `INGRÉDIENTS PRINCIPAUX DÉJÀ UTILISÉS — ne pas reproposer comme ingrédient principal : ${window.historiqueIngredientsChef.slice(-5).join(' | ')}.`
-            : '';
-
-        // 7. Listes pour Gemini
-        const listeRecettes = recettesAEnvoyer
-            .map(r => `- ${r.nom} (${r.temps_minutes} min) [ingrédients: ${r.ingredients_cles.join(', ')}] [score: ${r.score}]`)
-            .join('\n');
-
+        // 3. Préparer le stock par emplacement
         const frigo = produits.filter(p => p.emplacement === 'FRIGO');
         const congelo = produits.filter(p => p.emplacement === 'CONGELATEUR');
         const placard = produits.filter(p => p.emplacement === 'PLACARD');
         const entames = produits.filter(p => p.etat === 'Entamé');
 
         const listeStock = `
-FRIGO (priorité) : ${frigo.map(p => p.nom).join(', ') || 'vide'}
-ENTAMÉ (urgence) : ${entames.map(p => p.nom).join(', ') || 'aucun'}
+FRIGO (priorité - périssable) : ${frigo.map(p => p.nom).join(', ') || 'vide'}
+ENTAMÉ (urgence - à finir) : ${entames.map(p => p.nom).join(', ') || 'aucun'}
 CONGÉLATEUR : ${congelo.map(p => p.nom).join(', ') || 'vide'}
 PLACARD : ${placard.map(p => p.nom).join(', ') || 'vide'}`;
 
-        // 8. Prompt Gemini
-        const prompt = `Tu es un assistant cuisine pratique.
+        // 4. Historique pour éviter les répétitions
+        const platsDejaProposés = window.historiqueChef?.length
+            ? `PLATS DÉJÀ PROPOSÉS RÉCEMMENT — INTERDICTION ABSOLUE de les reproposer : ${window.historiqueChef.slice(-10).join(' | ')}.`
+            : '';
+
+        // 5. Demande spécifique de l'utilisateur
+        const demandeSpecifique = envie
+            ? `DEMANDE SPÉCIFIQUE DE L'UTILISATEUR : "${envie}" — tu DOIS proposer au moins un plat qui utilise cet ingrédient ou répond à cette envie si possible avec le stock.`
+            : '';
+
+        // 6. Prompt selon le mode — Gemini libre mais guidé
+        const promptsParMode = {
+            quotidien: `Tu es un assistant cuisine du quotidien.`,
+            monde: `Tu es un assistant cuisine spécialisé dans les cuisines du monde (italienne, asiatique, mexicaine, française...).`,
+            healthy: `Tu es un assistant cuisine healthy — tu favorises les plats légers, équilibrés et nutritifs.`,
+            dessert: `Tu es un assistant pâtisserie et desserts.`,
+            antigaspi: `Tu es un assistant anti-gaspi — tu priorises ABSOLUMENT les produits ENTAMÉ et du FRIGO pour éviter le gaspillage.`
+        };
+
+        const prompt = `${promptsParMode[mode] || promptsParMode.quotidien}
 
 STOCK DISPONIBLE :
 ${listeStock}
 
-RECETTES POSSIBLES — choisir UNIQUEMENT parmi cette liste :
-${listeRecettes}
+${demandeSpecifique}
 
-Ta mission : Choisir les 3 MEILLEURES recettes différentes qui correspondent au stock.
+Ta mission : Propose 3 NOMS DE PLATS simples réalisables avec ce stock.
 
 RÈGLES STRICTES :
-1. Choisis UNIQUEMENT parmi les recettes listées — aucune invention.
-2. Les 3 recettes DOIVENT utiliser des ingrédients principaux DIFFÉRENTS.
-3. PAS deux recettes à base de pâtes, PAS deux recettes à base d'œufs, etc.
-4. Priorise les recettes avec le score le plus élevé.
-5. Priorise les produits FRIGO et ENTAMÉ.
-6. Priorise les recettes rapides (moins de 20 min).
+1. Donne UNIQUEMENT le nom du plat — pas les ingrédients, pas de liste.
+2. Utilise UNIQUEMENT les ingrédients du stock. Invisibles autorisés : eau, sel, poivre, huile, beurre.
+3. Les 3 plats DOIVENT avoir des ingrédients principaux DIFFÉRENTS.
+4. PAS deux plats à base de pâtes, PAS deux plats à base d'œufs, etc.
+5. Noms simples et naturels : "spaghetti carbonara", "steak frites", "gratin de brocolis".
+6. PAS de noms de marques, PAS de codes produits.
 7. PAS de markdown, PAS de gras, PAS d'astérisques.
+8. Priorise FRIGO et ENTAMÉ.
 
-RÈGLE ANTI-RÉPÉTITION ABSOLUE :
-${platsDejaUtilises}
-${ingredientsDejaUtilises}
+${platsDejaProposés}
 
-FORMAT STRICT : Une seule phrase naturelle avec exactement 3 noms de recettes.
+FORMAT STRICT : Une seule phrase naturelle avec exactement 3 noms de plats courts.
 Exemple : "Ce soir je peux faire des spaghetti carbonara, un gratin dauphinois, ou une omelette au lard. Lequel te tente ?"
 Termine OBLIGATOIREMENT par : "Lequel te tente ?"`;
 
-        if (statut) statut.innerText = "🧠 Le Chef choisit les meilleures recettes...";
+        if (statut) statut.innerText = "🧠 Le Chef réfléchit...";
 
-        // 9. Appel Gemini avec retry
+        // 7. Appel Gemini avec retry
         let reponse = null;
         let tentatives = 0;
         while (!reponse && tentatives < 3) {
             try {
                 reponse = await appelGemini({
                     contents: [{ parts: [{ text: prompt }] }],
-                    generationConfig: { temperature: 0.8 }
+                    generationConfig: { temperature: 0.9 }
                 });
             } catch(e) {
                 tentatives++;
@@ -730,28 +675,24 @@ Termine OBLIGATOIREMENT par : "Lequel te tente ?"`;
             }
         }
 
-        // 10. Mémoriser et sauvegarder dans localStorage
+        // 8. Mémoriser et sauvegarder dans localStorage
+        if (!window.historiqueChef) window.historiqueChef = [];
+
         window.historiqueChef.push(
             reponse
-                .replace(/^.*?(je peux faire|vous proposer|préparer)\s*/i, '')
+                .replace(/^.*?(je peux faire|vous proposer|préparer|proposer de réaliser)\s*/i, '')
                 .replace(/lequel te tente \?/i, '')
                 .trim()
-                .substring(0, 150)
+                .substring(0, 200)
         );
 
-        const top3Ingredients = recettesAEnvoyer
-            .slice(0, 3)
-            .map(r => r.ingredients_cles[0])
-            .filter(Boolean);
-        window.historiqueIngredientsChef.push(top3Ingredients.join(', '));
+        if (window.historiqueChef.length > 15) window.historiqueChef.shift();
 
-        // Garder seulement les 10 dernières entrées
-        if (window.historiqueChef.length > 10) window.historiqueChef.shift();
-        if (window.historiqueIngredientsChef.length > 10) window.historiqueIngredientsChef.shift();
-
-        // Sauvegarder dans localStorage pour persister entre sessions
-        localStorage.setItem(`chefHistorique_${utilisateurActuel}`, JSON.stringify(window.historiqueChef));
-        localStorage.setItem(`chefIngredients_${utilisateurActuel}`, JSON.stringify(window.historiqueIngredientsChef));
+        // Sauvegarder dans localStorage
+        localStorage.setItem(
+            `chefHistorique_${utilisateurActuel}`,
+            JSON.stringify(window.historiqueChef)
+        );
 
         window.dernieresPropositions = reponse;
         window.attenteChoixRecette = true;
@@ -759,7 +700,7 @@ Termine OBLIGATOIREMENT par : "Lequel te tente ?"`;
 
         if (statut) statut.innerText = "🎤 Dis-moi ton choix ou clique sur un plat !";
 
-        // 11. Affichage
+        // 9. Affichage
         if (resultats) {
             resultats.innerHTML = `
                 <div style="background:white; padding:12px; border-radius:12px; border:1px solid #ddd; margin-top:5px;">
@@ -795,7 +736,6 @@ Termine OBLIGATOIREMENT par : "Lequel te tente ?"`;
         if (statut) statut.innerText = "❌ Le Chef a eu un problème. Réessaie dans quelques secondes.";
     }
 }
-
 // ============================================================
 // RÉDIGER LA RECETTE APRÈS CHOIX DU PLAT
 // ============================================================
