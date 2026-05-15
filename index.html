@@ -687,7 +687,12 @@ Termine OBLIGATOIREMENT par : "Lequel te tente ?"`;
 
         // 9. Mémoriser pour éviter les répétitions
         if (!window.historiqueChef) window.historiqueChef = [];
-        window.historiqueChef.push(reponse.substring(0, 200));
+      window.historiqueChef.push(reponse
+    .replace("Ce soir je peux faire ", "")
+    .replace("Lequel te tente ?", "")
+    .trim()
+    .substring(0, 150)
+);kj
         if (window.historiqueChef.length > 10) window.historiqueChef.shift();
 
         window.dernieresPropositions = reponse;
