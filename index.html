@@ -215,12 +215,23 @@
     <b style="color:#ff9800; font-size:15px;">👨‍🍳 QUE VOULEZ-VOUS MANGER ?</b>
     <p style="font-size:12px; color:#888; margin:5px 0 12px 0;">Le Chef propose 3 idées avec votre stock</p>
 
-    <!-- ✅ ICI avant le grid, pas dans le bouton -->
+    <!-- Champ demande spécifique -->
+    <div style="display:flex; gap:5px; margin-bottom:12px;">
+        <input type="text" id="chef-envie" 
+               placeholder="🥦 Une envie particulière ? (ex: avec du brocolis...)" 
+               style="flex:1; padding:10px; border:1px solid #ffcc80; border-radius:8px; font-size:13px;"
+               onkeypress="if(event.key==='Enter') lancerChefMode('quotidien')">
+        <button onclick="document.getElementById('chef-envie').value=''"
+                style="background:#ffcc80; border:none; border-radius:8px; padding:0 12px; cursor:pointer; font-size:16px;">✕</button>
+    </div>
+
+    <!-- Mode silencieux -->
     <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
         <input type="checkbox" id="mode-silencieux" style="width:18px; height:18px; cursor:pointer;">
         <label for="mode-silencieux" style="font-size:13px; color:#555; cursor:pointer;">🔇 Mode silencieux</label>
     </div>
 
+    <!-- Boutons modes -->
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
         <button onclick="lancerChefMode('quotidien')"
                 style="background:#ff9800; color:white; border:none; border-radius:12px; padding:14px 8px; cursor:pointer; font-size:13px; font-weight:bold;">
@@ -243,9 +254,11 @@
             ♻️ Anti-gaspi (finir les restes)
         </button>
     </div>
+
     <div id="statut-chef" style="text-align:center; margin-top:10px; font-size:13px; font-weight:bold; min-height:20px;"></div>
     <div id="chef-resultats" style="margin-top:5px;"></div>
 </div>
+
 
 <!-- ZONE RECETTE VOCALE -->
 <div id="zone-recette" style="display:none; margin-bottom:12px; padding:15px; background:#fff8e1; border-left:5px solid #ff9800; border-radius:10px;"></div>
@@ -477,7 +490,7 @@ function setupVocal() {
     recognition.continuous = false;
     recognition.interimResults = false;
 
-    recognition.onresult = traiterResultatVocal;
+    recognition.onresult = (e) => traiterResultatVocal(e);
     recognition.onerror = (e) => {
         console.error("Erreur micro :", e.error);
         const statut = document.getElementById('statut-vocal');
@@ -505,63 +518,67 @@ function demarrerMicro() {
 // ============================================================
 // 7. TRAITEMENT VOCAL PRINCIPAL
 // ============================================================
+async function traiterResultatVocal(e) {
+    const phrase = e.results[0][0].transcript.toLowerCase().trim();
+    const statut = document.getElementById('statut-vocal');
+    if (statut) statut.innerText = "💬 J'ai entendu : " + phrase;
+
+    if (!utilisateurActuel) {
+        faireParlerIA("Je ne sais pas qui tu es. Reconnecte-toi.");
+        return;
+    }
+
+    // STOP / ANNULE
+    if (phrase.includes("stop") || phrase.includes("annule")) {
+        window.speechSynthesis.cancel();
+        window.attenteChoixRecette = false;
+        window.attenteReponseIA = false;
+        window.attenteChoixProduit = false;
+        faireParlerIA("D'accord.");
+        return;
+    }
+
+    // ATTENTE CHOIX RECETTE
+    if (window.attenteChoixRecette) {
+        await gererChoixRecette(phrase);
+        return;
+    }
+
+    // DEMANDE AU CHEF
+    if (phrase.includes("chef") || phrase.includes("propose") || phrase.includes("recette") ||
+        phrase.includes("mange") || phrase.includes("idée") || phrase.includes("cuisin")) {
+        await demanderAuChefVocal(phrase);
+        return;
+    }
+
+    // ATTENTE CHOIX PRODUIT (doublon)
+    if (window.attenteChoixProduit) {
+        await gererChoixProduit(phrase);
+        return;
+    }
+
+    // ATTENTE OUI/NON COURSES
+    if (window.attenteReponseIA) {
+        await gererReponseOuiNon(phrase);
+        return;
+    }
+
+    // AJOUT AU FRIGO
+    if (phrase.includes("frigo") && (phrase.includes("mis") || phrase.includes("ajoute") || phrase.includes("rangé"))) {
+        await ajouterAuFrigoVocal(phrase);
+        return;
+    }
+
+    // SUPPRESSION
+    if (phrase.includes("supprime") || phrase.includes("retire") || phrase.includes("enlève") || phrase.includes("j'ai utilisé") || phrase.includes("j'ai mangé")) {
+        await supprimerVocal(phrase);
+        return;
+    }
+
+    faireParlerIA("Je n'ai pas compris. Tu peux me demander de supprimer un produit, d'appeler le chef, ou d'ajouter quelque chose au frigo.");
+}
+
 // ============================================================
-// 1. HTML À REMPLACER — Section Chef
-// ============================================================
-/*
-<div class="card" style="padding:15px; background:#fff8e1; border:2px solid #ff9800;">
-    <b style="color:#ff9800; font-size:15px;">👨‍🍳 QUE VOULEZ-VOUS MANGER ?</b>
-    <p style="font-size:12px; color:#888; margin:5px 0 12px 0;">Le Chef propose 3 idées avec votre stock</p>
-
-    <!-- Champ demande spécifique -->
-    <div style="display:flex; gap:5px; margin-bottom:12px;">
-        <input type="text" id="chef-envie" 
-               placeholder="🥦 Une envie particulière ? (ex: avec du brocolis...)" 
-               style="flex:1; padding:10px; border:1px solid #ffcc80; border-radius:8px; font-size:13px;"
-               onkeypress="if(event.key==='Enter') lancerChefMode('quotidien')">
-        <button onclick="document.getElementById('chef-envie').value=''"
-                style="background:#ffcc80; border:none; border-radius:8px; padding:0 12px; cursor:pointer; font-size:16px;">✕</button>
-    </div>
-
-    <!-- Mode silencieux -->
-    <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
-        <input type="checkbox" id="mode-silencieux" style="width:18px; height:18px; cursor:pointer;">
-        <label for="mode-silencieux" style="font-size:13px; color:#555; cursor:pointer;">🔇 Mode silencieux</label>
-    </div>
-
-    <!-- Boutons modes -->
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-        <button onclick="lancerChefMode('quotidien')"
-                style="background:#ff9800; color:white; border:none; border-radius:12px; padding:14px 8px; cursor:pointer; font-size:13px; font-weight:bold;">
-            👨‍🍳 Quotidien
-        </button>
-        <button onclick="lancerChefMode('monde')"
-                style="background:#3182ce; color:white; border:none; border-radius:12px; padding:14px 8px; cursor:pointer; font-size:13px; font-weight:bold;">
-            🌍 Monde
-        </button>
-        <button onclick="lancerChefMode('healthy')"
-                style="background:#38a169; color:white; border:none; border-radius:12px; padding:14px 8px; cursor:pointer; font-size:13px; font-weight:bold;">
-            🥗 Healthy
-        </button>
-        <button onclick="lancerChefMode('dessert')"
-                style="background:#8e24aa; color:white; border:none; border-radius:12px; padding:14px 8px; cursor:pointer; font-size:13px; font-weight:bold;">
-            🍰 Dessert
-        </button>
-        <button onclick="lancerChefMode('antigaspi')"
-                style="background:#2d3748; color:white; border:none; border-radius:12px; padding:14px 8px; cursor:pointer; font-size:13px; font-weight:bold; grid-column:1/3;">
-            ♻️ Anti-gaspi (finir les restes)
-        </button>
-    </div>
-
-    <div id="statut-chef" style="text-align:center; margin-top:10px; font-size:13px; font-weight:bold; min-height:20px;"></div>
-    <div id="chef-resultats" style="margin-top:5px;"></div>
-</div>
-*/
-
-// ============================================================
-// 2. FONCTION lancerChefMode — Gemini libre + historique persistant
-// ============================================================
-
 async function lancerChefMode(mode) {
     if (!utilisateurActuel) {
         alert("Je ne sais pas qui tu es ! Reconnecte-toi.");
@@ -643,7 +660,8 @@ RÈGLES STRICTES :
 3. Les 3 plats DOIVENT avoir des ingrédients principaux DIFFÉRENTS.
 4. PAS deux plats à base de pâtes, PAS deux plats à base d'œufs, etc.
 5. Noms simples et naturels : "spaghetti carbonara", "steak frites", "gratin de brocolis".
-6. PAS de noms de marques, PAS de codes produits.
+6. PAS de noms de marques, PAS de codes produits, PAS de noms commerciaux.
+   Exemple : pas "Vache qui rit", pas "Charal", pas "Barilla" — juste "fromage", "steak haché", "pâtes"
 7. PAS de markdown, PAS de gras, PAS d'astérisques.
 8. Priorise FRIGO et ENTAMÉ.
 
@@ -736,6 +754,8 @@ Termine OBLIGATOIREMENT par : "Lequel te tente ?"`;
         if (statut) statut.innerText = "❌ Le Chef a eu un problème. Réessaie dans quelques secondes.";
     }
 }
+
+
 // ============================================================
 // RÉDIGER LA RECETTE APRÈS CHOIX DU PLAT
 // ============================================================
