@@ -312,7 +312,11 @@
         <div id="shoppingList"></div>
     </div>
 </div>
-
+<button id="btn-supprimer-selection"
+        onclick="supprimerSelection()"
+        style="display:none; width:100%; background:#e53e3e; color:white; border:none; border-radius:10px; padding:12px; cursor:pointer; font-weight:bold; font-size:14px; margin:10px 0;">
+    🗑️ Supprimer la sélection
+</button>
 <!-- INVENTAIRE PAR EMPLACEMENT -->
 <div class="card"><button class="collapsible">🥦 FRIGO</button><div class="content"><div id="list-Frigo" class="loading">Chargement...</div></div></div>
 <div class="card"><button class="collapsible">❄️ CONGÉLATEUR</button><div class="content"><div id="list-Congélateur"></div></div></div>
@@ -1364,15 +1368,17 @@ async function chargerTout() {
             }
         }
 
+       // ============================================================
+// 1. REMPLACE LE CAS C dans chargerTout()
+// ============================================================
+ 
         // CAS C : STOCK CLASSIQUE
         else {
             const containerId = mapping[item.emplacement] || 'list-Placard';
             const container = document.getElementById(containerId);
             if (!container) return;
-
             const couleurEtat = item.etat === 'Entamé' ? '#ef6c00' : '#333';
             const labelEtat = item.etat === 'Entamé' ? '⚠️ Entamé' : '📦 Plein';
-
             let alerteHtml = "";
             if (item.date_peremption && item.emplacement === 'FRIGO') {
                 const diff = Math.ceil((new Date(item.date_peremption) - new Date()) / 86400000);
@@ -1385,14 +1391,20 @@ async function chargerTout() {
                                 style="font-size:9px; background:#edf2f7; border:1px solid #cbd5e0; border-radius:3px; padding:0 4px; cursor:pointer;">+2j</button>
                     </div>`;
             }
-
             const destinations = ['FRIGO', 'CONGELATEUR', 'PLACARD', 'ANIMAUX', 'SALLE_DE_BAIN', 'AUTRES'];
             const optionsHtml = destinations.map(d =>
                 `<option value="${d}" ${d === item.emplacement ? 'selected' : ''}>${d}</option>`
             ).join('');
-
+ 
             container.innerHTML += `
-    <div class="item" style="border-left:4px solid ${item.etat === 'Entamé' ? '#ef6c00' : '#4a5568'}; width:100%; box-sizing:border-box; justify-content:space-between;">
+    <div class="item" id="item-${item.id}" style="border-left:4px solid ${item.etat === 'Entamé' ? '#ef6c00' : '#4a5568'}; width:100%; box-sizing:border-box; justify-content:space-between;">
+        
+        <!-- Case à cocher sélection -->
+        <input type="checkbox" 
+               id="check-${item.id}"
+               onchange="mettreAJourBoutonSupprimer()"
+               style="width:18px; height:18px; cursor:pointer; margin-right:8px; flex-shrink:0;">
+        
         <div style="flex:1;">
             <b style="color:${couleurEtat};">${item.nom}</b>
             ${alerteHtml}
@@ -1416,17 +1428,17 @@ async function chargerTout() {
     </div>`;
         }
     });
-
+ 
     // Badge danger
     const badge = document.getElementById('badge-danger');
     if (badge) {
         badge.innerText = nbDanger;
         badge.style.display = nbDanger > 0 ? "inline-block" : "none";
     }
-
+ 
     remplirSuggestions();
+    mettreAJourBoutonSupprimer();
 }
-
 // ============================================================
 // 14. AJOUT MANUEL
 // ============================================================
@@ -1496,6 +1508,19 @@ async function supprimerDefinitif(id) {
     if (confirm("Supprimer cet article définitivement ?")) {
         await monSupabase.from('inventaire2').delete().eq('id', id).eq('proprietaire', utilisateurActuel);
         await chargerTout();
+    }
+}
+function mettreAJourBoutonSupprimer() {
+    const cases = document.querySelectorAll('input[id^="check-"]:checked');
+    const btn = document.getElementById('btn-supprimer-selection');
+    if (btn) {
+        const nb = cases.length;
+        if (nb > 0) {
+            btn.style.display = 'block';
+            btn.innerText = `🗑️ Supprimer la sélection (${nb})`;
+        } else {
+            btn.style.display = 'none';
+        }
     }
 }
 
