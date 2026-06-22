@@ -1447,7 +1447,6 @@ async function chargerTout() {
             container.innerHTML += `
     <div class="item" id="item-${item.id}" style="border-left:4px solid ${item.etat === 'Entamé' ? '#ef6c00' : '#4a5568'}; width:100%; box-sizing:border-box; justify-content:space-between;">
         
-        <!-- Case à cocher sélection -->
         <input type="checkbox" 
                id="check-${item.id}"
                onchange="mettreAJourBoutonSupprimer()"
