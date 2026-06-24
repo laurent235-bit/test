@@ -1886,42 +1886,72 @@ async function ouvrirScannerPoubelle() {
         afficherToast('❌ Connecte-toi d\'abord !');
         return;
     }
+
     const modal = document.getElementById('modal-scanner');
     const statut = document.getElementById('statut-scanner');
     const resultat = document.getElementById('resultat-scanner');
+
     modal.style.display = 'flex';
     statut.innerText = '📷 Démarrage de la caméra...';
     resultat.innerText = '';
     scanEnCours = false;
+
     try {
-        // Contraintes simplifiées pour mobile
+        // Accès caméra arrière
         streamActif = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: 'environment' }
+            video: {
+                facingMode: { ideal: 'environment' },
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
+            }
         });
+
         const video = document.getElementById('video-scanner');
         video.srcObject = streamActif;
-        video.onloadedmetadata = async () => {
-            await video.play();
-            statut.innerText = '🔍 Recherche du code-barres...';
-            // ZXing sans hints — plus compatible mobile
-            scannerCodeReader = new ZXingBrowser.BrowserMultiFormatReader();
-            scannerCodeReader.decodeFromVideoElement(video, async (result, error) => {
-                if (result && !scanEnCours) {
-                    scanEnCours = true;
-                    const ean = result.getText();
-                    console.log('✅ EAN détecté:', ean);
-                    statut.innerText = `✅ Code détecté !`;
-                    resultat.innerText = `EAN : ${ean} — Mise à jour du stock...`;
-                    if (navigator.vibrate) navigator.vibrate(200);
-                    fermerScanner();
-                    await traiterEANScanne(ean);
-                }
-            });
-        };
+        await video.play();
+
+        statut.innerText = '🔍 Recherche du code-barres...';
+
+        // Initialiser ZXing
+        const hints = new Map();
+        const formats = [
+            ZXingBrowser.BarcodeFormat.EAN_13,
+            ZXingBrowser.BarcodeFormat.EAN_8,
+            ZXingBrowser.BarcodeFormat.UPC_A,
+            ZXingBrowser.BarcodeFormat.UPC_E,
+            ZXingBrowser.BarcodeFormat.CODE_128,
+            ZXingBrowser.BarcodeFormat.CODE_39,
+            ZXingBrowser.BarcodeFormat.QR_CODE,
+        ];
+        hints.set(ZXingBrowser.DecodeHintType.POSSIBLE_FORMATS, formats);
+
+        scannerCodeReader = new ZXingBrowser.BrowserMultiFormatReader(hints);
+
+        // Scanner en continu
+        scannerCodeReader.decodeFromVideoElement(video, async (result, error, controls) => {
+            if (result && !scanEnCours) {
+                scanEnCours = true;
+                const ean = result.getText();
+                console.log('✅ EAN détecté:', ean);
+
+                statut.innerText = `✅ Code détecté !`;
+                resultat.innerText = `EAN : ${ean} — Mise à jour du stock...`;
+
+                // Vibration si supportée
+                if (navigator.vibrate) navigator.vibrate(200);
+
+                // Fermer le scanner
+                fermerScanner();
+
+                // Traiter l'EAN
+                await traiterEANScanne(ean);
+            }
+        });
+
     } catch (err) {
-        console.error('Erreur caméra:', err.name, err.message);
-        statut.innerText = `❌ Erreur: ${err.name}`;
-        resultat.innerText = err.message;
+        console.error('Erreur caméra:', err);
+        statut.innerText = '❌ Impossible d\'accéder à la caméra';
+        resultat.innerText = 'Vérifiez les permissions de la caméra dans votre navigateur.';
     }
 }
 
