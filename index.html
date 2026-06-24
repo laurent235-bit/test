@@ -461,7 +461,8 @@ window.onload = async () => {
             return;
         }
 
-        monSupabase = window.supabase.createClient(elUrl.value, elKey.value);
+        const supabaseLib = window.supabase || supabase;
+monSupabase = supabaseLib.createClient(elUrl.value, elKey.value);
 
         setupCollapsibles();
         setupVocal();
