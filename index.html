@@ -1882,6 +1882,11 @@ let streamActif = null;
 let scanEnCours = false;
 
 async function ouvrirScannerPoubelle() {
+    // Récupérer l'utilisateur depuis localStorage si besoin
+    if (!utilisateurActuel) {
+        utilisateurActuel = localStorage.getItem('monFrigo_User');
+    }
+    
     if (!utilisateurActuel) {
         afficherToast('❌ Connecte-toi d\'abord !');
         return;
@@ -1972,6 +1977,16 @@ function fermerScanner() {
 }
 
 async function traiterEANScanne(ean) {
+    // Récupérer l'utilisateur depuis localStorage si besoin
+    if (!utilisateurActuel) {
+        utilisateurActuel = localStorage.getItem('monFrigo_User');
+    }
+    
+    if (!utilisateurActuel) {
+        afficherToast('❌ Connecte-toi d\'abord !');
+        return;
+    }
+    
     try {
         afficherToast(`📦 EAN ${ean} — mise à jour du stock...`);
 
