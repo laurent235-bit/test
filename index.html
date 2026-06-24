@@ -1886,48 +1886,43 @@ async function ouvrirScannerPoubelle() {
         afficherToast('❌ Connecte-toi d\'abord !');
         return;
     }
-
     const modal = document.getElementById('modal-scanner');
     const statut = document.getElementById('statut-scanner');
     const resultat = document.getElementById('resultat-scanner');
-
     modal.style.display = 'flex';
     statut.innerText = '📷 Démarrage de la caméra...';
     resultat.innerText = '';
     scanEnCours = false;
-
-try {
-    // Accès caméra arrière — simplifié pour mobile
-    streamActif = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' }  // Plus simple sans width/height
-    });
-
-    const video = document.getElementById('video-scanner');
-    video.srcObject = streamActif;
-    video.onloadedmetadata = async () => {
-        await video.play();
-        statut.innerText = '🔍 Recherche du code-barres...';
-
-        // Initialiser ZXing sans hints — plus compatible
-        scannerCodeReader = new ZXingBrowser.BrowserMultiFormatReader();
-
-        scannerCodeReader.decodeFromVideoElement(video, async (result, error) => {
-            if (result && !scanEnCours) {
-                scanEnCours = true;
-                const ean = result.getText();
-                statut.innerText = `✅ Code détecté !`;
-                resultat.innerText = `EAN : ${ean}`;
-                if (navigator.vibrate) navigator.vibrate(200);
-                fermerScanner();
-                await traiterEANScanne(ean);
-            }
+    try {
+        // Contraintes simplifiées pour mobile
+        streamActif = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'environment' }
         });
-    };
-
-} catch (err) {
-    console.error('Erreur caméra:', err.name, err.message);
-    statut.innerText = `❌ Erreur: ${err.name}`;
-    resultat.innerText = err.message;
+        const video = document.getElementById('video-scanner');
+        video.srcObject = streamActif;
+        video.onloadedmetadata = async () => {
+            await video.play();
+            statut.innerText = '🔍 Recherche du code-barres...';
+            // ZXing sans hints — plus compatible mobile
+            scannerCodeReader = new ZXingBrowser.BrowserMultiFormatReader();
+            scannerCodeReader.decodeFromVideoElement(video, async (result, error) => {
+                if (result && !scanEnCours) {
+                    scanEnCours = true;
+                    const ean = result.getText();
+                    console.log('✅ EAN détecté:', ean);
+                    statut.innerText = `✅ Code détecté !`;
+                    resultat.innerText = `EAN : ${ean} — Mise à jour du stock...`;
+                    if (navigator.vibrate) navigator.vibrate(200);
+                    fermerScanner();
+                    await traiterEANScanne(ean);
+                }
+            });
+        };
+    } catch (err) {
+        console.error('Erreur caméra:', err.name, err.message);
+        statut.innerText = `❌ Erreur: ${err.name}`;
+        resultat.innerText = err.message;
+    }
 }
 
 function fermerScanner() {
