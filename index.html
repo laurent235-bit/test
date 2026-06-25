@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FRIGO ELITE v3.0</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="https://unpkg.com/@zxing/browser@latest/umd/index.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
     <style>
         :root {
@@ -379,8 +379,7 @@
 
         <!-- Vidéo caméra -->
         <div style="position:relative; width:100%; border-radius:16px; overflow:hidden; border:3px solid #ff9800;">
-            <video id="video-scanner"
-                   style="width:100%; display:block;"
+            <div id="video-scanner" style="width:100%; border-radius:12px; overflow:hidden;"></div>
                    autoplay playsinline muted></video>
             <!-- Ligne de scan animée -->
             <div style="position:absolute; left:5%; width:90%; height:3px; background:#ff9800; box-shadow:0 0 8px #ff9800; animation:scanline 2s ease-in-out infinite;"></div>
@@ -1885,11 +1884,9 @@ let streamActif = null;
 let scanEnCours = false;
 
 async function ouvrirScannerPoubelle() {
-    // Récupérer l'utilisateur depuis localStorage si besoin
     if (!utilisateurActuel) {
         utilisateurActuel = localStorage.getItem('monFrigo_User');
     }
-    
     if (!utilisateurActuel) {
         afficherToast('❌ Connecte-toi d\'abord !');
         return;
@@ -1900,81 +1897,40 @@ async function ouvrirScannerPoubelle() {
     const resultat = document.getElementById('resultat-scanner');
 
     modal.style.display = 'flex';
-    statut.innerText = '📷 Démarrage de la caméra...';
+    statut.innerText = '🔍 Recherche du code-barres...';
     resultat.innerText = '';
     scanEnCours = false;
 
     try {
-        // Accès caméra arrière
-        streamActif = await navigator.mediaDevices.getUserMedia({
-            video: {
-                facingMode: { ideal: 'environment' },
-                width: { ideal: 1280 },
-                height: { ideal: 720 }
-            }
-        });
+        scannerCodeReader = new Html5Qrcode("video-scanner");
 
-        const video = document.getElementById('video-scanner');
-        video.srcObject = streamActif;
-        await video.play();
-
-        statut.innerText = '🔍 Recherche du code-barres...';
-
-        // Initialiser ZXing
-        const hints = new Map();
-        const formats = [
-            ZXingBrowser.BarcodeFormat.EAN_13,
-            ZXingBrowser.BarcodeFormat.EAN_8,
-            ZXingBrowser.BarcodeFormat.UPC_A,
-            ZXingBrowser.BarcodeFormat.UPC_E,
-            ZXingBrowser.BarcodeFormat.CODE_128,
-            ZXingBrowser.BarcodeFormat.CODE_39,
-            ZXingBrowser.BarcodeFormat.QR_CODE,
-        ];
-        hints.set(ZXingBrowser.DecodeHintType.POSSIBLE_FORMATS, formats);
-
-        scannerCodeReader = new ZXingBrowser.BrowserMultiFormatReader(hints);
-
-        // Scanner en continu
-        scannerCodeReader.decodeFromVideoElement(video, async (result, error, controls) => {
-            if (result && !scanEnCours) {
-                scanEnCours = true;
-                const ean = result.getText();
-                console.log('✅ EAN détecté:', ean);
-
-                statut.innerText = `✅ Code détecté !`;
-                resultat.innerText = `EAN : ${ean} — Mise à jour du stock...`;
-
-                // Vibration si supportée
-                if (navigator.vibrate) navigator.vibrate(200);
-
-                // Fermer le scanner
-                fermerScanner();
-
-                // Traiter l'EAN
-                await traiterEANScanne(ean);
-            }
-        });
+        await scannerCodeReader.start(
+            { facingMode: "environment" },
+            { fps: 10, qrbox: { width: 250, height: 150 } },
+            async (ean) => {
+                if (!scanEnCours) {
+                    scanEnCours = true;
+                    statut.innerText = `✅ Code détecté !`;
+                    resultat.innerText = `EAN : ${ean}`;
+                    if (navigator.vibrate) navigator.vibrate(200);
+                    fermerScanner();
+                    await traiterEANScanne(ean);
+                }
+            },
+            (error) => {} // Erreurs ignorées pendant le scan
+        );
 
     } catch (err) {
-        console.error('Erreur caméra:', err);
-        statut.innerText = '❌ Impossible d\'accéder à la caméra';
-        resultat.innerText = 'Vérifiez les permissions de la caméra dans votre navigateur.';
+        console.error('Erreur:', err);
+        statut.innerText = `❌ ${err.message}`;
     }
 }
-
-function fermerScanner() {
+async function fermerScanner() {
     const modal = document.getElementById('modal-scanner');
     modal.style.display = 'none';
 
-    // Arrêter la caméra
-    if (streamActif) {
-        streamActif.getTracks().forEach(track => track.stop());
-        streamActif = null;
-    }
-
     if (scannerCodeReader) {
-        try { scannerCodeReader.reset(); } catch(e) {}
+        try { await scannerCodeReader.stop(); } catch(e) {}
         scannerCodeReader = null;
     }
 }
