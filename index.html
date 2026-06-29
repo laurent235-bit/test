@@ -1558,6 +1558,26 @@ async function supprimerDefinitif(id) {
         await chargerTout();
     }
 }
+
+async function supprimerSelection() {
+    if (!utilisateurActuel) return;
+    const cases = document.querySelectorAll('input[id^="check-"]:checked');
+    if (cases.length === 0) return;
+
+    const nb = cases.length;
+    if (!confirm(`Supprimer définitivement ${nb} produit(s) ?`)) return;
+
+    const ids = Array.from(cases).map(c => parseInt(c.id.replace('check-', '')));
+
+    await monSupabase
+        .from('inventaire2')
+        .delete()
+        .in('id', ids)
+        .eq('proprietaire', utilisateurActuel);
+
+    await chargerTout();
+}
+
 function mettreAJourBoutonSupprimer() {
     const cases = document.querySelectorAll('input[id^="check-"]:checked');
     const btn = document.getElementById('btn-supprimer-selection');
