@@ -1967,7 +1967,7 @@ async function traiterEANScanne(ean) {
             } else {
                 afficherToast(`✅ ${data.produit} retiré ! Il en reste ${data.nouvelleQte}`);
             }
-            chargerTout();
+             await chargerTout();
         } else if (data.ean) {
             afficherToast(`⚠️ Produit non trouvé dans votre stock (EAN: ${ean})`);
         } else {
