@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FRIGO ELITE v3.0</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
     <style>
         :root {
@@ -191,11 +192,16 @@
         </div>
     </div>
 </div>
-
+<div class="card" style="padding:15px; border:2px solid #2d3748;">
+    <button onclick="ouvrirScannerPoubelle()"
+            style="background:#2d3748; color:white; border:none; border-radius:12px; padding:14px; cursor:pointer; font-size:14px; font-weight:bold; width:100%; display:flex; align-items:center; justify-content:center; gap:8px;">
+        📱 Scanner un emballage vide
+    </button>
+</div>
 <!-- SCAN TICKET -->
 <div class="scan-zone">
     <b style="color:var(--accent)">🧾 ENTRÉE DE COURSES</b>
-	
+    <div style="display:flex; gap:10px; margin-top:10px;">
         <button onclick="document.getElementById('input-photo').click()" class="btn btn-accent" style="flex:1">
             📸 SCANNER UN TICKET
         </button>
@@ -362,6 +368,38 @@
     <button class="collapsible">📅 PLANNING DE LA SEMAINE</button>
     <div class="content">
         <div id="planning-grid" style="display:flex; flex-direction:column; gap:10px; padding:10px;"></div>
+    </div>
+</div><!-- 3. MODALE SCANNER — ajoute avant </body> -->
+<div id="modal-scanner" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.92); z-index:9999; flex-direction:column; align-items:center; justify-content:center;">
+    <div style="width:90%; max-width:420px; text-align:center;">
+        
+        <p style="color:white; font-size:16px; font-weight:bold; margin-bottom:15px;">
+            📦 Pointe vers le code-barres
+        </p>
+
+        <!-- Vidéo caméra -->
+        <div style="position:relative; width:100%; border-radius:16px; overflow:hidden; border:3px solid #ff9800;">
+            <div id="video-scanner" style="width:100%; border-radius:12px; overflow:hidden;"></div>
+                   autoplay playsinline muted></video>
+            <!-- Ligne de scan animée -->
+            <div style="position:absolute; left:5%; width:90%; height:3px; background:#ff9800; box-shadow:0 0 8px #ff9800; animation:scanline 2s ease-in-out infinite;"></div>
+            <!-- Coins de visée -->
+            <div style="position:absolute; top:10px; left:10px; width:30px; height:30px; border-top:3px solid #ff9800; border-left:3px solid #ff9800; border-radius:3px 0 0 0;"></div>
+            <div style="position:absolute; top:10px; right:10px; width:30px; height:30px; border-top:3px solid #ff9800; border-right:3px solid #ff9800; border-radius:0 3px 0 0;"></div>
+            <div style="position:absolute; bottom:10px; left:10px; width:30px; height:30px; border-bottom:3px solid #ff9800; border-left:3px solid #ff9800; border-radius:0 0 0 3px;"></div>
+            <div style="position:absolute; bottom:10px; right:10px; width:30px; height:30px; border-bottom:3px solid #ff9800; border-right:3px solid #ff9800; border-radius:0 0 3px 0;"></div>
+        </div>
+
+        <div id="statut-scanner" style="color:#ff9800; font-size:14px; margin-top:12px; font-weight:bold;">
+            🔍 Recherche du code-barres...
+        </div>
+
+        <div id="resultat-scanner" style="color:white; font-size:13px; margin-top:8px; min-height:30px; padding:0 10px;"></div>
+
+        <button onclick="fermerScanner()"
+                style="background:#718096; color:white; border:none; border-radius:10px; padding:12px 30px; cursor:pointer; font-size:14px; font-weight:bold; margin-top:15px;">
+            ✕ Annuler
+        </button>
     </div>
 </div>
 
@@ -1861,6 +1899,106 @@ function remplirSuggestions() {
     });
 }
 
+let scannerCodeReader = null;
+let streamActif = null;
+let scanEnCours = false;
+
+async function ouvrirScannerPoubelle() {
+    if (!utilisateurActuel) {
+        utilisateurActuel = localStorage.getItem('monFrigo_User');
+    }
+    if (!utilisateurActuel) {
+        afficherToast('❌ Connecte-toi d\'abord !');
+        return;
+    }
+
+    const modal = document.getElementById('modal-scanner');
+    const statut = document.getElementById('statut-scanner');
+    const resultat = document.getElementById('resultat-scanner');
+
+    modal.style.display = 'flex';
+    statut.innerText = '🔍 Recherche du code-barres...';
+    resultat.innerText = '';
+    scanEnCours = false;
+
+    try {
+        scannerCodeReader = new Html5Qrcode("video-scanner");
+
+        await scannerCodeReader.start(
+            { facingMode: "environment" },
+            { fps: 10, qrbox: { width: 250, height: 150 } },
+            async (ean) => {
+                if (!scanEnCours) {
+                    scanEnCours = true;
+                    statut.innerText = `✅ Code détecté !`;
+                    resultat.innerText = `EAN : ${ean}`;
+                    if (navigator.vibrate) navigator.vibrate(200);
+                    fermerScanner();
+                    await traiterEANScanne(ean);
+                }
+            },
+            (error) => {} // Erreurs ignorées pendant le scan
+        );
+
+    } catch (err) {
+        console.error('Erreur:', err);
+        statut.innerText = `❌ ${err.message}`;
+    }
+}
+async function fermerScanner() {
+    const modal = document.getElementById('modal-scanner');
+    modal.style.display = 'none';
+
+    if (scannerCodeReader) {
+        try { await scannerCodeReader.stop(); } catch(e) {}
+        scannerCodeReader = null;
+    }
+}
+
+async function traiterEANScanne(ean) {
+    // Récupérer l'utilisateur depuis localStorage si besoin
+    if (!utilisateurActuel) {
+        utilisateurActuel = localStorage.getItem('monFrigo_User');
+    }
+    
+    if (!utilisateurActuel) {
+        afficherToast('❌ Connecte-toi d\'abord !');
+        return;
+    }
+    
+    try {
+        afficherToast(`📦 EAN ${ean} — mise à jour du stock...`);
+
+        const response = await fetch('https://mon-assistant-cuisine.laurent235.workers.dev/poubelle', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                utilisateur: utilisateurActuel,
+                ean: ean,
+                source: 'telephone'
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            if (data.nouvelleQte === 0) {
+                afficherToast(`✅ ${data.produit} épuisé ! Ajouté à la liste de courses 🛒`);
+            } else {
+                afficherToast(`✅ ${data.produit} retiré ! Il en reste ${data.nouvelleQte}`);
+            }
+             await chargerTout();
+        } else if (data.ean) {
+            afficherToast(`⚠️ Produit non trouvé dans votre stock (EAN: ${ean})`);
+        } else {
+            afficherToast('⚠️ Produit non identifié');
+        }
+
+    } catch (err) {
+        console.error('Erreur:', err);
+        afficherToast('❌ Erreur de connexion');
+    }
+}
 </script>
 </body>
 </html>
