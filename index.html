@@ -6,6 +6,7 @@
     <title>FRIGO ELITE v3.0</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+	<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
     <style>
         :root {
@@ -179,25 +180,17 @@
 <!-- TOAST -->
 <div id="toast"></div>
 
-<!-- MODAL PLANNING -->
-<div id="modal-planning">
-    <div class="modal-box">
-        <h3 id="modal-titre" style="margin:0 0 15px 0; color:#4a5568;"></h3>
-        <input type="text" id="modal-input" placeholder="Nom du repas..." 
-               style="width:100%; padding:12px; border:2px solid #e2e8f0; border-radius:10px; font-size:16px; margin-bottom:15px;">
-        <div style="display:flex; gap:10px;">
-            <button onclick="validerPlanning()" class="btn btn-mur">✅ Valider</button>
-            <button onclick="fermerModal()" class="btn" style="background:#718096;">Annuler</button>
-            <button onclick="supprimerPlanning()" class="btn btn-danger" style="width:auto; padding:12px;">🗑️</button>
-        </div>
-    </div>
-</div>
+<!-- 2. AJOUTE CE BOUTON dans une card -->
 <div class="card" style="padding:15px; border:2px solid #2d3748;">
-    <button onclick="ouvrirScannerPoubelle()"
-            style="background:#2d3748; color:white; border:none; border-radius:12px; padding:14px; cursor:pointer; font-size:14px; font-weight:bold; width:100%; display:flex; align-items:center; justify-content:center; gap:8px;">
-        📱 Scanner un emballage vide
+    <button onclick="ouvrirScannerContinu()"
+            style="background:#2d3748; color:white; border:none; border-radius:12px; padding:14px; cursor:pointer; font-size:14px; font-weight:bold; width:100%;">
+        🗑️ MODE POUBELLE (scan continu)
     </button>
+    <p style="font-size:11px; color:#888; margin:8px 0 0 0; text-align:center;">
+        Passe les emballages devant la caméra
+    </p>
 </div>
+
 <!-- SCAN TICKET -->
 <div class="scan-zone">
     <b style="color:var(--accent)">🧾 ENTRÉE DE COURSES</b>
@@ -369,36 +362,34 @@
     <div class="content">
         <div id="planning-grid" style="display:flex; flex-direction:column; gap:10px; padding:10px;"></div>
     </div>
-</div><!-- 3. MODALE SCANNER — ajoute avant </body> -->
-<div id="modal-scanner" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.92); z-index:9999; flex-direction:column; align-items:center; justify-content:center;">
-    <div style="width:90%; max-width:420px; text-align:center;">
-        
-        <p style="color:white; font-size:16px; font-weight:bold; margin-bottom:15px;">
-            📦 Pointe vers le code-barres
+</div>
+<!-- MODALE SCANNER CONTINU -->
+<div id="modal-scanner" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:9999; flex-direction:column; align-items:center; justify-content:center;">
+    <div style="width:95%; max-width:500px; text-align:center;">
+
+        <p style="color:white; font-size:18px; font-weight:bold; margin-bottom:10px;">
+            🗑️ MODE POUBELLE ACTIF
+        </p>
+        <p style="color:#aaa; font-size:13px; margin-bottom:15px;">
+            Passe les emballages devant la caméra
         </p>
 
-        <!-- Vidéo caméra -->
-        <div style="position:relative; width:100%; border-radius:16px; overflow:hidden; border:3px solid #ff9800;">
-            <div id="video-scanner" style="width:100%; border-radius:12px; overflow:hidden;"></div>
-                   autoplay playsinline muted></video>
-            <!-- Ligne de scan animée -->
-            <div style="position:absolute; left:5%; width:90%; height:3px; background:#ff9800; box-shadow:0 0 8px #ff9800; animation:scanline 2s ease-in-out infinite;"></div>
-            <!-- Coins de visée -->
-            <div style="position:absolute; top:10px; left:10px; width:30px; height:30px; border-top:3px solid #ff9800; border-left:3px solid #ff9800; border-radius:3px 0 0 0;"></div>
-            <div style="position:absolute; top:10px; right:10px; width:30px; height:30px; border-top:3px solid #ff9800; border-right:3px solid #ff9800; border-radius:0 3px 0 0;"></div>
-            <div style="position:absolute; bottom:10px; left:10px; width:30px; height:30px; border-bottom:3px solid #ff9800; border-left:3px solid #ff9800; border-radius:0 0 0 3px;"></div>
-            <div style="position:absolute; bottom:10px; right:10px; width:30px; height:30px; border-bottom:3px solid #ff9800; border-right:3px solid #ff9800; border-radius:0 0 3px 0;"></div>
+        <div id="video-scanner" style="width:100%; border-radius:16px; overflow:hidden; border:3px solid #48bb78;"></div>
+
+        <div style="background:#2d3748; border-radius:12px; padding:12px; margin-top:15px;">
+            <div style="color:#48bb78; font-size:24px; font-weight:bold;" id="compteur-scans">0</div>
+            <div style="color:#aaa; font-size:12px;">produits scannés</div>
         </div>
 
-        <div id="statut-scanner" style="color:#ff9800; font-size:14px; margin-top:12px; font-weight:bold;">
-            🔍 Recherche du code-barres...
+        <div id="statut-scanner" style="color:#48bb78; font-size:15px; margin-top:12px; font-weight:bold; min-height:22px;">
+            🔍 En attente d'un code-barres...
         </div>
 
-        <div id="resultat-scanner" style="color:white; font-size:13px; margin-top:8px; min-height:30px; padding:0 10px;"></div>
+        <div id="historique-scans" style="margin-top:10px; max-height:120px; overflow-y:auto;"></div>
 
-        <button onclick="fermerScanner()"
-                style="background:#718096; color:white; border:none; border-radius:10px; padding:12px 30px; cursor:pointer; font-size:14px; font-weight:bold; margin-top:15px;">
-            ✕ Annuler
+        <button onclick="fermerScannerContinu()"
+                style="background:#e53e3e; color:white; border:none; border-radius:10px; padding:14px 40px; cursor:pointer; font-size:15px; font-weight:bold; margin-top:15px;">
+            ✕ TERMINER
         </button>
     </div>
 </div>
@@ -1997,6 +1988,149 @@ async function traiterEANScanne(ean) {
     } catch (err) {
         console.error('Erreur:', err);
         afficherToast('❌ Erreur de connexion');
+    }
+}
+let scannerContinu = null;
+let compteurScans = 0;
+let derniersEAN = [];  // Évite les doublons rapides
+let scanEnPause = false;
+
+async function ouvrirScannerContinu() {
+    if (!utilisateurActuel) {
+        utilisateurActuel = localStorage.getItem('monFrigo_User');
+    }
+    if (!utilisateurActuel) {
+        afficherToast('❌ Connecte-toi d\'abord !');
+        return;
+    }
+
+    const modal = document.getElementById('modal-scanner');
+    const statut = document.getElementById('statut-scanner');
+
+    modal.style.display = 'flex';
+    statut.innerText = '📷 Démarrage de la caméra...';
+    compteurScans = 0;
+    derniersEAN = [];
+    document.getElementById('compteur-scans').innerText = '0';
+    document.getElementById('historique-scans').innerHTML = '';
+
+    try {
+        scannerContinu = new Html5Qrcode("video-scanner");
+
+        await scannerContinu.start(
+            { facingMode: "environment" },
+            {
+                fps: 15,                              // Scan rapide
+                qrbox: { width: 300, height: 200 },   // Zone large
+                aspectRatio: 1.5
+            },
+            async (ean) => {
+                // Éviter les doublons dans les 3 dernières secondes
+                if (scanEnPause) return;
+                if (derniersEAN.includes(ean)) return;
+
+                scanEnPause = true;
+                derniersEAN.push(ean);
+
+                // Nettoyer l'historique après 3 secondes
+                setTimeout(() => {
+                    derniersEAN = derniersEAN.filter(e => e !== ean);
+                }, 3000);
+
+                statut.innerText = `✅ ${ean}`;
+                if (navigator.vibrate) navigator.vibrate(150);
+                jouerBip();
+
+                await traiterEANContinu(ean);
+
+                // Reprendre le scan après 1 seconde
+                setTimeout(() => { scanEnPause = false; }, 1000);
+            },
+            (error) => {} // Ignorer les erreurs de scan
+        );
+
+        statut.innerText = '🔍 En attente d\'un code-barres...';
+
+    } catch (err) {
+        console.error('Erreur:', err);
+        statut.innerText = `❌ ${err.message}`;
+    }
+}
+
+async function fermerScannerContinu() {
+    const modal = document.getElementById('modal-scanner');
+    modal.style.display = 'none';
+
+    if (scannerContinu) {
+        try { await scannerContinu.stop(); } catch(e) {}
+        scannerContinu = null;
+    }
+
+    if (compteurScans > 0) {
+        afficherToast(`✅ ${compteurScans} produit(s) retiré(s) du stock !`);
+        await chargerTout();
+    }
+}
+
+// Bip sonore de confirmation
+function jouerBip() {
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.value = 1200;
+        gain.gain.value = 0.3;
+        osc.start();
+        setTimeout(() => { osc.stop(); ctx.close(); }, 120);
+    } catch(e) {}
+}
+
+async function traiterEANContinu(ean) {
+    const statut = document.getElementById('statut-scanner');
+    const historique = document.getElementById('historique-scans');
+
+    try {
+        const response = await fetch('https://mon-assistant-cuisine.laurent235.workers.dev/poubelle', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                utilisateur: utilisateurActuel,
+                ean: ean,
+                source: 'telephone'
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            compteurScans++;
+            document.getElementById('compteur-scans').innerText = compteurScans;
+
+            const msg = data.nouvelleQte === 0
+                ? `🛒 ${data.produit} → liste de courses`
+                : `✅ ${data.produit} → reste ${data.nouvelleQte}`;
+
+            statut.innerText = msg;
+
+            // Ajouter à l'historique visuel
+            historique.innerHTML = `
+                <div style="background:#2d3748; color:#48bb78; padding:8px 12px; border-radius:8px; margin-bottom:5px; font-size:12px; text-align:left;">
+                    ${msg}
+                </div>` + historique.innerHTML;
+
+        } else {
+            statut.innerText = `⚠️ Produit inconnu (${ean})`;
+            historique.innerHTML = `
+                <div style="background:#2d3748; color:#f6ad55; padding:8px 12px; border-radius:8px; margin-bottom:5px; font-size:12px; text-align:left;">
+                    ⚠️ EAN ${ean} non trouvé
+                </div>` + historique.innerHTML;
+        }
+
+    } catch (err) {
+        console.error('Erreur:', err);
+        statut.innerText = '❌ Erreur de connexion';
     }
 }
 </script>
