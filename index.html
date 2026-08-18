@@ -6,7 +6,6 @@
     <title>FRIGO ELITE v3.0</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-	<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
     <style>
         :root {
@@ -188,6 +187,15 @@
     </button>
     <p style="font-size:11px; color:#888; margin:8px 0 0 0; text-align:center;">
         Passe les emballages devant la caméra
+    </p>
+</div>
+<div class="card" style="padding:15px; border:2px solid #3182ce;">
+    <button onclick="ouvrirScannerDates()"
+            style="background:#3182ce; color:white; border:none; border-radius:12px; padding:14px; cursor:pointer; font-size:14px; font-weight:bold; width:100%;">
+        📅 SCANNER LES DATES DE PÉREMPTION
+    </button>
+    <p style="font-size:11px; color:#888; margin:8px 0 0 0; text-align:center;">
+        Scanne le code-barres puis la date au rangement des courses
     </p>
 </div>
 
@@ -393,7 +401,60 @@
         </button>
     </div>
 </div>
+<!-- 2. MODALE SCANNER DATES — avant </body> -->
+<div id="modal-dates" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:9999; flex-direction:column; align-items:center; justify-content:center;">
+    <div style="width:95%; max-width:500px; text-align:center;">
 
+        <p style="color:white; font-size:18px; font-weight:bold; margin-bottom:5px;" id="titre-etape">
+            1️⃣ SCANNE LE CODE-BARRES
+        </p>
+        <p style="color:#aaa; font-size:13px; margin-bottom:15px;" id="soustitre-etape">
+            Identifie d'abord le produit
+        </p>
+
+        <!-- Zone caméra scan code-barres -->
+        <div id="zone-codebarre">
+            <div id="video-dates" style="width:100%; border-radius:16px; overflow:hidden; border:3px solid #3182ce;"></div>
+        </div>
+
+        <!-- Zone photo date -->
+        <div id="zone-date" style="display:none;">
+            <div style="background:#2d3748; border-radius:12px; padding:20px; margin-bottom:15px;">
+                <div style="color:#48bb78; font-size:16px; font-weight:bold;" id="produit-detecte">—</div>
+                <div style="color:#aaa; font-size:12px; margin-top:5px;">Produit identifié ✅</div>
+            </div>
+
+            <video id="video-photo-date" style="width:100%; border-radius:16px; border:3px solid #48bb78;" autoplay playsinline muted></video>
+
+            <button onclick="prendrePhotoDate()"
+                    style="width:100%; background:#48bb78; color:white; border:none; border-radius:12px; padding:16px; cursor:pointer; font-size:16px; font-weight:bold; margin-top:12px;">
+                📸 PHOTOGRAPHIER LA DATE
+            </button>
+
+            <button onclick="passerDate()"
+                    style="width:100%; background:#718096; color:white; border:none; border-radius:10px; padding:12px; cursor:pointer; font-size:13px; margin-top:8px;">
+                ⏭️ Passer ce produit
+            </button>
+        </div>
+
+        <!-- Compteur -->
+        <div style="background:#2d3748; border-radius:12px; padding:12px; margin-top:15px;">
+            <div style="color:#3182ce; font-size:24px; font-weight:bold;" id="compteur-dates">0</div>
+            <div style="color:#aaa; font-size:12px;">dates enregistrées</div>
+        </div>
+
+        <div id="statut-dates" style="color:#3182ce; font-size:14px; margin-top:12px; font-weight:bold; min-height:20px;">
+            🔍 En attente d'un code-barres...
+        </div>
+
+        <div id="historique-dates" style="margin-top:10px; max-height:100px; overflow-y:auto;"></div>
+
+        <button onclick="fermerScannerDates()"
+                style="background:#e53e3e; color:white; border:none; border-radius:10px; padding:14px 40px; cursor:pointer; font-size:15px; font-weight:bold; margin-top:15px;">
+            ✕ TERMINER
+        </button>
+    </div>
+</div>
 <style>
 @keyframes scanline {
     0%   { top: 15%; }
@@ -1420,52 +1481,26 @@ async function chargerTout() {
             const couleurEtat = item.etat === 'Entamé' ? '#ef6c00' : '#333';
             const labelEtat = item.etat === 'Entamé' ? '⚠️ Entamé' : '📦 Plein';
             let alerteHtml = "";
-            if (item.date_peremption && item.emplacement === 'FRIGO') {
-                const diff = Math.ceil((new Date(item.date_peremption) - new Date()) / 86400000);
-                const icone = diff <= 1 ? "🔴" : diff <= 3 ? "🟠" : "🟢";
-                alerteHtml = `
-                    <div style="display:flex; align-items:center; gap:5px; margin-top:2px;">
-                        <span>${icone}</span>
-                        <small style="font-size:10px; color:#718096;">Exp: ${item.date_peremption}</small>
-                        <button onclick="prolongerDate(${item.id}, '${item.date_peremption}')"
-                                style="font-size:9px; background:#edf2f7; border:1px solid #cbd5e0; border-radius:3px; padding:0 4px; cursor:pointer;">+2j</button>
-                    </div>`;
-            }
-            const destinations = ['FRIGO', 'CONGELATEUR', 'PLACARD', 'ANIMAUX', 'SALLE_DE_BAIN', 'AUTRES'];
-            const optionsHtml = destinations.map(d =>
-                `<option value="${d}" ${d === item.emplacement ? 'selected' : ''}>${d}</option>`
-            ).join('');
- 
-            container.innerHTML += `
-    <div class="item" id="item-${item.id}" style="border-left:4px solid ${item.etat === 'Entamé' ? '#ef6c00' : '#4a5568'}; width:100%; box-sizing:border-box; justify-content:space-between;">
-        
-        <input type="checkbox" 
-               id="check-${item.id}"
-               onchange="mettreAJourBoutonSupprimer()"
-               style="width:18px; height:18px; cursor:pointer; margin-right:8px; flex-shrink:0;">
-        
-        <div style="flex:1;">
-            <b style="color:${couleurEtat};">${item.nom}</b>
-            ${alerteHtml}
-            <div style="display:flex; align-items:center; gap:8px; margin-top:4px;">
-                <select onchange="changerEmplacement(${item.id}, this.value)"
-                        style="font-size:10px; border:1px solid #ddd; border-radius:4px; background:#f7fafc; color:#4a5568; cursor:pointer; padding:2px;">
-                    ${optionsHtml}
-                </select>
-                <small style="cursor:pointer; color:gray;" onclick="basculerEtat(${item.id}, '${item.etat}')">${labelEtat}</small>
-            </div>
-        </div>
-        <div style="display:flex; align-items:center; gap:5px;">
-            <button class="qte-btn" onclick="modifierQuantite(${item.id}, ${item.quantite}, -1)">−</button>
-            <b style="width:28px; text-align:center;">${item.quantite}</b>
-            <button class="qte-btn" onclick="modifierQuantite(${item.id}, ${item.quantite}, 1)">+</button>
-            <button onclick="basculerEtat(${item.id}, '${item.etat}')"
-                    style="background:none; border:none; font-size:20px; cursor:pointer;">
-                ${item.etat === 'Entamé' ? '🍴' : '🍽️'}
-            </button>
-        </div>
-    </div>`;
-        }
+           if (item.date_peremption && item.emplacement === 'FRIGO') {
+    const diff = Math.ceil((new Date(item.date_peremption) - new Date()) / 86400000);
+    const icone = diff <= 1 ? "🔴" : diff <= 3 ? "🟠" : "🟢";
+    
+    // Distinguer date scannée vs estimée
+    const estScannee = item.date_scannee === true;
+    const prefixe = estScannee ? '' : '~';
+    const suffixe = estScannee ? '' : ' (est.)';
+    const couleurTexte = estScannee ? '#2f855a' : '#a0aec0';
+    
+    alerteHtml = `
+        <div style="display:flex; align-items:center; gap:5px; margin-top:2px;">
+            <span>${icone}</span>
+            <small style="font-size:10px; color:${couleurTexte};">
+                Exp: ${prefixe}${item.date_peremption}${suffixe}
+            </small>
+            <button onclick="prolongerDate(${item.id}, '${item.date_peremption}')"
+                    style="font-size:9px; background:#edf2f7; border:1px solid #cbd5e0; border-radius:3px; padding:0 4px; cursor:pointer;">+2j</button>
+        </div>`;
+}
     });
  
     // Badge danger
@@ -2143,6 +2178,339 @@ async function traiterEANContinu(ean) {
         console.error('Erreur:', err);
         statut.innerText = '❌ Erreur de connexion';
     }
+}
+let scannerDates = null;
+let streamPhotoDate = null;
+let compteurDates = 0;
+let produitEnCours = null;
+let etapeActuelle = 'codebarre'; // 'codebarre' ou 'date'
+
+// ============================================================
+// OUVRIR LE MODE SCAN DATES
+// ============================================================
+async function ouvrirScannerDates() {
+    if (!utilisateurActuel) {
+        utilisateurActuel = localStorage.getItem('monFrigo_User');
+    }
+    if (!utilisateurActuel) {
+        afficherToast('❌ Connecte-toi d\'abord !');
+        return;
+    }
+
+    const modal = document.getElementById('modal-dates');
+    modal.style.display = 'flex';
+
+    compteurDates = 0;
+    produitEnCours = null;
+    document.getElementById('compteur-dates').innerText = '0';
+    document.getElementById('historique-dates').innerHTML = '';
+
+    // Activer l'audio
+    if (!window.audioContext) {
+        window.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (window.audioContext.state === 'suspended') {
+        await window.audioContext.resume();
+    }
+
+    await demarrerScanCodeBarre();
+}
+
+// ============================================================
+// ÉTAPE 1 : SCAN CODE-BARRES
+// ============================================================
+async function demarrerScanCodeBarre() {
+    etapeActuelle = 'codebarre';
+
+    document.getElementById('titre-etape').innerText = '1️⃣ SCANNE LE CODE-BARRES';
+    document.getElementById('soustitre-etape').innerText = 'Identifie d\'abord le produit';
+    document.getElementById('zone-codebarre').style.display = 'block';
+    document.getElementById('zone-date').style.display = 'none';
+
+    const statut = document.getElementById('statut-dates');
+    statut.innerText = '🔍 En attente d\'un code-barres...';
+
+    try {
+        scannerDates = new Html5Qrcode("video-dates");
+
+        await scannerDates.start(
+            { facingMode: "environment" },
+            { fps: 15, qrbox: { width: 300, height: 200 }, aspectRatio: 1.5 },
+            async (ean) => {
+                if (etapeActuelle !== 'codebarre') return;
+
+                if (navigator.vibrate) navigator.vibrate(150);
+                jouerBip();
+
+                statut.innerText = `🔍 Recherche du produit...`;
+
+                // Arrêter le scan
+                await scannerDates.stop();
+                scannerDates = null;
+
+                // Identifier le produit
+                await identifierProduitParEAN(ean);
+            },
+            (error) => {}
+        );
+
+    } catch (err) {
+        console.error('Erreur:', err);
+        document.getElementById('statut-dates').innerText = `❌ ${err.message}`;
+    }
+}
+
+// ============================================================
+// IDENTIFIER LE PRODUIT PAR EAN
+// ============================================================
+async function identifierProduitParEAN(ean) {
+    const statut = document.getElementById('statut-dates');
+
+    try {
+        // Chercher dans Supabase par EAN
+        const { data: produits } = await monSupabase
+            .from('inventaire2')
+            .select('id, nom, quantite, date_peremption, ean')
+            .eq('proprietaire', utilisateurActuel)
+            .eq('ean', ean)
+            .neq('etat', 'Vide');
+
+        if (produits?.length > 0) {
+            produitEnCours = produits[0];
+            statut.innerText = `✅ ${produitEnCours.nom}`;
+            await passerEtapeDate();
+            return;
+        }
+
+        // Pas trouvé par EAN → chercher via Open Food Facts + Gemini
+        statut.innerText = '🌐 Recherche du produit...';
+
+        const response = await fetch('https://mon-assistant-cuisine.laurent235.workers.dev/identifier', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                utilisateur: utilisateurActuel,
+                ean: ean
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success && data.produit) {
+            produitEnCours = {
+                id: data.id,
+                nom: data.produit,
+                ean: ean
+            };
+            statut.innerText = `✅ ${data.produit}`;
+            await passerEtapeDate();
+        } else {
+            statut.innerText = `⚠️ Produit non trouvé dans votre stock`;
+            ajouterHistoriqueDate(`⚠️ EAN ${ean} non trouvé`, '#f6ad55');
+            setTimeout(() => demarrerScanCodeBarre(), 2000);
+        }
+
+    } catch (err) {
+        console.error('Erreur identification:', err);
+        statut.innerText = '❌ Erreur de connexion';
+        setTimeout(() => demarrerScanCodeBarre(), 2000);
+    }
+}
+
+// ============================================================
+// ÉTAPE 2 : PHOTO DE LA DATE
+// ============================================================
+async function passerEtapeDate() {
+    etapeActuelle = 'date';
+
+    document.getElementById('titre-etape').innerText = '2️⃣ PHOTOGRAPHIE LA DATE';
+    document.getElementById('soustitre-etape').innerText = 'Tourne l\'emballage vers la date';
+    document.getElementById('zone-codebarre').style.display = 'none';
+    document.getElementById('zone-date').style.display = 'block';
+    document.getElementById('produit-detecte').innerText = produitEnCours.nom;
+
+    // Démarrer la caméra pour la photo
+    try {
+        streamPhotoDate = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'environment' }
+        });
+        const video = document.getElementById('video-photo-date');
+        video.srcObject = streamPhotoDate;
+        await video.play();
+
+        document.getElementById('statut-dates').innerText = '📸 Cadre la date de péremption';
+
+    } catch (err) {
+        console.error('Erreur caméra:', err);
+        document.getElementById('statut-dates').innerText = '❌ Erreur caméra';
+    }
+}
+
+// ============================================================
+// PRENDRE LA PHOTO ET LIRE LA DATE
+// ============================================================
+async function prendrePhotoDate() {
+    const statut = document.getElementById('statut-dates');
+    const video = document.getElementById('video-photo-date');
+
+    if (!video || !streamPhotoDate) return;
+
+    statut.innerText = '🧠 Lecture de la date...';
+
+    try {
+        // Capturer l'image
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0);
+
+        const base64 = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+
+        // Envoyer à Gemini Vision
+        const payload = {
+            contents: [{
+                parts: [
+                    {
+                        text: `Analyse cette photo d'un emballage alimentaire.
+
+MISSION : Trouve la DATE DE PÉREMPTION (DLC, DDM, "à consommer avant", "best before").
+
+Formats possibles : JJ/MM/AAAA, JJ.MM.AAAA, JJ-MM-AA, MM/AAAA, "15 AOU 2026"
+
+Réponds UNIQUEMENT en JSON sans markdown :
+{
+  "date": "2026-08-25",
+  "date_lue": "25/08/2026",
+  "confiance": 0.95
+}
+
+Si aucune date lisible :
+{
+  "date": null,
+  "date_lue": null,
+  "confiance": 0
+}
+
+IMPORTANT : Le champ "date" doit être au format AAAA-MM-JJ.
+Si seul mois/année visible, prends le dernier jour du mois.`
+                    },
+                    { inline_data: { mime_type: "image/jpeg", data: base64 } }
+                ]
+            }],
+            generationConfig: { temperature: 0.1 }
+        };
+
+        const reponse = await appelGemini(payload);
+        const propre = reponse.replace(/```json/g, '').replace(/```/g, '').trim();
+        const jsonStr = propre.substring(propre.indexOf('{'), propre.lastIndexOf('}') + 1);
+        const resultat = JSON.parse(jsonStr);
+
+        if (resultat.date && resultat.confiance > 0.5) {
+            // Enregistrer la date
+            await enregistrerDatePeremption(produitEnCours.id, resultat.date);
+
+            compteurDates++;
+            document.getElementById('compteur-dates').innerText = compteurDates;
+            statut.innerText = `✅ ${resultat.date_lue}`;
+            ajouterHistoriqueDate(`✅ ${produitEnCours.nom} → ${resultat.date_lue}`, '#48bb78');
+
+            if (navigator.vibrate) navigator.vibrate(200);
+            jouerBip();
+
+            // Produit suivant
+            arreterCameraPhoto();
+            setTimeout(() => demarrerScanCodeBarre(), 1500);
+
+        } else {
+            statut.innerText = '⚠️ Date non lisible — réessaie';
+        }
+
+    } catch (err) {
+        console.error('Erreur lecture date:', err);
+        statut.innerText = '❌ Erreur de lecture';
+    }
+}
+
+// ============================================================
+// ENREGISTRER LA DATE — garde la plus proche
+// ============================================================
+async function enregistrerDatePeremption(id, nouvelleDate) {
+    try {
+        // Récupérer la date actuelle
+        const { data: produit } = await monSupabase
+            .from('inventaire2')
+            .select('date_peremption')
+            .eq('id', id)
+            .maybeSingle();
+
+        let dateAEnregistrer = nouvelleDate;
+
+        // Si une date existe déjà, garder la plus proche
+        if (produit?.date_peremption) {
+            const dateExistante = new Date(produit.date_peremption);
+            const dateNouvelle = new Date(nouvelleDate);
+            if (dateExistante < dateNouvelle) {
+                dateAEnregistrer = produit.date_peremption;
+            }
+        }
+
+        await monSupabase
+            .from('inventaire2')
+            .update({ date_peremption: dateAEnregistrer })
+            .eq('id', id)
+            .eq('proprietaire', utilisateurActuel);
+
+    } catch (err) {
+        console.error('Erreur enregistrement date:', err);
+    }
+}
+
+// ============================================================
+// PASSER CE PRODUIT
+// ============================================================
+function passerDate() {
+    arreterCameraPhoto();
+    demarrerScanCodeBarre();
+}
+
+// ============================================================
+// ARRÊTER LA CAMÉRA PHOTO
+// ============================================================
+function arreterCameraPhoto() {
+    if (streamPhotoDate) {
+        streamPhotoDate.getTracks().forEach(t => t.stop());
+        streamPhotoDate = null;
+    }
+}
+
+// ============================================================
+// FERMER LE MODE
+// ============================================================
+async function fermerScannerDates() {
+    document.getElementById('modal-dates').style.display = 'none';
+
+    if (scannerDates) {
+        try { await scannerDates.stop(); } catch(e) {}
+        scannerDates = null;
+    }
+    arreterCameraPhoto();
+
+    if (compteurDates > 0) {
+        afficherToast(`✅ ${compteurDates} date(s) enregistrée(s) !`);
+        await chargerTout();
+    }
+}
+
+// ============================================================
+// HISTORIQUE VISUEL
+// ============================================================
+function ajouterHistoriqueDate(message, couleur) {
+    const historique = document.getElementById('historique-dates');
+    historique.innerHTML = `
+        <div style="background:#2d3748; color:${couleur}; padding:8px 12px; border-radius:8px; margin-bottom:5px; font-size:12px; text-align:left;">
+            ${message}
+        </div>` + historique.innerHTML;
 }
 </script>
 </body>
