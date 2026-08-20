@@ -2302,15 +2302,17 @@ async function demarrerScanCodeBarre() {
 // ============================================================
 async function identifierProduitParEAN(ean) {
     const statut = document.getElementById('statut-dates');
+    console.log('🔍 EAN scanné:', ean, typeof ean);
 
     try {
-        // Chercher dans Supabase par EAN
-        const { data: produits } = await monSupabase
+        const { data: produits, error } = await monSupabase
             .from('inventaire2')
             .select('id, nom, quantite, date_peremption, ean')
             .eq('proprietaire', utilisateurActuel)
             .eq('ean', ean)
             .neq('etat', 'Vide');
+
+        console.log('📦 Résultat:', produits, error);
 
         if (produits?.length > 0) {
             produitEnCours = produits[0];
