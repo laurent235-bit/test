@@ -2319,37 +2319,14 @@ async function identifierProduitParEAN(ean) {
             return;
         }
 
-        // Pas trouvé par EAN → chercher via Open Food Facts + Gemini
-        statut.innerText = '🌐 Recherche du produit...';
-
-        const response = await fetch('https://mon-assistant-cuisine.laurent235.workers.dev/identifier', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                utilisateur: utilisateurActuel,
-                ean: ean
-            })
-        });
-
-        const data = await response.json();
-
-        if (data.success && data.produit) {
-            produitEnCours = {
-                id: data.id,
-                nom: data.produit,
-                ean: ean
-            };
-            statut.innerText = `✅ ${data.produit}`;
-            await passerEtapeDate();
-        } else {
-            statut.innerText = `⚠️ Produit non trouvé dans votre stock`;
-            ajouterHistoriqueDate(`⚠️ EAN ${ean} non trouvé`, '#f6ad55');
-            setTimeout(() => demarrerScanCodeBarre(), 2000);
-        }
+        // Pas trouvé → message et retour au scan
+        statut.innerText = `⚠️ EAN inconnu — scanne d'abord en mode poubelle`;
+        ajouterHistoriqueDate(`⚠️ EAN ${ean} inconnu`, '#f6ad55');
+        setTimeout(() => demarrerScanCodeBarre(), 2500);
 
     } catch (err) {
         console.error('Erreur identification:', err);
-        statut.innerText = '❌ Erreur de connexion';
+        statut.innerText = '❌ Erreur';
         setTimeout(() => demarrerScanCodeBarre(), 2000);
     }
 }
