@@ -2302,36 +2302,64 @@ async function demarrerScanCodeBarre() {
 // ============================================================
 async function identifierProduitParEAN(ean) {
     const statut = document.getElementById('statut-dates');
-    console.log('🔍 EAN scanné:', ean, typeof ean);
-
+    console.log('🔍 EAN scanné:', ean);
+ 
     try {
-        const { data: produits, error } = await monSupabase
+        // 1. Chercher d'abord dans Supabase par EAN (rapide)
+        const { data: produits } = await monSupabase
             .from('inventaire2')
             .select('id, nom, quantite, date_peremption, ean')
             .eq('proprietaire', utilisateurActuel)
             .eq('ean', ean)
             .neq('etat', 'Vide');
-
-        console.log('📦 Résultat:', produits, error);
-
+ 
         if (produits?.length > 0) {
             produitEnCours = produits[0];
             statut.innerText = `✅ ${produitEnCours.nom}`;
             await passerEtapeDate();
             return;
         }
-
-        // Pas trouvé → message et retour au scan
-        statut.innerText = `⚠️ EAN inconnu — scanne d'abord en mode poubelle`;
-        ajouterHistoriqueDate(`⚠️ EAN ${ean} inconnu`, '#f6ad55');
-        setTimeout(() => demarrerScanCodeBarre(), 2500);
-
+ 
+        // 2. EAN inconnu → passer par le Worker (Open Food Facts + Gemini)
+        statut.innerText = '🌐 Recherche du produit...';
+ 
+        const response = await fetch('https://mon-assistant-cuisine.laurent235.workers.dev/identifier', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                utilisateur: utilisateurActuel,
+                ean: ean
+            })
+        });
+ 
+        const data = await response.json();
+        console.log('📦 Réponse Worker:', data);
+ 
+        if (data.success && data.produit) {
+            produitEnCours = {
+                id: data.id,
+                nom: data.produit,
+                ean: ean
+            };
+            statut.innerText = `✅ ${data.produit}`;
+            ajouterHistoriqueDate(`🔗 EAN lié à ${data.produit}`, '#3182ce');
+            await passerEtapeDate();
+        } else {
+            const msg = data.nomDetecte
+                ? `⚠️ "${data.nomDetecte}" pas dans votre stock`
+                : `⚠️ Produit inconnu (${ean})`;
+            statut.innerText = msg;
+            ajouterHistoriqueDate(msg, '#f6ad55');
+            setTimeout(() => demarrerScanCodeBarre(), 2500);
+        }
+ 
     } catch (err) {
         console.error('Erreur identification:', err);
-        statut.innerText = '❌ Erreur';
+        statut.innerText = '❌ Erreur de connexion';
         setTimeout(() => demarrerScanCodeBarre(), 2000);
     }
 }
+ 
 
 // ============================================================
 // ÉTAPE 2 : PHOTO DE LA DATE
