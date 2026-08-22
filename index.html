@@ -544,6 +544,45 @@
             ✕ TERMINER
         </button>
     </div>
+	<!-- 1. AJOUTE CETTE MODALE avant </body> -->
+<div id="modal-saisie-manuelle" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:10000; flex-direction:column; align-items:center; justify-content:center;">
+    <div style="width:92%; max-width:420px; background:white; border-radius:20px; padding:25px;">
+
+        <div style="text-align:center; margin-bottom:20px;">
+            <div style="font-size:40px;">❓</div>
+            <b style="font-size:17px; color:#2d3748; display:block; margin-top:8px;">
+                Produit inconnu
+            </b>
+            <p style="font-size:12px; color:#718096; margin:6px 0 0 0;" id="ean-inconnu">
+                EAN : —
+            </p>
+        </div>
+
+        <label style="font-size:13px; color:#4a5568; font-weight:bold; display:block; margin-bottom:6px;">
+            Quel est ce produit ?
+        </label>
+        <input type="text" id="input-nom-manuel"
+               placeholder="Ex: Papier toilette, Lessive..."
+               style="width:100%; padding:14px; border:2px solid #cbd5e0; border-radius:12px; font-size:15px; margin-bottom:15px;"
+               onkeypress="if(event.key==='Enter') validerSaisieManuelle()">
+
+        <label style="font-size:13px; color:#4a5568; font-weight:bold; display:block; margin-bottom:6px;">
+            Quantité
+        </label>
+        <input type="number" id="input-qte-manuel" value="1" min="1"
+               style="width:100%; padding:14px; border:2px solid #cbd5e0; border-radius:12px; font-size:15px; margin-bottom:20px; text-align:center;">
+
+        <button onclick="validerSaisieManuelle()"
+                style="width:100%; background:#38a169; color:white; border:none; border-radius:12px; padding:15px; cursor:pointer; font-size:15px; font-weight:bold; margin-bottom:10px;">
+            ✅ AJOUTER AU STOCK
+        </button>
+
+        <button onclick="annulerSaisieManuelle()"
+                style="width:100%; background:#718096; color:white; border:none; border-radius:12px; padding:13px; cursor:pointer; font-size:14px;">
+            ⏭️ Passer ce produit
+        </button>
+    </div>
+</div>
 </div>
 <style>
 @keyframes scanline {
@@ -2859,6 +2898,171 @@ function ajouterHistoriqueInventaire(message, couleur) {
         <div style="background:#2d3748; color:${couleur}; padding:8px 12px; border-radius:8px; margin-bottom:5px; font-size:12px; text-align:left;">
             ${message}
         </div>` + historique.innerHTML;
+}
+let eanEnAttente = null;
+
+// ============================================================
+// OUVRIR LA SAISIE MANUELLE
+// ============================================================
+function ouvrirSaisieManuelle(ean) {
+    eanEnAttente = ean;
+    document.getElementById('ean-inconnu').innerText = `EAN : ${ean}`;
+    document.getElementById('input-nom-manuel').value = '';
+    document.getElementById('input-qte-manuel').value = '1';
+    document.getElementById('modal-saisie-manuelle').style.display = 'flex';
+
+    // Focus sur le champ après un court délai
+    setTimeout(() => {
+        document.getElementById('input-nom-manuel').focus();
+    }, 300);
+}
+
+// ============================================================
+// VALIDER LA SAISIE
+// ============================================================
+async function validerSaisieManuelle() {
+    const nom = document.getElementById('input-nom-manuel').value.trim();
+    const qte = parseInt(document.getElementById('input-qte-manuel').value) || 1;
+
+    if (!nom) {
+        afficherToast('⚠️ Entre un nom de produit');
+        return;
+    }
+
+    document.getElementById('modal-saisie-manuelle').style.display = 'none';
+
+    const statut = document.getElementById('statut-inventaire');
+    if (statut) statut.innerText = '💾 Ajout du produit...';
+
+    try {
+        // Générer le nom Alexa
+        let nomAlexa = nom.toLowerCase();
+        try {
+            const reponseIA = await appelGemini(
+                `En 2-3 mots max, nom simplifié prononçable pour Alexa.
+Exemples: "Papier toilette 12 rouleaux" → "papier toilette", "Lessive Ariel 2L" → "lessive"
+Produit: "${nom}"
+Réponds UNIQUEMENT le nom simplifié en minuscules, sans ponctuation.`
+            );
+            if (reponseIA) nomAlexa = reponseIA.trim().toLowerCase();
+        } catch(e) {
+            nomAlexa = nom.split(' ').slice(0, 2).join(' ').toLowerCase();
+        }
+
+        // Insérer dans Supabase
+        const { error } = await monSupabase
+            .from('inventaire2')
+            .insert([{
+                nom: nom,
+                nom_alexa: nomAlexa,
+                ean: eanEnAttente,
+                quantite: qte,
+                emplacement: emplacementInventaire || 'PLACARD',
+                etat: 'Plein',
+                proprietaire: utilisateurActuel
+            }]);
+
+        if (error) throw error;
+
+        compteurInventaire++;
+        document.getElementById('compteur-inventaire').innerText = compteurInventaire;
+        if (statut) statut.innerText = `🆕 ${nom} ajouté !`;
+        ajouterHistoriqueInventaire(`🆕 ${nom} (saisie manuelle)`, '#805ad5');
+
+        if (navigator.vibrate) navigator.vibrate(200);
+        jouerBip();
+
+    } catch (err) {
+        console.error('Erreur saisie manuelle:', err);
+        if (statut) statut.innerText = '❌ Erreur d\'ajout';
+        afficherToast('❌ Erreur : ' + err.message);
+    }
+
+    eanEnAttente = null;
+}
+
+// ============================================================
+// ANNULER LA SAISIE
+// ============================================================
+function annulerSaisieManuelle() {
+    document.getElementById('modal-saisie-manuelle').style.display = 'none';
+    eanEnAttente = null;
+    const statut = document.getElementById('statut-inventaire');
+    if (statut) statut.innerText = '🔍 Scanne un produit...';
+}
+</script>
+
+<!-- ============================================================
+3. MODIFIE ajouterProduitInventaire() — remplace la fin
+============================================================ -->
+<script>
+// REMPLACE la fonction ajouterProduitInventaire par celle-ci
+
+async function ajouterProduitInventaire(ean) {
+    const statut = document.getElementById('statut-inventaire');
+    statut.innerText = '🔍 Identification...';
+
+    try {
+        // 1. Chercher si l'EAN existe déjà dans le stock
+        const { data: existants } = await monSupabase
+            .from('inventaire2')
+            .select('id, nom, quantite, emplacement')
+            .eq('proprietaire', utilisateurActuel)
+            .eq('ean', ean)
+            .neq('etat', 'Vide');
+
+        if (existants?.length > 0) {
+            const produit = existants[0];
+            const nouvelleQte = (parseInt(produit.quantite) || 0) + 1;
+
+            await monSupabase
+                .from('inventaire2')
+                .update({ quantite: nouvelleQte, etat: 'Plein' })
+                .eq('id', produit.id);
+
+            compteurInventaire++;
+            document.getElementById('compteur-inventaire').innerText = compteurInventaire;
+            statut.innerText = `✅ ${produit.nom} → ${nouvelleQte}`;
+            ajouterHistoriqueInventaire(`➕ ${produit.nom} → ${nouvelleQte}`, '#48bb78');
+            return;
+        }
+
+        // 2. EAN inconnu → chercher via le Worker (3 bases Open Facts)
+        statut.innerText = '🌐 Recherche du produit...';
+
+        const response = await fetch('https://mon-assistant-cuisine.laurent235.workers.dev/inventaire', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                utilisateur: utilisateurActuel,
+                ean: ean,
+                emplacement: emplacementInventaire
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            compteurInventaire++;
+            document.getElementById('compteur-inventaire').innerText = compteurInventaire;
+
+            if (data.nouveau) {
+                statut.innerText = `🆕 ${data.produit} ajouté !`;
+                ajouterHistoriqueInventaire(`🆕 ${data.produit}`, '#3182ce');
+            } else {
+                statut.innerText = `✅ ${data.produit} → ${data.quantite}`;
+                ajouterHistoriqueInventaire(`➕ ${data.produit} → ${data.quantite}`, '#48bb78');
+            }
+        } else {
+            // 3. PRODUIT INTROUVABLE → SAISIE MANUELLE
+            statut.innerText = `❓ Produit inconnu — saisie manuelle`;
+            ouvrirSaisieManuelle(ean);
+        }
+
+    } catch (err) {
+        console.error('Erreur ajout inventaire:', err);
+        statut.innerText = '❌ Erreur de connexion';
+    }
 }
 </script>
 </body>
