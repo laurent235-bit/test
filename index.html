@@ -178,6 +178,16 @@
 
 <!-- TOAST -->
 <div id="toast"></div>
+<!-- 1. AJOUTE CE BOUTON dans une card -->
+<div class="card" style="padding:15px; border:2px solid #38a169;">
+    <button onclick="ouvrirModeInventaire()"
+            style="background:#38a169; color:white; border:none; border-radius:12px; padding:14px; cursor:pointer; font-size:14px; font-weight:bold; width:100%;">
+        📦 MODE INVENTAIRE (scanner pour ajouter)
+    </button>
+    <p style="font-size:11px; color:#888; margin:8px 0 0 0; text-align:center;">
+        Scanne tes produits pour les ajouter au stock
+    </p>
+</div>
 
 <!-- 2. AJOUTE CE BOUTON dans une card -->
 <div class="card" style="padding:15px; border:2px solid #2d3748;">
@@ -399,6 +409,86 @@
                 style="background:#e53e3e; color:white; border:none; border-radius:10px; padding:14px 40px; cursor:pointer; font-size:15px; font-weight:bold; margin-top:15px;">
             ✕ TERMINER
         </button>
+    </div>
+</div>
+<!-- 2. MODALE INVENTAIRE — avant </body> -->
+<div id="modal-inventaire" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:9999; flex-direction:column; align-items:center; justify-content:center; overflow-y:auto;">
+    <div style="width:95%; max-width:500px; text-align:center; padding:20px 0;">
+
+        <!-- ÉTAPE 1 : Choix emplacement -->
+        <div id="etape-emplacement">
+            <p style="color:white; font-size:20px; font-weight:bold; margin-bottom:8px;">
+                📦 MODE INVENTAIRE
+            </p>
+            <p style="color:#aaa; font-size:14px; margin-bottom:25px;">
+                Où ranges-tu ces produits ?
+            </p>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                <button onclick="choisirEmplacementInventaire('FRIGO')"
+                        style="background:#3182ce; color:white; border:none; border-radius:14px; padding:22px 10px; cursor:pointer; font-size:15px; font-weight:bold;">
+                    🥦<br>FRIGO
+                </button>
+                <button onclick="choisirEmplacementInventaire('CONGELATEUR')"
+                        style="background:#00838f; color:white; border:none; border-radius:14px; padding:22px 10px; cursor:pointer; font-size:15px; font-weight:bold;">
+                    ❄️<br>CONGÉLO
+                </button>
+                <button onclick="choisirEmplacementInventaire('PLACARD')"
+                        style="background:#ed8936; color:white; border:none; border-radius:14px; padding:22px 10px; cursor:pointer; font-size:15px; font-weight:bold;">
+                    🍝<br>PLACARD
+                </button>
+                <button onclick="choisirEmplacementInventaire('ANIMAUX')"
+                        style="background:#805ad5; color:white; border:none; border-radius:14px; padding:22px 10px; cursor:pointer; font-size:15px; font-weight:bold;">
+                    🐾<br>ANIMAUX
+                </button>
+                <button onclick="choisirEmplacementInventaire('SALLE_DE_BAIN')"
+                        style="background:#38b2ac; color:white; border:none; border-radius:14px; padding:22px 10px; cursor:pointer; font-size:15px; font-weight:bold;">
+                    🚿<br>SALLE DE BAIN
+                </button>
+                <button onclick="choisirEmplacementInventaire('AUTRES')"
+                        style="background:#718096; color:white; border:none; border-radius:14px; padding:22px 10px; cursor:pointer; font-size:15px; font-weight:bold;">
+                    📦<br>AUTRES
+                </button>
+            </div>
+
+            <button onclick="fermerModeInventaire()"
+                    style="background:#e53e3e; color:white; border:none; border-radius:10px; padding:14px 40px; cursor:pointer; font-size:15px; font-weight:bold; margin-top:25px;">
+                ✕ ANNULER
+            </button>
+        </div>
+
+        <!-- ÉTAPE 2 : Scan -->
+        <div id="etape-scan-inventaire" style="display:none;">
+            <p style="color:white; font-size:18px; font-weight:bold; margin-bottom:5px;">
+                📦 SCAN INVENTAIRE
+            </p>
+            <p style="color:#48bb78; font-size:14px; font-weight:bold; margin-bottom:15px;" id="emplacement-actuel">
+                → FRIGO
+            </p>
+
+            <div id="video-inventaire" style="width:100%; border-radius:16px; overflow:hidden; border:3px solid #38a169;"></div>
+
+            <div style="background:#2d3748; border-radius:12px; padding:12px; margin-top:15px;">
+                <div style="color:#38a169; font-size:26px; font-weight:bold;" id="compteur-inventaire">0</div>
+                <div style="color:#aaa; font-size:12px;">produits ajoutés</div>
+            </div>
+
+            <div id="statut-inventaire" style="color:#38a169; font-size:14px; margin-top:12px; font-weight:bold; min-height:22px;">
+                🔍 Scanne un produit...
+            </div>
+
+            <div id="historique-inventaire" style="margin-top:10px; max-height:130px; overflow-y:auto;"></div>
+
+            <button onclick="changerEmplacementInventaire()"
+                    style="background:#4a5568; color:white; border:none; border-radius:10px; padding:12px; cursor:pointer; font-size:13px; font-weight:bold; width:100%; margin-top:12px;">
+                🔄 Changer d'emplacement
+            </button>
+
+            <button onclick="fermerModeInventaire()"
+                    style="background:#e53e3e; color:white; border:none; border-radius:10px; padding:14px 40px; cursor:pointer; font-size:15px; font-weight:bold; margin-top:10px;">
+                ✕ TERMINER
+            </button>
+        </div>
     </div>
 </div>
 <!-- 2. MODALE SCANNER DATES — avant </body> -->
@@ -2551,6 +2641,222 @@ async function fermerScannerDates() {
 // ============================================================
 function ajouterHistoriqueDate(message, couleur) {
     const historique = document.getElementById('historique-dates');
+    historique.innerHTML = `
+        <div style="background:#2d3748; color:${couleur}; padding:8px 12px; border-radius:8px; margin-bottom:5px; font-size:12px; text-align:left;">
+            ${message}
+        </div>` + historique.innerHTML;
+}
+<!-- ============================================================
+3. FONCTIONS JS
+============================================================ -->
+<script>
+let scannerInventaire = null;
+let compteurInventaire = 0;
+let emplacementInventaire = 'FRIGO';
+let derniersEANInventaire = [];
+let scanInventairePause = false;
+
+const LABELS_EMPLACEMENT = {
+    'FRIGO': '🥦 FRIGO',
+    'CONGELATEUR': '❄️ CONGÉLATEUR',
+    'PLACARD': '🍝 PLACARD',
+    'ANIMAUX': '🐾 ANIMAUX',
+    'SALLE_DE_BAIN': '🚿 SALLE DE BAIN',
+    'AUTRES': '📦 AUTRES'
+};
+
+// ============================================================
+// OUVRIR LE MODE INVENTAIRE
+// ============================================================
+async function ouvrirModeInventaire() {
+    if (!utilisateurActuel) {
+        utilisateurActuel = localStorage.getItem('monFrigo_User');
+    }
+    if (!utilisateurActuel) {
+        afficherToast('❌ Connecte-toi d\'abord !');
+        return;
+    }
+
+    const modal = document.getElementById('modal-inventaire');
+    modal.style.display = 'flex';
+
+    // Afficher l'étape choix emplacement
+    document.getElementById('etape-emplacement').style.display = 'block';
+    document.getElementById('etape-scan-inventaire').style.display = 'none';
+
+    compteurInventaire = 0;
+    derniersEANInventaire = [];
+    document.getElementById('compteur-inventaire').innerText = '0';
+    document.getElementById('historique-inventaire').innerHTML = '';
+
+    // Activer l'audio
+    if (!window.audioContext) {
+        window.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (window.audioContext.state === 'suspended') {
+        await window.audioContext.resume();
+    }
+}
+
+// ============================================================
+// CHOISIR L'EMPLACEMENT ET DÉMARRER LE SCAN
+// ============================================================
+async function choisirEmplacementInventaire(emplacement) {
+    emplacementInventaire = emplacement;
+
+    document.getElementById('etape-emplacement').style.display = 'none';
+    document.getElementById('etape-scan-inventaire').style.display = 'block';
+    document.getElementById('emplacement-actuel').innerText = '→ ' + LABELS_EMPLACEMENT[emplacement];
+
+    await demarrerScanInventaire();
+}
+
+// ============================================================
+// CHANGER D'EMPLACEMENT EN COURS DE ROUTE
+// ============================================================
+async function changerEmplacementInventaire() {
+    if (scannerInventaire) {
+        try { await scannerInventaire.stop(); } catch(e) {}
+        scannerInventaire = null;
+    }
+    document.getElementById('etape-emplacement').style.display = 'block';
+    document.getElementById('etape-scan-inventaire').style.display = 'none';
+}
+
+// ============================================================
+// DÉMARRER LE SCAN
+// ============================================================
+async function demarrerScanInventaire() {
+    const statut = document.getElementById('statut-inventaire');
+    statut.innerText = '📷 Démarrage de la caméra...';
+    scanInventairePause = false;
+
+    try {
+        scannerInventaire = new Html5Qrcode("video-inventaire");
+
+        await scannerInventaire.start(
+            { facingMode: "environment" },
+            { fps: 15, qrbox: { width: 300, height: 200 }, aspectRatio: 1.5 },
+            async (ean) => {
+                if (scanInventairePause) return;
+                if (derniersEANInventaire.includes(ean)) return;
+
+                scanInventairePause = true;
+                derniersEANInventaire.push(ean);
+                setTimeout(() => {
+                    derniersEANInventaire = derniersEANInventaire.filter(e => e !== ean);
+                }, 3000);
+
+                if (navigator.vibrate) navigator.vibrate(150);
+                jouerBip();
+
+                await ajouterProduitInventaire(ean);
+
+                setTimeout(() => { scanInventairePause = false; }, 800);
+            },
+            (error) => {}
+        );
+
+        statut.innerText = '🔍 Scanne un produit...';
+
+    } catch (err) {
+        console.error('Erreur:', err);
+        statut.innerText = `❌ ${err.message}`;
+    }
+}
+
+// ============================================================
+// AJOUTER LE PRODUIT AU STOCK
+// ============================================================
+async function ajouterProduitInventaire(ean) {
+    const statut = document.getElementById('statut-inventaire');
+    statut.innerText = '🔍 Identification...';
+
+    try {
+        // 1. Chercher si l'EAN existe déjà dans le stock
+        const { data: existants } = await monSupabase
+            .from('inventaire2')
+            .select('id, nom, quantite, emplacement')
+            .eq('proprietaire', utilisateurActuel)
+            .eq('ean', ean)
+            .neq('etat', 'Vide');
+
+        if (existants?.length > 0) {
+            // Produit déjà en stock → quantité +1
+            const produit = existants[0];
+            const nouvelleQte = (parseInt(produit.quantite) || 0) + 1;
+
+            await monSupabase
+                .from('inventaire2')
+                .update({ quantite: nouvelleQte, etat: 'Plein' })
+                .eq('id', produit.id);
+
+            compteurInventaire++;
+            document.getElementById('compteur-inventaire').innerText = compteurInventaire;
+            statut.innerText = `✅ ${produit.nom} → ${nouvelleQte}`;
+            ajouterHistoriqueInventaire(`➕ ${produit.nom} → ${nouvelleQte}`, '#48bb78');
+            return;
+        }
+
+        // 2. EAN inconnu → chercher sur Open Food Facts via le Worker
+        statut.innerText = '🌐 Recherche du produit...';
+
+        const response = await fetch('https://mon-assistant-cuisine.laurent235.workers.dev/inventaire', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                utilisateur: utilisateurActuel,
+                ean: ean,
+                emplacement: emplacementInventaire
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            compteurInventaire++;
+            document.getElementById('compteur-inventaire').innerText = compteurInventaire;
+
+            if (data.nouveau) {
+                statut.innerText = `🆕 ${data.produit} ajouté !`;
+                ajouterHistoriqueInventaire(`🆕 ${data.produit}`, '#3182ce');
+            } else {
+                statut.innerText = `✅ ${data.produit} → ${data.quantite}`;
+                ajouterHistoriqueInventaire(`➕ ${data.produit} → ${data.quantite}`, '#48bb78');
+            }
+        } else {
+            statut.innerText = `⚠️ Produit inconnu (${ean})`;
+            ajouterHistoriqueInventaire(`⚠️ EAN ${ean} inconnu`, '#f6ad55');
+        }
+
+    } catch (err) {
+        console.error('Erreur ajout inventaire:', err);
+        statut.innerText = '❌ Erreur de connexion';
+    }
+}
+
+// ============================================================
+// FERMER LE MODE
+// ============================================================
+async function fermerModeInventaire() {
+    document.getElementById('modal-inventaire').style.display = 'none';
+
+    if (scannerInventaire) {
+        try { await scannerInventaire.stop(); } catch(e) {}
+        scannerInventaire = null;
+    }
+
+    if (compteurInventaire > 0) {
+        afficherToast(`✅ ${compteurInventaire} produit(s) ajouté(s) !`);
+        await chargerTout();
+    }
+}
+
+// ============================================================
+// HISTORIQUE VISUEL
+// ============================================================
+function ajouterHistoriqueInventaire(message, couleur) {
+    const historique = document.getElementById('historique-inventaire');
     historique.innerHTML = `
         <div style="background:#2d3748; color:${couleur}; padding:8px 12px; border-radius:8px; margin-bottom:5px; font-size:12px; text-align:left;">
             ${message}
