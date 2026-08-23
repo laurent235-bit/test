@@ -3008,10 +3008,12 @@ async function demarrerScanCamera() {
 
         statut.innerText = '🔍 En attente d\'un code-barres...';
 
-    } catch (err) {
+        } catch (err) {
         console.error('Erreur:', err);
         statut.innerText = `❌ ${err.message}`;
+    }
 }
+
 let wakeLock = null;
 
 async function activerWakeLock() {
