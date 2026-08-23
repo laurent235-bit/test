@@ -2195,6 +2195,7 @@ let scannerContinu = null;
 let compteurScans = 0;
 let derniersEAN = [];  // Évite les doublons rapides
 let scanEnPause = false;
+let cameraAvant = false;
 
 async function ouvrirScannerContinu() {
     if (!utilisateurActuel) {
@@ -2222,16 +2223,7 @@ if (window.audioContext.state === 'suspended') {
     document.getElementById('compteur-scans').innerText = '0';
     document.getElementById('historique-scans').innerHTML = '';
 
-    try {
-        scannerContinu = new Html5Qrcode("video-scanner");
-
-        await scannerContinu.start(
-            { facingMode: "environment" },
-            {
-                fps: 15,                              // Scan rapide
-                qrbox: { width: 300, height: 200 },   // Zone large
-                aspectRatio: 1.5
-            },
+        await demarrerScanCamera();
             async (ean) => {
                 // Éviter les doublons dans les 3 dernières secondes
                 if (scanEnPause) return;
@@ -3064,35 +3056,65 @@ async function ajouterProduitInventaire(ean) {
         statut.innerText = '❌ Erreur de connexion';
     }
 }
-let cameraAvant = false;
 
-// Dans ta modale, ajoute ce bouton :
-// <button onclick="basculerCamera()">🔄 Changer de caméra</button>
-
+// ============================================================
+// BASCULER ENTRE CAMÉRA AVANT ET ARRIÈRE
+// ============================================================
 async function basculerCamera() {
     cameraAvant = !cameraAvant;
-    
+
+    const statut = document.getElementById('statut-scanner');
+    statut.innerText = cameraAvant ? '🤳 Caméra avant...' : '📷 Caméra arrière...';
+
     // Arrêter le scanner actuel
     if (scannerContinu) {
         try { await scannerContinu.stop(); } catch(e) {}
         scannerContinu = null;
     }
-    
+
     // Redémarrer avec l'autre caméra
-    await demarrerScanAvecCamera();
+    await demarrerScanCamera();
 }
 
-async function demarrerScanAvecCamera() {
-    scannerContinu = new Html5Qrcode("video-scanner");
-    
-    await scannerContinu.start(
-        { facingMode: cameraAvant ? "user" : "environment" },
-        { fps: 15, qrbox: { width: 300, height: 200 } },
-        async (ean) => {
-            // ... ton code de traitement
-        },
-        (error) => {}
-    );
+// ============================================================
+// DÉMARRER LE SCAN AVEC LA CAMÉRA CHOISIE
+// ============================================================
+async function demarrerScanCamera() {
+    const statut = document.getElementById('statut-scanner');
+
+    try {
+        scannerContinu = new Html5Qrcode("video-scanner");
+
+        await scannerContinu.start(
+            { facingMode: cameraAvant ? "user" : "environment" },
+            { fps: 15, qrbox: { width: 300, height: 200 }, aspectRatio: 1.5 },
+            async (ean) => {
+                if (scanEnPause) return;
+                if (derniersEAN.includes(ean)) return;
+
+                scanEnPause = true;
+                derniersEAN.push(ean);
+                setTimeout(() => {
+                    derniersEAN = derniersEAN.filter(e => e !== ean);
+                }, 3000);
+
+                statut.innerText = `✅ ${ean}`;
+                if (navigator.vibrate) navigator.vibrate(150);
+                jouerBip();
+
+                await traiterEANContinu(ean);
+
+                setTimeout(() => { scanEnPause = false; }, 1000);
+            },
+            (error) => {}
+        );
+
+        statut.innerText = '🔍 En attente d\'un code-barres...';
+
+    } catch (err) {
+        console.error('Erreur:', err);
+        statut.innerText = `❌ ${err.message}`;
+    ouvrirScannerContinu
 }
 </script>
 </body>
