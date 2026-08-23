@@ -3089,6 +3089,29 @@ async function demarrerScanCamera() {
         statut.innerText = `❌ ${err.message}`;
     ouvrirScannerContinu
 }
+let wakeLock = null;
+
+async function activerWakeLock() {
+    try {
+        if ('wakeLock' in navigator) {
+            wakeLock = await navigator.wakeLock.request('screen');
+            console.log('✅ Écran maintenu allumé');
+        }
+    } catch (err) {
+        console.log('⚠️ Wake Lock:', err.message);
+    }
+}
+
+async function desactiverWakeLock() {
+    try {
+        if (wakeLock) {
+            await wakeLock.release();
+            wakeLock = null;
+        }
+    } catch (err) {
+        console.log('⚠️ Erreur:', err.message);
+    }
+}
 </script>
 </body>
 </html>
