@@ -2208,53 +2208,26 @@ async function ouvrirScannerContinu() {
 
     const modal = document.getElementById('modal-scanner');
     const statut = document.getElementById('statut-scanner');
-
     modal.style.display = 'flex';
-	// Activer l'audio (le clic sur le bouton l'autorise)
-if (!window.audioContext) {
-    window.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-}
-if (window.audioContext.state === 'suspended') {
-    await window.audioContext.resume();
-}
+
+    // Activer l'audio
+    if (!window.audioContext) {
+        window.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (window.audioContext.state === 'suspended') {
+        await window.audioContext.resume();
+    }
+
+    // Garder l'écran allumé
+    await activerWakeLock();
+
     statut.innerText = '📷 Démarrage de la caméra...';
     compteurScans = 0;
     derniersEAN = [];
     document.getElementById('compteur-scans').innerText = '0';
     document.getElementById('historique-scans').innerHTML = '';
 
-        await demarrerScanCamera();
-            async (ean) => {
-                // Éviter les doublons dans les 3 dernières secondes
-                if (scanEnPause) return;
-                if (derniersEAN.includes(ean)) return;
-
-                scanEnPause = true;
-                derniersEAN.push(ean);
-
-                // Nettoyer l'historique après 3 secondes
-                setTimeout(() => {
-                    derniersEAN = derniersEAN.filter(e => e !== ean);
-                }, 3000);
-
-                statut.innerText = `✅ ${ean}`;
-                if (navigator.vibrate) navigator.vibrate(150);
-                jouerBip();
-
-                await traiterEANContinu(ean);
-
-                // Reprendre le scan après 1 seconde
-                setTimeout(() => { scanEnPause = false; }, 1000);
-            },
-            (error) => {} // Ignorer les erreurs de scan
-        );
-
-        statut.innerText = '🔍 En attente d\'un code-barres...';
-
-    } catch (err) {
-        console.error('Erreur:', err);
-        statut.innerText = `❌ ${err.message}`;
-    }
+    await demarrerScanCamera();
 }
 
 async function fermerScannerContinu() {
