@@ -3064,6 +3064,36 @@ async function ajouterProduitInventaire(ean) {
         statut.innerText = '❌ Erreur de connexion';
     }
 }
+let cameraAvant = false;
+
+// Dans ta modale, ajoute ce bouton :
+// <button onclick="basculerCamera()">🔄 Changer de caméra</button>
+
+async function basculerCamera() {
+    cameraAvant = !cameraAvant;
+    
+    // Arrêter le scanner actuel
+    if (scannerContinu) {
+        try { await scannerContinu.stop(); } catch(e) {}
+        scannerContinu = null;
+    }
+    
+    // Redémarrer avec l'autre caméra
+    await demarrerScanAvecCamera();
+}
+
+async function demarrerScanAvecCamera() {
+    scannerContinu = new Html5Qrcode("video-scanner");
+    
+    await scannerContinu.start(
+        { facingMode: cameraAvant ? "user" : "environment" },
+        { fps: 15, qrbox: { width: 300, height: 200 } },
+        async (ean) => {
+            // ... ton code de traitement
+        },
+        (error) => {}
+    );
+}
 </script>
 </body>
 </html>
