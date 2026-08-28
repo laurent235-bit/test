@@ -195,6 +195,52 @@
             style="background:#2d3748; color:white; border:none; border-radius:12px; padding:14px; cursor:pointer; font-size:14px; font-weight:bold; width:100%;">
         🗑️ MODE POUBELLE (scan continu)
     </button>
+	<div id="modal-quantite" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:10000; flex-direction:column; align-items:center; justify-content:center;">
+    <div style="width:92%; max-width:420px; background:white; border-radius:20px; padding:25px;">
+
+        <div style="text-align:center; margin-bottom:20px;">
+            <div style="font-size:40px;">📦</div>
+            <b style="font-size:18px; color:#2d3748; display:block; margin-top:8px;" id="produit-quantite">
+                —
+            </b>
+            <p style="font-size:14px; color:#38a169; margin:6px 0 0 0; font-weight:bold;" id="stock-actuel">
+                En stock : —
+            </p>
+        </div>
+
+        <p style="font-size:14px; color:#4a5568; font-weight:bold; text-align:center; margin-bottom:15px;">
+            Combien retirer ?
+        </p>
+
+        <!-- Boutons rapides -->
+        <div style="display:flex; gap:10px; margin-bottom:12px;">
+            <button onclick="validerQuantiteRetrait(1)"
+                    style="flex:1; background:#3182ce; color:white; border:none; border-radius:12px; padding:18px; cursor:pointer; font-size:20px; font-weight:bold;">
+                −1
+            </button>
+            <button onclick="validerQuantiteRetraitTout()"
+                    style="flex:2; background:#e53e3e; color:white; border:none; border-radius:12px; padding:18px; cursor:pointer; font-size:15px; font-weight:bold;"
+                    id="btn-tout-retirer">
+                🗑️ TOUT (—)
+            </button>
+        </div>
+
+        <!-- Quantité personnalisée -->
+        <div style="display:flex; gap:10px; margin-bottom:15px; align-items:center;">
+            <input type="number" id="input-qte-retrait" value="2" min="1"
+                   style="flex:1; padding:14px; border:2px solid #cbd5e0; border-radius:12px; font-size:16px; text-align:center;">
+            <button onclick="validerQuantiteRetraitPerso()"
+                    style="flex:1; background:#38a169; color:white; border:none; border-radius:12px; padding:14px; cursor:pointer; font-size:14px; font-weight:bold;">
+                ✅ Retirer
+            </button>
+        </div>
+
+        <button onclick="annulerQuantiteRetrait()"
+                style="width:100%; background:#718096; color:white; border:none; border-radius:12px; padding:13px; cursor:pointer; font-size:14px;">
+            ✕ Annuler
+        </button>
+    </div>
+</div>
     <p style="font-size:11px; color:#888; margin:8px 0 0 0; text-align:center;">
         Passe les emballages devant la caméra
     </p>
@@ -2272,85 +2318,63 @@ async function traiterEANContinu(ean) {
     const statut = document.getElementById('statut-scanner');
     const historique = document.getElementById('historique-scans');
 
+    statut.innerText = '🔍 Recherche du produit...';
+
     try {
-        const response = await fetch('https://mon-assistant-cuisine.laurent235.workers.dev/poubelle', {
+        // 1. Chercher directement dans Supabase par EAN
+        const { data: produits } = await monSupabase
+            .from('inventaire2')
+            .select('id, nom, quantite')
+            .eq('proprietaire', utilisateurActuel)
+            .eq('ean', ean)
+            .neq('etat', 'Vide');
+
+        if (produits?.length > 0) {
+            // Produit trouvé → demander la quantité
+            ouvrirModaleQuantite(produits[0]);
+            return;
+        }
+
+        // 2. EAN inconnu → passer par le Worker pour identifier
+        statut.innerText = '🌐 Identification du produit...';
+
+        const response = await fetch('https://mon-assistant-cuisine.laurent235.workers.dev/identifier', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 utilisateur: utilisateurActuel,
-                ean: ean,
-                source: 'telephone'
+                ean: ean
             })
         });
 
         const data = await response.json();
 
-        if (data.success) {
-            compteurScans++;
-            document.getElementById('compteur-scans').innerText = compteurScans;
+        if (data.success && data.id) {
+            // Récupérer la quantité actuelle
+            const { data: produit } = await monSupabase
+                .from('inventaire2')
+                .select('id, nom, quantite')
+                .eq('id', data.id)
+                .maybeSingle();
 
-            const msg = data.nouvelleQte === 0
-                ? `🛒 ${data.produit} → liste de courses`
-                : `✅ ${data.produit} → reste ${data.nouvelleQte}`;
-
-            statut.innerText = msg;
-
-            // Ajouter à l'historique visuel
-            historique.innerHTML = `
-                <div style="background:#2d3748; color:#48bb78; padding:8px 12px; border-radius:8px; margin-bottom:5px; font-size:12px; text-align:left;">
-                    ${msg}
-                </div>` + historique.innerHTML;
-
-        } else {
-            statut.innerText = `⚠️ Produit inconnu (${ean})`;
-            historique.innerHTML = `
-                <div style="background:#2d3748; color:#f6ad55; padding:8px 12px; border-radius:8px; margin-bottom:5px; font-size:12px; text-align:left;">
-                    ⚠️ EAN ${ean} non trouvé
-                </div>` + historique.innerHTML;
+            if (produit) {
+                ouvrirModaleQuantite(produit);
+                return;
+            }
         }
+
+        // Produit non trouvé
+        statut.innerText = `⚠️ Produit inconnu (${ean})`;
+        historique.innerHTML = `
+            <div style="background:#2d3748; color:#f6ad55; padding:8px 12px; border-radius:8px; margin-bottom:5px; font-size:12px; text-align:left;">
+                ⚠️ EAN ${ean} non trouvé
+            </div>` + historique.innerHTML;
 
     } catch (err) {
         console.error('Erreur:', err);
         statut.innerText = '❌ Erreur de connexion';
     }
 }
-let scannerDates = null;
-let streamPhotoDate = null;
-let compteurDates = 0;
-let produitEnCours = null;
-let etapeActuelle = 'codebarre'; // 'codebarre' ou 'date'
-
-// ============================================================
-// OUVRIR LE MODE SCAN DATES
-// ============================================================
-async function ouvrirScannerDates() {
-    if (!utilisateurActuel) {
-        utilisateurActuel = localStorage.getItem('monFrigo_User');
-    }
-    if (!utilisateurActuel) {
-        afficherToast('❌ Connecte-toi d\'abord !');
-        return;
-    }
-
-    const modal = document.getElementById('modal-dates');
-    modal.style.display = 'flex';
-
-    compteurDates = 0;
-    produitEnCours = null;
-    document.getElementById('compteur-dates').innerText = '0';
-    document.getElementById('historique-dates').innerHTML = '';
-
-    // Activer l'audio
-    if (!window.audioContext) {
-        window.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    }
-    if (window.audioContext.state === 'suspended') {
-        await window.audioContext.resume();
-    }
-
-    await demarrerScanCodeBarre();
-}
-
 // ============================================================
 // ÉTAPE 1 : SCAN CODE-BARRES
 // ============================================================
@@ -2466,7 +2490,7 @@ async function passerEtapeDate() {
     etapeActuelle = 'date';
 
     document.getElementById('titre-etape').innerText = '2️⃣ PHOTOGRAPHIE LA DATE';
-    document.getElementById('soustitre-etape').innerText = 'Tourne l\'emballage vers la date';
+    traiter.getElementById('soustitre-etape').innerText = 'Tourne l\'emballage vers la date';
     document.getElementById('zone-codebarre').style.display = 'none';
     document.getElementById('zone-date').style.display = 'block';
     document.getElementById('produit-detecte').innerText = produitEnCours.nom;
@@ -3040,6 +3064,110 @@ async function desactiverWakeLock() {
     } catch (err) {
         console.log('⚠️ Erreur:', err.message);
     }
+}
+async function appliquerRetrait(qteARetirer) {
+    if (!produitARetirer) return;
+
+    const statut = document.getElementById('statut-scanner');
+    const historique = document.getElementById('historique-scans');
+
+    try {
+        const qteActuelle = parseInt(produitARetirer.quantite) || 0;
+        const nouvelleQte = Math.max(0, qteActuelle - qteARetirer);
+
+        if (nouvelleQte === 0) {
+            // Stock épuisé → liste de courses
+            await monSupabase
+                .from('inventaire2')
+                .update({ quantite: 0, etat: 'Vide' })
+                .eq('id', produitARetirer.id)
+                .eq('proprietaire', utilisateurActuel);
+
+            const msg = `🛒 ${produitARetirer.nom} → liste de courses`;
+            statut.innerText = msg;
+            historique.innerHTML = `
+                <div style="background:#2d3748; color:#f6ad55; padding:8px 12px; border-radius:8px; margin-bottom:5px; font-size:12px; text-align:left;">
+                    ${msg}
+                </div>` + historique.innerHTML;
+
+        } else {
+            await monSupabase
+                .from('inventaire2')
+                .update({ quantite: nouvelleQte })
+                .eq('id', produitARetirer.id)
+                .eq('proprietaire', utilisateurActuel);
+
+            const msg = `✅ ${produitARetirer.nom} −${qteARetirer} → reste ${nouvelleQte}`;
+            statut.innerText = msg;
+            historique.innerHTML = `
+                <div style="background:#2d3748; color:#48bb78; padding:8px 12px; border-radius:8px; margin-bottom:5px; font-size:12px; text-align:left;">
+                    ${msg}
+                </div>` + historique.innerHTML;
+        }
+
+        compteurScans++;
+        document.getElementById('compteur-scans').innerText = compteurScans;
+
+        if (navigator.vibrate) navigator.vibrate(200);
+        jouerBip();
+
+    } catch (err) {
+        console.error('Erreur retrait:', err);
+        statut.innerText = '❌ Erreur de mise à jour';
+    }
+
+    produitARetirer = null;
+}
+let produitARetirer = null;
+
+// ============================================================
+// OUVRIR LA MODALE DE QUANTITÉ
+// ============================================================
+function ouvrirModaleQuantite(produit) {
+    produitARetirer = produit;
+
+    document.getElementById('produit-quantite').innerText = produit.nom;
+    document.getElementById('stock-actuel').innerText = `En stock : ${produit.quantite}`;
+    document.getElementById('btn-tout-retirer').innerText = `🗑️ TOUT (${produit.quantite})`;
+    document.getElementById('input-qte-retrait').value = Math.min(2, produit.quantite);
+    document.getElementById('input-qte-retrait').max = produit.quantite;
+
+    document.getElementById('modal-quantite').style.display = 'flex';
+}
+
+// ============================================================
+// VALIDER — quantité fixe
+// ============================================================
+async function validerQuantiteRetrait(qte) {
+    document.getElementById('modal-quantite').style.display = 'none';
+    await appliquerRetrait(qte);
+}
+
+// ============================================================
+// VALIDER — tout retirer
+// ============================================================
+async function validerQuantiteRetraitTout() {
+    document.getElementById('modal-quantite').style.display = 'none';
+    await appliquerRetrait(produitARetirer.quantite);
+}
+
+// ============================================================
+// VALIDER — quantité personnalisée
+// ============================================================
+async function validerQuantiteRetraitPerso() {
+    const qte = parseInt(document.getElementById('input-qte-retrait').value) || 1;
+    document.getElementById('modal-quantite').style.display = 'none';
+    await appliquerRetrait(qte);
+}
+
+// ============================================================
+// ANNULER
+// ============================================================
+function annulerQuantiteRetrait() {
+    document.getElementById('modal-quantite').style.display = 'none';
+    produitARetirer = null;
+    const statut = document.getElementById('statut-scanner');
+    if (statut) statut.innerText = '🔍 En attente d\'un code-barres...';
 }
 </script>
 </body>
