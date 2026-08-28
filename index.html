@@ -721,12 +721,11 @@ monSupabase = supabaseLib.createClient(elUrl.value, elKey.value);
         setupVocal();
 
         await Promise.all([
-            await verifierPeremptions();
 			chargerTout(),
             chargerGrimoire(),
             chargerPlanning()
         ]);
-
+await verifierPeremptions();
     } catch (err) {
         console.error("Erreur critique au démarrage :", err);
         afficherToast("❌ Erreur de démarrage");
