@@ -178,6 +178,28 @@
 
 <!-- TOAST -->
 <div id="toast"></div>
+<div id="bandeau-peremption" style="display:none; background:linear-gradient(135deg,#fff5f5,#fed7d7); border:2px solid #fc8181; border-radius:15px; padding:15px; margin-bottom:12px; cursor:pointer;"
+     onclick="basculerDetailsPeremption()">
+
+    <div style="display:flex; align-items:center; justify-content:space-between;">
+        <div style="display:flex; align-items:center; gap:12px;">
+            <div style="font-size:28px;" id="icone-alerte">⚠️</div>
+            <div>
+                <b style="color:#c53030; font-size:15px; display:block;" id="titre-alerte">
+                    3 produits périment bientôt
+                </b>
+                <small style="color:#9b2c2c; font-size:12px;" id="soustitre-alerte">
+                    Touchez pour voir la liste
+                </small>
+            </div>
+        </div>
+        <span style="color:#c53030; font-size:14px;" id="fleche-alerte">▼</span>
+    </div>
+
+    <div id="details-peremption" style="display:none; margin-top:12px; padding-top:12px; border-top:1px solid #fc8181;">
+        <!-- Rempli dynamiquement -->
+    </div>
+</div>
 <!-- 1. AJOUTE CE BOUTON dans une card -->
 <div class="card" style="padding:15px; border:2px solid #38a169;">
     <button onclick="ouvrirModeInventaire()"
@@ -699,7 +721,8 @@ monSupabase = supabaseLib.createClient(elUrl.value, elKey.value);
         setupVocal();
 
         await Promise.all([
-            chargerTout(),
+            await verifierPeremptions();
+			chargerTout(),
             chargerGrimoire(),
             chargerPlanning()
         ]);
@@ -1728,6 +1751,7 @@ async function chargerTout() {
 
     remplirSuggestions();
     mettreAJourBoutonSupprimer();
+	verifierPeremptions();
 }
 // ============================================================
 // 14. AJOUT MANUEL
@@ -3168,6 +3192,215 @@ function annulerQuantiteRetrait() {
     produitARetirer = null;
     const statut = document.getElementById('statut-scanner');
     if (statut) statut.innerText = '🔍 En attente d\'un code-barres...';
+}
+async function verifierPeremptions() {
+    if (!utilisateurActuel || !monSupabase) return;
+
+    try {
+        const { data: produits, error } = await monSupabase
+            .from('inventaire2')
+            .select('id, nom, quantite, date_peremption, emplacement, date_scannee')
+            .eq('proprietaire', utilisateurActuel)
+            .neq('etat', 'Vide')
+            .not('date_peremption', 'is', null)
+            .order('date_peremption');
+
+        if (error || !produits?.length) {
+            document.getElementById('bandeau-peremption').style.display = 'none';
+            return;
+        }
+
+        const aujourdhui = new Date();
+        aujourdhui.setHours(0, 0, 0, 0);
+
+        // Classer les produits par urgence
+        const perimes = [];
+        const urgents = [];   // aujourd'hui ou demain
+        const bientot = [];   // 2 à 4 jours
+
+        produits.forEach(p => {
+            const datePeremption = new Date(p.date_peremption);
+            datePeremption.setHours(0, 0, 0, 0);
+            const jours = Math.ceil((datePeremption - aujourdhui) / 86400000);
+
+            if (jours < 0) perimes.push({ ...p, jours });
+            else if (jours <= 1) urgents.push({ ...p, jours });
+            else if (jours <= 4) bientot.push({ ...p, jours });
+        });
+
+        const total = perimes.length + urgents.length + bientot.length;
+
+        if (total === 0) {
+            document.getElementById('bandeau-peremption').style.display = 'none';
+            return;
+        }
+
+        // Afficher le bandeau
+        afficherBandeauPeremption(perimes, urgents, bientot);
+
+    } catch (err) {
+        console.error('Erreur vérification péremptions:', err);
+    }
+}
+
+// ============================================================
+// AFFICHER LE BANDEAU
+// ============================================================
+function afficherBandeauPeremption(perimes, urgents, bientot) {
+    const bandeau = document.getElementById('bandeau-peremption');
+    const icone = document.getElementById('icone-alerte');
+    const titre = document.getElementById('titre-alerte');
+    const soustitre = document.getElementById('soustitre-alerte');
+    const details = document.getElementById('details-peremption');
+
+    const total = perimes.length + urgents.length + bientot.length;
+
+    // Adapter le style selon l'urgence
+    if (perimes.length > 0) {
+        bandeau.style.background = 'linear-gradient(135deg,#fff5f5,#feb2b2)';
+        bandeau.style.borderColor = '#e53e3e';
+        icone.innerText = '🔴';
+        titre.innerText = `${perimes.length} produit(s) périmé(s) !`;
+        titre.style.color = '#c53030';
+    } else if (urgents.length > 0) {
+        bandeau.style.background = 'linear-gradient(135deg,#fffaf0,#fbd38d)';
+        bandeau.style.borderColor = '#ed8936';
+        icone.innerText = '⚠️';
+        titre.innerText = `${urgents.length} produit(s) à consommer aujourd'hui !`;
+        titre.style.color = '#c05621';
+    } else {
+        bandeau.style.background = 'linear-gradient(135deg,#fffff0,#faf089)';
+        bandeau.style.borderColor = '#d69e2e';
+        icone.innerText = '🟡';
+        titre.innerText = `${bientot.length} produit(s) périment bientôt`;
+        titre.style.color = '#975a16';
+    }
+
+    soustitre.innerText = 'Touchez pour voir la liste';
+
+    // Construire la liste détaillée
+    let html = '';
+
+    if (perimes.length > 0) {
+        html += `<div style="margin-bottom:10px;">
+            <b style="font-size:12px; color:#c53030;">🔴 PÉRIMÉS</b>
+            ${perimes.map(p => ligneProduitPeremption(p, '#c53030')).join('')}
+        </div>`;
+    }
+
+    if (urgents.length > 0) {
+        html += `<div style="margin-bottom:10px;">
+            <b style="font-size:12px; color:#c05621;">⚠️ AUJOURD'HUI / DEMAIN</b>
+            ${urgents.map(p => ligneProduitPeremption(p, '#c05621')).join('')}
+        </div>`;
+    }
+
+    if (bientot.length > 0) {
+        html += `<div>
+            <b style="font-size:12px; color:#975a16;">🟡 DANS 2 À 4 JOURS</b>
+            ${bientot.map(p => ligneProduitPeremption(p, '#975a16')).join('')}
+        </div>`;
+    }
+
+    // Bouton pour lancer le Chef anti-gaspi
+    html += `
+        <button onclick="event.stopPropagation(); lancerChefAntigaspi()"
+                style="width:100%; background:#38a169; color:white; border:none; border-radius:10px; padding:12px; cursor:pointer; font-weight:bold; font-size:13px; margin-top:12px;">
+            👨‍🍳 Que cuisiner avec ça ?
+        </button>`;
+
+    details.innerHTML = html;
+    bandeau.style.display = 'block';
+}
+
+// ============================================================
+// LIGNE PRODUIT
+// ============================================================
+function ligneProduitPeremption(p, couleur) {
+    const texteJours = p.jours < 0
+        ? `périmé depuis ${Math.abs(p.jours)}j`
+        : p.jours === 0
+            ? "aujourd'hui"
+            : p.jours === 1
+                ? "demain"
+                : `dans ${p.jours}j`;
+
+    const badge = p.date_scannee ? '' : ' <small style="opacity:0.6;">(est.)</small>';
+
+    return `
+        <div style="display:flex; justify-content:space-between; align-items:center; background:white; border-radius:8px; padding:8px 12px; margin-top:6px;">
+            <div style="flex:1;">
+                <b style="font-size:13px; color:#2d3748;">${p.nom}</b>
+                <small style="display:block; font-size:11px; color:${couleur};">
+                    ${texteJours}${badge} • qté ${p.quantite}
+                </small>
+            </div>
+            <button onclick="event.stopPropagation(); prolongerDate(${p.id}, '${p.date_peremption}')"
+                    style="background:#edf2f7; border:1px solid #cbd5e0; border-radius:6px; padding:6px 10px; cursor:pointer; font-size:11px; margin-right:6px;">
+                +2j
+            </button>
+            <button onclick="event.stopPropagation(); marquerConsomme(${p.id}, ${p.quantite})"
+                    style="background:#48bb78; color:white; border:none; border-radius:6px; padding:6px 10px; cursor:pointer; font-size:11px;">
+                ✓
+            </button>
+        </div>`;
+}
+
+// ============================================================
+// BASCULER L'AFFICHAGE DES DÉTAILS
+// ============================================================
+function basculerDetailsPeremption() {
+    const details = document.getElementById('details-peremption');
+    const fleche = document.getElementById('fleche-alerte');
+
+    if (details.style.display === 'none') {
+        details.style.display = 'block';
+        fleche.innerText = '▲';
+    } else {
+        details.style.display = 'none';
+        fleche.innerText = '▼';
+    }
+}
+
+// ============================================================
+// MARQUER COMME CONSOMMÉ
+// ============================================================
+async function marquerConsomme(id, quantite) {
+    if (!utilisateurActuel) return;
+
+    const nouvelleQte = Math.max(0, (parseInt(quantite) || 1) - 1);
+
+    if (nouvelleQte === 0) {
+        await monSupabase
+            .from('inventaire2')
+            .update({ quantite: 0, etat: 'Vide' })
+            .eq('id', id)
+            .eq('proprietaire', utilisateurActuel);
+        afficherToast('🛒 Ajouté à la liste de courses');
+    } else {
+        await monSupabase
+            .from('inventaire2')
+            .update({ quantite: nouvelleQte })
+            .eq('id', id)
+            .eq('proprietaire', utilisateurActuel);
+        afficherToast(`✅ Il en reste ${nouvelleQte}`);
+    }
+
+    await chargerTout();
+    await verifierPeremptions();
+}
+
+// ============================================================
+// LANCER LE CHEF EN MODE ANTI-GASPI
+// ============================================================
+function lancerChefAntigaspi() {
+    // Fermer le bandeau
+    document.getElementById('details-peremption').style.display = 'none';
+    document.getElementById('fleche-alerte').innerText = '▼';
+
+    // Scroller vers le Chef et lancer le mode antigaspi
+    document.getElementById('statut-chef')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(() => lancerChefMode('antigaspi'), 400);
 }
 </script>
 </body>
