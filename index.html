@@ -256,6 +256,10 @@
                 ✅ Retirer
             </button>
         </div>
+		 <button onclick="marquerEntame()"
+                style="width:100%; background:#ed8936; color:white; border:none; border-radius:12px; padding:15px; cursor:pointer; font-size:15px; font-weight:bold; margin-bottom:12px;">
+            ⚠️ MARQUER COMME ENTAMÉ
+        </button>
 
         <button onclick="annulerQuantiteRetrait()"
                 style="width:100%; background:#718096; color:white; border:none; border-radius:12px; padding:13px; cursor:pointer; font-size:14px;">
@@ -961,6 +965,7 @@ async function lancerChefMode(mode) {
             const dejaPropose = window.historiqueChef.some(h =>
                 h.toLowerCase().includes(r.nom.toLowerCase())
             );
+			
  
             return {
                 ...r,
@@ -3242,6 +3247,44 @@ async function validerQuantiteRetraitPerso() {
     const qte = parseInt(document.getElementById('input-qte-retrait').value) || 1;
     document.getElementById('modal-quantite').style.display = 'none';
     await appliquerRetrait(qte);
+}
+// ============================================================
+// MARQUER COMME ENTAMÉ (sans changer la quantité)
+// ============================================================
+async function marquerEntame() {
+    if (!produitARetirer) return;
+
+    document.getElementById('modal-quantite').style.display = 'none';
+
+    const statut = document.getElementById('statut-scanner');
+    const historique = document.getElementById('historique-scans');
+
+    try {
+        await monSupabase
+            .from('inventaire2')
+            .update({ etat: 'Entamé' })
+            .eq('id', produitARetirer.id)
+            .eq('proprietaire', utilisateurActuel);
+
+        const msg = `⚠️ ${produitARetirer.nom} marqué entamé`;
+        statut.innerText = msg;
+        historique.innerHTML = `
+            <div style="background:#2d3748; color:#ed8936; padding:8px 12px; border-radius:8px; margin-bottom:5px; font-size:12px; text-align:left;">
+                ${msg}
+            </div>` + historique.innerHTML;
+
+        compteurScans++;
+        document.getElementById('compteur-scans').innerText = compteurScans;
+
+        if (navigator.vibrate) navigator.vibrate(200);
+        jouerBip();
+
+    } catch (err) {
+        console.error('Erreur entamé:', err);
+        statut.innerText = '❌ Erreur';
+    }
+
+    produitARetirer = null;
 }
 
 // ============================================================
