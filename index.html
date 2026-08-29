@@ -372,7 +372,52 @@
     <div id="statut-chef" style="text-align:center; margin-top:10px; font-size:13px; font-weight:bold; min-height:20px;"></div>
     <div id="chef-resultats" style="margin-top:5px;"></div>
 </div>
+<div class="card" style="padding:15px; border:2px solid #805ad5;">
+    <button onclick="ouvrirHistoriqueScans()"
+            style="background:#805ad5; color:white; border:none; border-radius:12px; padding:14px; cursor:pointer; font-size:14px; font-weight:bold; width:100%;">
+        📜 HISTORIQUE DES SCANS
+    </button>
+    <p style="font-size:11px; color:#888; margin:8px 0 0 0; text-align:center;">
+        Quand ai-je consommé quoi ?
+    </p>
+</div>
 
+<!-- 2. MODALE HISTORIQUE — avant </body> -->
+<div id="modal-historique" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:9999; flex-direction:column; align-items:center; justify-content:flex-start; overflow-y:auto; padding:20px 0;">
+    <div style="width:94%; max-width:480px;">
+
+        <div style="background:white; border-radius:20px 20px 0 0; padding:20px; text-align:center;">
+            <div style="font-size:36px;">📜</div>
+            <b style="font-size:18px; color:#2d3748; display:block; margin-top:8px;">
+                Historique des scans
+            </b>
+            <p style="font-size:12px; color:#718096; margin:6px 0 0 0;">
+                Retrouve quand tu as consommé chaque produit
+            </p>
+
+            <!-- Recherche -->
+            <input type="text" id="recherche-historique"
+                   placeholder="🔍 Chercher un produit..."
+                   oninput="filtrerHistorique()"
+                   style="width:100%; padding:12px; border:2px solid #e2e8f0; border-radius:10px; font-size:14px; margin-top:12px;">
+        </div>
+
+        <div id="liste-historique" style="background:#f7fafc; padding:15px; max-height:60vh; overflow-y:auto;">
+            <p style="text-align:center; color:#a0aec0; font-size:13px;">Chargement...</p>
+        </div>
+
+        <div style="background:white; border-radius:0 0 20px 20px; padding:20px;">
+            <button onclick="effacerHistorique()"
+                    style="width:100%; background:#e53e3e; color:white; border:none; border-radius:12px; padding:13px; cursor:pointer; font-size:14px; font-weight:bold; margin-bottom:10px;">
+                🗑️ Effacer l'historique
+            </button>
+            <button onclick="fermerHistoriqueScans()"
+                    style="width:100%; background:#718096; color:white; border:none; border-radius:12px; padding:14px; cursor:pointer; font-size:15px; font-weight:bold;">
+                ✕ FERMER
+            </button>
+        </div>
+    </div>
+</div>
 
 <!-- ZONE RECETTE VOCALE -->
 <div id="zone-recette" style="display:none; margin-bottom:12px; padding:15px; background:#fff8e1; border-left:5px solid #ff9800; border-radius:10px;"></div>
@@ -1698,7 +1743,20 @@ async function chargerTout() {
             if (!container) return;
 
             const couleurEtat = item.etat === 'Entamé' ? '#ef6c00' : '#333';
-            const labelEtat = item.etat === 'Entamé' ? '⚠️ Entamé' : '📦 Plein';
+            let labelEtat = '📦 Plein';
+    if (item.etat === 'Entamé') {
+        if (item.date_entame) {
+            const jours = Math.floor((new Date() - new Date(item.date_entame)) / 86400000);
+            labelEtat = jours === 0
+                ? '⚠️ Entamé aujourd\'hui'
+                : jours === 1
+                    ? '⚠️ Entamé hier'
+                    : `⚠️ Entamé depuis ${jours}j`;
+        } else {
+            labelEtat = '⚠️ Entamé';
+        }
+    }
+*/
 
             // ── AFFICHAGE DE LA DATE DE PÉREMPTION ──
             let alerteHtml = "";
@@ -3735,6 +3793,329 @@ async function insererTousLesProduits(articles) {
     afficherToast(`✅ ${ajoutes + fusionnes} produit(s) traité(s) !`);
 
     await chargerTout();
+}
+let historiqueComplet = [];
+
+// ============================================================
+// ENREGISTRER UNE ACTION DANS L'HISTORIQUE
+// À appeler à chaque scan
+// ============================================================
+async function enregistrerHistorique(produit, action, quantite, quantiteRestante) {
+    try {
+        await monSupabase.from('historique_scans').insert([{
+            produit_id: produit.id,
+            nom_produit: produit.nom,
+            action: action,
+            quantite: quantite || 1,
+            quantite_restante: quantiteRestante,
+            emplacement: produit.emplacement || null,
+            proprietaire: utilisateurActuel
+        }]);
+    } catch (err) {
+        console.log('Historique non enregistré:', err.message);
+    }
+}
+
+// ============================================================
+// OUVRIR L'HISTORIQUE
+// ============================================================
+async function ouvrirHistoriqueScans() {
+    if (!utilisateurActuel) {
+        utilisateurActuel = localStorage.getItem('monFrigo_User');
+    }
+    if (!utilisateurActuel) {
+        afficherToast('❌ Connecte-toi d\'abord !');
+        return;
+    }
+
+    document.getElementById('modal-historique').style.display = 'flex';
+    document.getElementById('recherche-historique').value = '';
+    await chargerHistorique();
+}
+
+// ============================================================
+// CHARGER L'HISTORIQUE DEPUIS SUPABASE
+// ============================================================
+async function chargerHistorique() {
+    const liste = document.getElementById('liste-historique');
+    liste.innerHTML = '<p style="text-align:center; color:#a0aec0; font-size:13px;">Chargement...</p>';
+
+    try {
+        const { data, error } = await monSupabase
+            .from('historique_scans')
+            .select('*')
+            .eq('proprietaire', utilisateurActuel)
+            .order('date_scan', { ascending: false })
+            .limit(200);
+
+        if (error) throw error;
+
+        historiqueComplet = data || [];
+        afficherHistorique(historiqueComplet);
+
+    } catch (err) {
+        console.error('Erreur chargement historique:', err);
+        liste.innerHTML = '<p style="text-align:center; color:#e53e3e; font-size:13px;">❌ Erreur de chargement</p>';
+    }
+}
+
+// ============================================================
+// AFFICHER L'HISTORIQUE GROUPÉ PAR JOUR
+// ============================================================
+function afficherHistorique(donnees) {
+    const liste = document.getElementById('liste-historique');
+
+    if (!donnees.length) {
+        liste.innerHTML = '<p style="text-align:center; color:#a0aec0; font-size:13px; padding:30px 0;">Aucun scan enregistré pour le moment</p>';
+        return;
+    }
+
+    // Grouper par jour
+    const groupes = {};
+    donnees.forEach(h => {
+        const date = new Date(h.date_scan);
+        const cle = date.toISOString().split('T')[0];
+        if (!groupes[cle]) groupes[cle] = [];
+        groupes[cle].push(h);
+    });
+
+    const aujourdhui = new Date().toISOString().split('T')[0];
+    const hier = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+
+    let html = '';
+
+    Object.keys(groupes).sort().reverse().forEach(cle => {
+        // Titre du jour
+        let titreJour;
+        if (cle === aujourdhui) titreJour = "Aujourd'hui";
+        else if (cle === hier) titreJour = "Hier";
+        else {
+            const d = new Date(cle);
+            const jours = Math.floor((new Date() - d) / 86400000);
+            titreJour = `${d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })} — il y a ${jours}j`;
+        }
+
+        html += `<div style="margin-bottom:18px;">
+            <b style="font-size:12px; color:#805ad5; text-transform:uppercase; display:block; margin-bottom:8px;">
+                ${titreJour}
+            </b>`;
+
+        groupes[cle].forEach(h => {
+            const heure = new Date(h.date_scan).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+
+            let icone, couleur, texteAction;
+            switch(h.action) {
+                case 'entame':
+                    icone = '⚠️'; couleur = '#ed8936'; texteAction = 'entamé';
+                    break;
+                case 'vide':
+                    icone = '🛒'; couleur = '#e53e3e'; texteAction = 'épuisé → courses';
+                    break;
+                case 'ajout':
+                    icone = '➕'; couleur = '#38a169'; texteAction = `+${h.quantite}`;
+                    break;
+                default:
+                    icone = '🗑️'; couleur = '#4a5568';
+                    texteAction = `−${h.quantite}` + (h.quantite_restante !== null ? ` → reste ${h.quantite_restante}` : '');
+            }
+
+            html += `
+                <div style="background:white; border-radius:10px; padding:10px 12px; margin-bottom:6px; display:flex; align-items:center; justify-content:space-between; border-left:3px solid ${couleur};">
+                    <div style="flex:1;">
+                        <b style="font-size:13px; color:#2d3748;">${icone} ${h.nom_produit}</b>
+                        <small style="display:block; font-size:11px; color:${couleur}; margin-top:2px;">
+                            ${texteAction}
+                        </small>
+                    </div>
+                    <small style="font-size:11px; color:#a0aec0;">${heure}</small>
+                </div>`;
+        });
+
+        html += '</div>';
+    });
+
+    liste.innerHTML = html;
+}
+
+// ============================================================
+// FILTRER L'HISTORIQUE PAR RECHERCHE
+// ============================================================
+function filtrerHistorique() {
+    const recherche = document.getElementById('recherche-historique').value
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
+
+    if (!recherche) {
+        afficherHistorique(historiqueComplet);
+        return;
+    }
+
+    const filtres = historiqueComplet.filter(h => {
+        const nom = (h.nom_produit || '').toLowerCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "");
+        return nom.includes(recherche);
+    });
+
+    afficherHistorique(filtres);
+}
+
+// ============================================================
+// EFFACER L'HISTORIQUE
+// ============================================================
+async function effacerHistorique() {
+    const choix = confirm(
+        "Effacer l'historique ?\n\n" +
+        "OK = Effacer tout l'historique\n" +
+        "Annuler = Garder les 30 derniers jours seulement"
+    );
+
+    try {
+        if (choix) {
+            // Tout effacer
+            await monSupabase
+                .from('historique_scans')
+                .delete()
+                .eq('proprietaire', utilisateurActuel);
+            afficherToast('🗑️ Historique effacé');
+        } else {
+            // Garder les 30 derniers jours
+            const limite = new Date(Date.now() - 30 * 86400000).toISOString();
+            await monSupabase
+                .from('historique_scans')
+                .delete()
+                .eq('proprietaire', utilisateurActuel)
+                .lt('date_scan', limite);
+            afficherToast('🧹 Historique nettoyé (30 derniers jours gardés)');
+        }
+
+        await chargerHistorique();
+
+    } catch (err) {
+        console.error('Erreur effacement:', err);
+        afficherToast('❌ Erreur');
+    }
+}
+
+// ============================================================
+// FERMER
+// ============================================================
+function fermerHistoriqueScans() {
+    document.getElementById('modal-historique').style.display = 'none';
+}
+</script>
+
+<!-- ============================================================
+4. MODIFICATIONS DES FONCTIONS EXISTANTES
+============================================================ -->
+<script>
+
+// ============================================================
+// REMPLACE appliquerRetrait() par cette version
+// ============================================================
+async function appliquerRetrait(qteARetirer) {
+    if (!produitARetirer) return;
+
+    const statut = document.getElementById('statut-scanner');
+    const historique = document.getElementById('historique-scans');
+
+    try {
+        const qteActuelle = parseInt(produitARetirer.quantite) || 0;
+        const nouvelleQte = Math.max(0, qteActuelle - qteARetirer);
+
+        if (nouvelleQte === 0) {
+            await monSupabase
+                .from('inventaire2')
+                .update({ quantite: 0, etat: 'Vide' })
+                .eq('id', produitARetirer.id)
+                .eq('proprietaire', utilisateurActuel);
+
+            // ← HISTORIQUE
+            await enregistrerHistorique(produitARetirer, 'vide', qteARetirer, 0);
+
+            const msg = `🛒 ${produitARetirer.nom} → liste de courses`;
+            statut.innerText = msg;
+            historique.innerHTML = `
+                <div style="background:#2d3748; color:#f6ad55; padding:8px 12px; border-radius:8px; margin-bottom:5px; font-size:12px; text-align:left;">
+                    ${msg}
+                </div>` + historique.innerHTML;
+
+        } else {
+            await monSupabase
+                .from('inventaire2')
+                .update({ quantite: nouvelleQte })
+                .eq('id', produitARetirer.id)
+                .eq('proprietaire', utilisateurActuel);
+
+            // ← HISTORIQUE
+            await enregistrerHistorique(produitARetirer, 'retire', qteARetirer, nouvelleQte);
+
+            const msg = `✅ ${produitARetirer.nom} −${qteARetirer} → reste ${nouvelleQte}`;
+            statut.innerText = msg;
+            historique.innerHTML = `
+                <div style="background:#2d3748; color:#48bb78; padding:8px 12px; border-radius:8px; margin-bottom:5px; font-size:12px; text-align:left;">
+                    ${msg}
+                </div>` + historique.innerHTML;
+        }
+
+        compteurScans++;
+        document.getElementById('compteur-scans').innerText = compteurScans;
+
+        if (navigator.vibrate) navigator.vibrate(200);
+        jouerBip();
+
+    } catch (err) {
+        console.error('Erreur retrait:', err);
+        statut.innerText = '❌ Erreur de mise à jour';
+    }
+
+    produitARetirer = null;
+}
+
+// ============================================================
+// REMPLACE marquerEntame() par cette version
+// ============================================================
+async function marquerEntame() {
+    if (!produitARetirer) return;
+
+    document.getElementById('modal-quantite').style.display = 'none';
+
+    const statut = document.getElementById('statut-scanner');
+    const historique = document.getElementById('historique-scans');
+
+    try {
+        await monSupabase
+            .from('inventaire2')
+            .update({
+                etat: 'Entamé',
+                date_entame: new Date().toISOString()
+            })
+            .eq('id', produitARetirer.id)
+            .eq('proprietaire', utilisateurActuel);
+
+        // ← HISTORIQUE
+        await enregistrerHistorique(produitARetirer, 'entame', 0, produitARetirer.quantite);
+
+        const msg = `⚠️ ${produitARetirer.nom} marqué entamé`;
+        statut.innerText = msg;
+        historique.innerHTML = `
+            <div style="background:#2d3748; color:#ed8936; padding:8px 12px; border-radius:8px; margin-bottom:5px; font-size:12px; text-align:left;">
+                ${msg}
+            </div>` + historique.innerHTML;
+
+        compteurScans++;
+        document.getElementById('compteur-scans').innerText = compteurScans;
+
+        if (navigator.vibrate) navigator.vibrate(200);
+        jouerBip();
+
+    } catch (err) {
+        console.error('Erreur entamé:', err);
+        statut.innerText = '❌ Erreur';
+    }
+
+    produitARetirer = null;
 }
 </script>
 </body>
