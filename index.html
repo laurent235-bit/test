@@ -280,7 +280,31 @@
         Scanne le code-barres puis la date au rangement des courses
     </p>
 </div>
+<div id="modal-verif-packs" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:10000; flex-direction:column; align-items:center; justify-content:flex-start; overflow-y:auto; padding:20px 0;">
+    <div style="width:94%; max-width:480px;">
 
+        <div style="background:white; border-radius:20px 20px 0 0; padding:20px; text-align:center;">
+            <div style="font-size:36px;">📦</div>
+            <b style="font-size:17px; color:#2d3748; display:block; margin-top:8px;">
+                Vérification des quantités
+            </b>
+            <p style="font-size:12px; color:#718096; margin:6px 0 0 0;">
+                Ces produits sont souvent vendus en pack — confirme les quantités
+            </p>
+        </div>
+
+        <div id="liste-verif-packs" style="background:#f7fafc; padding:15px; max-height:60vh; overflow-y:auto;">
+            <!-- Rempli dynamiquement -->
+        </div>
+
+        <div style="background:white; border-radius:0 0 20px 20px; padding:20px;">
+            <button onclick="validerVerifPacks()"
+                    style="width:100%; background:#38a169; color:white; border:none; border-radius:12px; padding:16px; cursor:pointer; font-size:16px; font-weight:bold;">
+                ✅ VALIDER L'INVENTAIRE
+            </button>
+        </div>
+    </div>
+</div>
 <!-- SCAN TICKET -->
 <div class="scan-zone">
     <b style="color:var(--accent)">🧾 ENTRÉE DE COURSES</b>
@@ -1490,78 +1514,62 @@ async function traiterRetourGemini(text) {
         document.getElementById('statut-scan').innerText = "❌ Session expirée.";
         return;
     }
- 
-    const calculerDatePeremption = (nom, emplacement) => {
-        if (emplacement !== 'FRIGO') return null;
-        const n = nom.toLowerCase();
-        let jours = 10;
-        if (n.includes('jambon') || n.includes('viande') || n.includes('poisson') || n.includes('poulet') || n.includes('lardons')) jours = 4;
-        else if (n.includes('yaourt') || n.includes('lait') || n.includes('creme') || n.includes('dessert')) jours = 15;
-        else if (n.includes('oeuf') || n.includes('fromage') || n.includes('beurre')) jours = 25;
-        const d = new Date();
-        d.setDate(d.getDate() + jours);
-        return d.toISOString().split('T')[0];
-    };
- 
+
     try {
         // ÉTAPE 1 : Parser le JSON du ticket
         const debut = text.indexOf('[');
         const fin = text.lastIndexOf(']') + 1;
         if (debut === -1) throw new Error("Aucun JSON trouvé dans la réponse");
         const articles = JSON.parse(text.substring(debut, fin));
- 
+
         if (!articles || articles.length === 0) {
             document.getElementById('statut-scan').innerText = "⚠️ Aucun article détecté.";
             return;
         }
- 
+
         document.getElementById('statut-scan').innerText = `🧠 Génération des noms vocaux...`;
- 
+
         // ÉTAPE 2 : UN SEUL appel Gemini pour TOUS les nom_alexa
-        // Au lieu de 20 appels séparés → 1 seul appel groupé
         const produitsAvecAlias = articles.filter(a => !a.nom_alexa || a.nom_alexa.trim() === "");
-        
+
         if (produitsAvecAlias.length > 0) {
             try {
                 const promptAliases = `Pour chaque produit de cette liste, génère un nom court (2-3 mots maximum) naturel et prononçable à voix haute pour Alexa.
 Supprime : marques, poids, codes, adjectifs marketing.
 Garde : l'essentiel du nom en minuscules.
- 
+
 Exemples :
 "CORDON BLEU DINDE 2X100G" → "cordon bleu"
 "YAOURT BRASSE NATURE 0% MG 4X125G" → "yaourt nature"
 "PETIT BEURRE CHOCOLAT LU 200G" → "petit beurre chocolat"
 "PAPIER TOILETTE 12 ROULEAUX" → "papier toilette"
 "LESSIVE LIQUIDE ARIEL 2L" → "lessive"
- 
+
 Réponds UNIQUEMENT en JSON valide, sans markdown, sans backticks :
 {"NOM_EXACT_DU_PRODUIT": "alias_court", ...}
- 
+
 Produits à traiter :
 ${produitsAvecAlias.map(a => `"${a.nom}"`).join('\n')}`;
- 
+
                 const aliasesRaw = await appelGemini(promptAliases);
-                
-                // Nettoyage au cas où Gemini ajoute des backticks
+
                 const aliasesPropre = aliasesRaw
                     .replace(/```json\n?/g, '')
                     .replace(/```\n?/g, '')
                     .trim();
-                
+
                 const aliases = JSON.parse(aliasesPropre);
-                
-                // Injecter les alias dans les articles
+
                 articles.forEach(a => {
                     if (!a.nom_alexa || a.nom_alexa.trim() === "") {
-                        a.nom_alexa = aliases[a.nom] || 
-                                      aliases[a.nom.toUpperCase()] || 
+                        a.nom_alexa = aliases[a.nom] ||
+                                      aliases[a.nom.toUpperCase()] ||
                                       a.nom.split(' ').slice(0, 2).join(' ').toLowerCase();
                     }
                 });
- 
+
             } catch(e) {
                 console.error("Erreur génération aliases groupée :", e);
-                // Fallback : premier mot du nom
                 articles.forEach(a => {
                     if (!a.nom_alexa) {
                         a.nom_alexa = a.nom.split(' ').slice(0, 2).join(' ').toLowerCase();
@@ -1569,66 +1577,12 @@ ${produitsAvecAlias.map(a => `"${a.nom}"`).join('\n')}`;
                 });
             }
         }
- 
-        // ÉTAPE 3 : Insérer/mettre à jour chaque article dans Supabase
-        document.getElementById('statut-scan').innerText = `💾 Enregistrement des articles...`;
-        
-        let nbAjoutes = 0;
-        let nbFusionnes = 0;
- 
-        for (const a of articles) {
-            const nomNettoye = (a.nom || "").trim().replace(/\s+/g, ' ');
-            if (!nomNettoye) continue;
- 
-            const qteScan = parseInt(a.quantite) || 1;
-            const emplacement = (a.emplacement || 'PLACARD').toUpperCase().trim();
-            const datePerim = a.peremption || calculerDatePeremption(nomNettoye, emplacement);
-            const nomAlexa = (a.nom_alexa || nomNettoye.split(' ')[0]).trim().toLowerCase();
- 
-            // Chercher si le produit existe déjà
-            const { data: existant } = await monSupabase
-                .from('inventaire2')
-                .select('id, quantite, nom_alexa, date_peremption')
-                .ilike('nom', nomNettoye)
-                .eq('emplacement', emplacement)
-                .eq('proprietaire', utilisateurActuel)
-                .neq('etat', 'Vide')
-                .maybeSingle();
- 
-            if (existant) {
-                // Produit existant → fusionner les quantités
-                await monSupabase
-                    .from('inventaire2')
-                    .update({
-                        quantite: (parseInt(existant.quantite) || 0) + qteScan,
-                        etat: 'Plein',
-                        nom_alexa: existant.nom_alexa || nomAlexa,
-                        date_peremption: existant.date_peremption || datePerim
-                    })
-                    .eq('id', existant.id);
-                nbFusionnes++;
-            } else {
-                // Nouveau produit → insérer
-                await monSupabase
-                    .from('inventaire2')
-                    .insert([{
-                        nom: nomNettoye,
-                        nom_alexa: nomAlexa,
-                        quantite: qteScan,
-                        emplacement: emplacement,
-                        etat: 'Plein',
-                        date_peremption: datePerim,
-                        proprietaire: utilisateurActuel
-                    }]);
-                nbAjoutes++;
-            }
-        }
- 
-        document.getElementById('statut-scan').innerText =
-            `✅ ${nbAjoutes} nouveaux + ${nbFusionnes} mis à jour !`;
-        
-        await chargerTout();
- 
+
+        // ÉTAPE 3 : Vérification des packs et doublons AVANT insertion
+        document.getElementById('statut-scan').innerText = `🔍 Vérification des quantités...`;
+
+        await preparerVerificationPacks(articles);
+
     } catch(e) {
         console.error("Erreur traiterRetourGemini :", e);
         document.getElementById('statut-scan').innerText = "❌ Erreur de traitement : " + e.message;
@@ -3504,6 +3458,283 @@ function lancerChefAntigaspi() {
     // Scroller vers le Chef et lancer le mode antigaspi
     document.getElementById('statut-chef')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     setTimeout(() => lancerChefMode('antigaspi'), 400);
+}
+// ============================================================
+// PRODUITS SOUVENT VENDUS EN PACK
+// ============================================================
+const PRODUITS_PACKS = [
+    'lait', 'yaourt', 'yop', 'oeuf', 'eau', 'biere', 'soda', 'cola',
+    'compote', 'creme dessert', 'jus', 'danette', 'petit suisse',
+    'fromage blanc', 'liegeois', 'flan', 'actimel', 'briquette',
+    'bouteille', 'canette', 'pack', 'brique', 'gourde', 'yaourts'
+];
+
+let produitsAVerifier = [];
+let produitsAInserer = [];
+
+// ============================================================
+// DÉTECTER SI UN PRODUIT EST UN PACK POTENTIEL
+// ============================================================
+function estProduitPack(nom) {
+    const n = nom.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    return PRODUITS_PACKS.some(mot => n.includes(mot));
+}
+
+// ============================================================
+// DÉTECTER LES DOUBLONS DANS LA LISTE
+// ============================================================
+function detecterDoublons(articles) {
+    const groupes = {};
+
+    articles.forEach((a, index) => {
+        // Clé de regroupement : nom simplifié
+        const cle = (a.nom_alexa || a.nom)
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .replace(/[0-9]+|x[0-9]+|g$|kg$|cl$|l$|ml$/g, '')
+            .trim();
+
+        if (!groupes[cle]) groupes[cle] = [];
+        groupes[cle].push({ ...a, indexOriginal: index });
+    });
+
+    return groupes;
+}
+
+// ============================================================
+// PRÉPARER LA VÉRIFICATION APRÈS SCAN GEMINI
+// Appelée à la place de l'insertion directe
+// ============================================================
+async function preparerVerificationPacks(articles) {
+    produitsAVerifier = [];
+    produitsAInserer = [];
+
+    // Détecter les doublons
+    const groupes = detecterDoublons(articles);
+
+    Object.keys(groupes).forEach(cle => {
+        const groupe = groupes[cle];
+
+        if (groupe.length > 1) {
+            // DOUBLON DÉTECTÉ → fusionner et vérifier
+            const qteTotale = groupe.reduce((s, a) => s + (parseInt(a.quantite) || 1), 0);
+            produitsAVerifier.push({
+                ...groupe[0],
+                quantite: qteTotale,
+                raison: 'doublon',
+                nbLignes: groupe.length
+            });
+        } else if (estProduitPack(groupe[0].nom)) {
+            // PRODUIT PACK → vérifier
+            produitsAVerifier.push({
+                ...groupe[0],
+                raison: 'pack'
+            });
+        } else {
+            // NORMAL → insérer directement
+            produitsAInserer.push(groupe[0]);
+        }
+    });
+
+    // S'il n'y a rien à vérifier, on insère tout directement
+    if (produitsAVerifier.length === 0) {
+        await insererTousLesProduits([...produitsAInserer]);
+        return;
+    }
+
+    afficherModaleVerifPacks();
+}
+
+// ============================================================
+// AFFICHER LA MODALE DE VÉRIFICATION
+// ============================================================
+function afficherModaleVerifPacks() {
+    const liste = document.getElementById('liste-verif-packs');
+
+    liste.innerHTML = produitsAVerifier.map((p, i) => {
+        const badgeRaison = p.raison === 'doublon'
+            ? `<span style="background:#fed7d7; color:#c53030; font-size:10px; padding:3px 8px; border-radius:10px; font-weight:bold;">⚠️ ${p.nbLignes} lignes fusionnées</span>`
+            : `<span style="background:#bee3f8; color:#2c5282; font-size:10px; padding:3px 8px; border-radius:10px; font-weight:bold;">📦 Souvent en pack</span>`;
+
+        return `
+        <div style="background:white; border-radius:14px; padding:14px; margin-bottom:12px; border:1px solid #e2e8f0;">
+
+            <div style="margin-bottom:10px;">
+                <b style="font-size:14px; color:#2d3748; display:block;">${p.nom}</b>
+                <div style="margin-top:5px;">${badgeRaison}</div>
+            </div>
+
+            <!-- Emplacement -->
+            <select onchange="modifierEmplacementVerif(${i}, this.value)"
+                    style="width:100%; padding:8px; border:1px solid #cbd5e0; border-radius:8px; font-size:12px; margin-bottom:10px; background:#f7fafc;">
+                <option value="FRIGO" ${p.emplacement === 'FRIGO' ? 'selected' : ''}>🥦 FRIGO</option>
+                <option value="CONGELATEUR" ${p.emplacement === 'CONGELATEUR' ? 'selected' : ''}>❄️ CONGÉLATEUR</option>
+                <option value="PLACARD" ${p.emplacement === 'PLACARD' ? 'selected' : ''}>🍝 PLACARD</option>
+                <option value="ANIMAUX" ${p.emplacement === 'ANIMAUX' ? 'selected' : ''}>🐾 ANIMAUX</option>
+                <option value="SALLE_DE_BAIN" ${p.emplacement === 'SALLE_DE_BAIN' ? 'selected' : ''}>🚿 SALLE DE BAIN</option>
+                <option value="AUTRES" ${p.emplacement === 'AUTRES' ? 'selected' : ''}>📦 AUTRES</option>
+            </select>
+
+            <!-- Quantité -->
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+                <button onclick="modifierQteVerif(${i}, -1)"
+                        style="background:#e2e8f0; border:none; border-radius:8px; width:40px; height:40px; cursor:pointer; font-size:20px; font-weight:bold;">−</button>
+                <input type="number" id="qte-verif-${i}" value="${p.quantite}" min="1"
+                       onchange="setQteVerif(${i}, this.value)"
+                       style="flex:1; padding:10px; border:2px solid #cbd5e0; border-radius:8px; font-size:18px; text-align:center; font-weight:bold;">
+                <button onclick="modifierQteVerif(${i}, 1)"
+                        style="background:#e2e8f0; border:none; border-radius:8px; width:40px; height:40px; cursor:pointer; font-size:20px; font-weight:bold;">+</button>
+            </div>
+
+            <!-- Boutons packs rapides -->
+            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                <small style="font-size:11px; color:#718096; width:100%; margin-bottom:4px;">Pack de :</small>
+                ${[2, 4, 6, 8, 10, 12].map(n => `
+                    <button onclick="setQteVerif(${i}, ${n})"
+                            style="flex:1; background:#edf2f7; border:1px solid #cbd5e0; border-radius:8px; padding:8px 4px; cursor:pointer; font-size:13px; font-weight:bold; color:#4a5568;">
+                        ×${n}
+                    </button>
+                `).join('')}
+            </div>
+
+            <!-- Supprimer -->
+            <button onclick="supprimerLigneVerif(${i})"
+                    style="width:100%; background:none; border:none; color:#e53e3e; cursor:pointer; font-size:12px; margin-top:8px;">
+                🗑️ Ne pas ajouter ce produit
+            </button>
+        </div>`;
+    }).join('');
+
+    document.getElementById('modal-verif-packs').style.display = 'flex';
+}
+
+// ============================================================
+// MODIFIER LA QUANTITÉ
+// ============================================================
+function modifierQteVerif(index, delta) {
+    const nouvelle = Math.max(1, (parseInt(produitsAVerifier[index].quantite) || 1) + delta);
+    produitsAVerifier[index].quantite = nouvelle;
+    document.getElementById(`qte-verif-${index}`).value = nouvelle;
+}
+
+function setQteVerif(index, valeur) {
+    const nouvelle = Math.max(1, parseInt(valeur) || 1);
+    produitsAVerifier[index].quantite = nouvelle;
+    document.getElementById(`qte-verif-${index}`).value = nouvelle;
+}
+
+// ============================================================
+// MODIFIER L'EMPLACEMENT
+// ============================================================
+function modifierEmplacementVerif(index, emplacement) {
+    produitsAVerifier[index].emplacement = emplacement;
+}
+
+// ============================================================
+// SUPPRIMER UNE LIGNE
+// ============================================================
+function supprimerLigneVerif(index) {
+    produitsAVerifier[index].supprime = true;
+    afficherModaleVerifPacks();
+    // Retirer visuellement
+    produitsAVerifier = produitsAVerifier.filter(p => !p.supprime);
+    if (produitsAVerifier.length === 0) {
+        validerVerifPacks();
+    } else {
+        afficherModaleVerifPacks();
+    }
+}
+
+// ============================================================
+// VALIDER ET INSÉRER TOUT
+// ============================================================
+async function validerVerifPacks() {
+    document.getElementById('modal-verif-packs').style.display = 'none';
+
+    const tousLesProduits = [...produitsAInserer, ...produitsAVerifier.filter(p => !p.supprime)];
+    await insererTousLesProduits(tousLesProduits);
+
+    produitsAVerifier = [];
+    produitsAInserer = [];
+}
+
+// ============================================================
+// INSÉRER DANS SUPABASE
+// ============================================================
+async function insererTousLesProduits(articles) {
+    const statut = document.getElementById('statut-scan');
+    if (statut) statut.innerText = `💾 Ajout de ${articles.length} produits...`;
+
+    let ajoutes = 0;
+    let fusionnes = 0;
+
+    // Estimation de date de péremption
+    const calculerDatePeremption = (nom, emplacement) => {
+        if (emplacement !== 'FRIGO') return null;
+        const n = nom.toLowerCase();
+        let jours = 10;
+        if (n.includes('jambon') || n.includes('viande') || n.includes('poisson') ||
+            n.includes('poulet') || n.includes('lardons')) jours = 4;
+        else if (n.includes('yaourt') || n.includes('lait') || n.includes('creme') ||
+                 n.includes('dessert')) jours = 15;
+        else if (n.includes('oeuf') || n.includes('fromage') || n.includes('beurre')) jours = 25;
+        const d = new Date();
+        d.setDate(d.getDate() + jours);
+        return d.toISOString().split('T')[0];
+    };
+
+    for (const a of articles) {
+        try {
+            const nomNettoye = (a.nom || '').trim().replace(/\s+/g, ' ');
+            if (!nomNettoye) continue;
+
+            const qte = parseInt(a.quantite) || 1;
+            const emplacement = a.emplacement || 'PLACARD';
+
+            // Vérifier si le produit existe déjà en stock
+            const { data: existant } = await monSupabase
+                .from('inventaire2')
+                .select('id, quantite')
+                .ilike('nom', nomNettoye)
+                .eq('emplacement', emplacement)
+                .eq('proprietaire', utilisateurActuel)
+                .neq('etat', 'Vide')
+                .maybeSingle();
+
+            if (existant) {
+                await monSupabase
+                    .from('inventaire2')
+                    .update({
+                        quantite: (parseInt(existant.quantite) || 0) + qte,
+                        etat: 'Plein'
+                    })
+                    .eq('id', existant.id);
+                fusionnes++;
+            } else {
+                await monSupabase.from('inventaire2').insert([{
+                    nom: nomNettoye,
+                    nom_alexa: a.nom_alexa || nomNettoye.split(' ').slice(0, 2).join(' ').toLowerCase(),
+                    quantite: qte,
+                    emplacement: emplacement,
+                    etat: 'Plein',
+                    date_peremption: calculerDatePeremption(nomNettoye, emplacement),
+                    ean: a.ean || null,
+                    proprietaire: utilisateurActuel
+                }]);
+                ajoutes++;
+            }
+        } catch (err) {
+            console.error('Erreur insertion:', a.nom, err);
+        }
+    }
+
+    if (statut) {
+        statut.innerText = `✅ ${ajoutes} ajouté(s), ${fusionnes} fusionné(s)`;
+    }
+    afficherToast(`✅ ${ajoutes + fusionnes} produit(s) traité(s) !`);
+
+    await chargerTout();
 }
 </script>
 </body>
