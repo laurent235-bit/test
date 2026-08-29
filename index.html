@@ -890,78 +890,78 @@ async function lancerChefMode(mode) {
         alert("Je ne sais pas qui tu es ! Reconnecte-toi.");
         return;
     }
-
+ 
     const statut = document.getElementById('statut-chef');
     const resultats = document.getElementById('chef-resultats');
     const envie = document.getElementById('chef-envie')?.value.trim() || '';
-
+ 
     if (statut) statut.innerText = "👨‍🍳 Le Chef regarde ton stock...";
     if (resultats) resultats.innerHTML = "";
-
+ 
     try {
-        // 1. Historique persistant
+        // ── 1. HISTORIQUE PERSISTANT ──
         if (!window.historiqueChef) {
             window.historiqueChef = JSON.parse(
                 localStorage.getItem(`chefHistorique_${utilisateurActuel}`) || '[]'
             );
         }
-
-        // 2. Récupérer le stock
+ 
+        // ── 2. RÉCUPÉRER LE STOCK ──
         const { data: produits, error: errProduits } = await monSupabase
             .from('inventaire2')
             .select('nom, quantite, emplacement, etat')
             .eq('proprietaire', utilisateurActuel)
             .neq('etat', 'Vide');
-
+ 
         if (errProduits) throw errProduits;
         if (!produits?.length) {
             if (statut) statut.innerText = "❌ Stock vide !";
             return;
         }
-
-        // 3. Récupérer les recettes
+ 
+        // ── 3. RÉCUPÉRER LES RECETTES ──
         const { data: recettes, error: errRecettes } = await monSupabase
             .from('recettes_chef')
             .select('id, nom, ingredients_cles, temps_minutes')
             .eq('mode', mode)
             .eq('actif', true);
-
+ 
         if (errRecettes) throw errRecettes;
         if (!recettes?.length) {
             if (statut) statut.innerText = "❌ Aucune recette disponible.";
             return;
         }
-
-        // 4. Normaliser les noms de produits
+ 
+        // ── 4. NORMALISER LES NOMS DE PRODUITS ──
         const nomsProduits = produits.map(p =>
             p.nom.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
         );
-
-        // ── INGRÉDIENTS TOUJOURS DISPONIBLES (placard de base) ──
-        const basiques = ['sel', 'poivre', 'huile', 'eau', 'beurre', 'sucre', 'farine', 'ail', 'oignon'];
-
-        // 5. FILTRAGE STRICT — au moins 75% des ingrédients doivent être en stock
+ 
+        // Ingrédients toujours considérés comme disponibles
+        const basiques = ['sel', 'poivre', 'huile', 'eau', 'beurre', 'sucre',
+                          'farine', 'ail', 'oignon', 'bouillon', 'vinaigrette',
+                          'mayonnaise', 'vanille'];
+ 
+        // ── 5. SCORER ET FILTRER ──
         const recettesScores = recettes.map(r => {
             const ingredientsNecessaires = r.ingredients_cles.filter(i => !basiques.includes(i));
-
+ 
             const presents = ingredientsNecessaires.filter(ingredient =>
                 nomsProduits.some(nom => nom.includes(ingredient))
             );
-
+ 
             const tauxCouverture = ingredientsNecessaires.length > 0
                 ? presents.length / ingredientsNecessaires.length
-                : 0;
-
-            // L'ingrédient principal DOIT être présent
+                : 1;
+ 
             const principalPresent = nomsProduits.some(nom =>
                 nom.includes(r.ingredients_cles[0])
             );
-
-            // Déjà proposé récemment ?
+ 
             const dejaPropose = window.historiqueChef.some(h =>
                 h.toLowerCase().includes(r.nom.toLowerCase())
             );
-
+ 
             return {
                 ...r,
                 score: presents.length,
@@ -971,108 +971,113 @@ async function lancerChefMode(mode) {
                 famille: detecterFamille(r.ingredients_cles)
             };
         });
-
-        // Garder uniquement les recettes réalisables (75% minimum)
+ 
+        // Filtrage strict : ingrédient principal présent + 75% de couverture
         let candidates = recettesScores.filter(r =>
             r.principalPresent && r.tauxCouverture >= 0.75
         );
-
-        // Si trop peu de recettes, on assouplit à 60%
-        if (candidates.length < 5) {
+ 
+        // Assouplissement si trop peu de résultats
+        if (candidates.length < 6) {
             candidates = recettesScores.filter(r =>
                 r.principalPresent && r.tauxCouverture >= 0.6
             );
         }
-
+ 
         if (candidates.length === 0) {
             if (statut) statut.innerText = "❌ Aucune recette réalisable avec ton stock.";
             return;
         }
-
-        // 6. DIVERSITÉ PAR FAMILLE — max 2 recettes par famille
+ 
+        console.log(`📋 ${candidates.length} recettes candidates`);
+        console.log(`📋 Familles:`, [...new Set(candidates.map(c => c.famille))]);
+ 
+        // ── 6. DIVERSITÉ PAR FAMILLE + ALÉATOIRE ──
         const parFamille = {};
         candidates.forEach(r => {
             if (!parFamille[r.famille]) parFamille[r.famille] = [];
             parFamille[r.famille].push(r);
         });
-
-        // Trier chaque famille : non proposées d'abord, puis meilleur score
+ 
+        // Dans chaque famille : non proposées d'abord, puis aléatoire pondéré
         Object.keys(parFamille).forEach(f => {
             parFamille[f].sort((a, b) => {
                 if (a.dejaPropose !== b.dejaPropose) return a.dejaPropose ? 1 : -1;
-                return b.tauxCouverture - a.tauxCouverture;
+                const scoreA = a.tauxCouverture + Math.random() * 0.5;
+                const scoreB = b.tauxCouverture + Math.random() * 0.5;
+                return scoreB - scoreA;
             });
         });
-
-        // Mélanger les familles pour varier d'une session à l'autre
+ 
+        // Mélanger l'ordre des familles à chaque session
         const familles = Object.keys(parFamille).sort(() => Math.random() - 0.5);
-
+ 
         // Prendre max 2 recettes par famille
         const recettesAEnvoyer = [];
         familles.forEach(f => {
             recettesAEnvoyer.push(...parFamille[f].slice(0, 2));
         });
-
-        // 7. Préparer les données pour Gemini
+ 
+        // ── 7. PRÉPARER LES DONNÉES POUR GEMINI ──
         const listeRecettes = recettesAEnvoyer
             .slice(0, 18)
             .map(r => `- ${r.nom} [famille:${r.famille}] [${r.temps_minutes}min]`)
             .join('\n');
-
+ 
         const frigo = produits.filter(p => p.emplacement === 'FRIGO');
         const congelo = produits.filter(p => p.emplacement === 'CONGELATEUR');
         const placard = produits.filter(p => p.emplacement === 'PLACARD');
         const entames = produits.filter(p => p.etat === 'Entamé');
-
+ 
         const listeStock = `FRIGO : ${frigo.map(p => p.nom).join(', ') || 'vide'}
 ENTAMÉ : ${entames.map(p => p.nom).join(', ') || 'aucun'}
 CONGÉLATEUR : ${congelo.map(p => p.nom).join(', ') || 'vide'}
 PLACARD : ${placard.map(p => p.nom).join(', ') || 'vide'}`;
-
+ 
         const platsDejaProposés = window.historiqueChef?.length
             ? `INTERDICTION ABSOLUE de reproposer : ${window.historiqueChef.slice(-8).join(' | ')}.`
             : '';
-
+ 
         const demandeSpecifique = envie
             ? `L'utilisateur veut : "${envie}" — privilégie une recette qui correspond.`
             : '';
-
-        // 8. Prompt Gemini
+ 
+        // ── 8. PROMPT GEMINI ──
         const prompt = `Tu es un assistant cuisine.
-
+ 
 STOCK DISPONIBLE :
 ${listeStock}
-
+ 
 RECETTES POSSIBLES — choisir UNIQUEMENT parmi cette liste :
 ${listeRecettes}
-
+ 
 ${demandeSpecifique}
-
+ 
 Ta mission : Choisir 3 recettes de cette liste.
-
+ 
 RÈGLES ABSOLUES :
 1. Choisis UNIQUEMENT parmi les recettes listées — AUCUNE invention.
 2. Les 3 recettes DOIVENT avoir des FAMILLES DIFFÉRENTES (voir [famille:...]).
-   Exemple : une pâtes + une viande + un œuf. JAMAIS 2 fois la même famille.
+   Exemple : une PATES + une VIANDE + un OEUFS. JAMAIS 2 fois la même famille.
 3. Priorise les recettes utilisant les produits FRIGO et ENTAMÉ.
 4. Écris les noms EXACTEMENT comme dans la liste.
 5. PAS de markdown, PAS de gras, PAS d'astérisques.
 ${platsDejaProposés}
-
+ 
 FORMAT STRICT : Une seule phrase naturelle avec exactement 3 noms de recettes.
 Exemple : "Ce soir je peux faire des spaghetti carbonara, un steak frites, ou une omelette au fromage et salade. Lequel te tente ?"
 Termine OBLIGATOIREMENT par : "Lequel te tente ?"`;
-
+ 
         if (statut) statut.innerText = "🧠 Le Chef choisit...";
-
-        // 9. Appel Gemini avec retry
+ 
+        // ── 9. APPEL GEMINI AVEC RETRY ──
         let reponse = null;
         let tentatives = 0;
         while (!reponse && tentatives < 3) {
             try {
                 reponse = await appelGemini({
                     contents: [{ parts: [{ text: prompt }] }],
-                    generationConfig: { temperature: 0.8 }
+                    generationConfig: { temperature: 0.9 }
                 });
             } catch(e) {
                 tentatives++;
@@ -1084,8 +1089,8 @@ Termine OBLIGATOIREMENT par : "Lequel te tente ?"`;
                 }
             }
         }
-
-        // 10. Mémoriser
+ 
+        // ── 10. MÉMORISER ──
         window.historiqueChef.push(
             reponse
                 .replace(/^.*?(je peux faire|vous proposer|préparer|proposer)\s*/i, '')
@@ -1095,14 +1100,14 @@ Termine OBLIGATOIREMENT par : "Lequel te tente ?"`;
         );
         if (window.historiqueChef.length > 12) window.historiqueChef.shift();
         localStorage.setItem(`chefHistorique_${utilisateurActuel}`, JSON.stringify(window.historiqueChef));
-
+ 
         window.dernieresPropositions = reponse;
         window.attenteChoixRecette = true;
         window.modeChefActuel = mode;
-
+ 
         if (statut) statut.innerText = "🎤 Dis-moi ton choix ou clique sur un plat !";
-
-        // 11. Affichage
+ 
+        // ── 11. AFFICHAGE ──
         if (resultats) {
             resultats.innerHTML = `
                 <div style="background:white; padding:12px; border-radius:12px; border:1px solid #ddd; margin-top:5px;">
@@ -1127,41 +1132,40 @@ Termine OBLIGATOIREMENT par : "Lequel te tente ?"`;
                     </div>
                 </div>`;
         }
-
+ 
         if (!document.getElementById('mode-silencieux')?.checked) {
             faireParlerIA(reponse);
         }
-
+ 
     } catch (err) {
         console.error("Erreur Chef :", err);
         if (statut) statut.innerText = "❌ Le Chef a eu un problème. Réessaie dans quelques secondes.";
     }
 }
 
-// ============================================================
 // DÉTECTER LA FAMILLE D'UNE RECETTE
-// Sert à garantir la diversité des propositions
+// Garantit la diversité des propositions
 // ============================================================
 function detecterFamille(ingredients) {
     const premier = ingredients[0] || '';
     const tous = ingredients.join(' ');
-
-    if (/pate|spaghetti|macaroni|tagliatelle|lasagne|nouille/.test(premier)) return 'PATES';
-    if (/riz|risotto|quinoa/.test(premier)) return 'RIZ';
-    if (/pomme|frite|dauphin|puree/.test(premier)) return 'POMMES_DE_TERRE';
+ 
+    if (/pate|spaghetti|macaroni|tagliatelle|lasagne|nouille|coquillette|vermicelle|coude/.test(premier)) return 'PATES';
+    if (/riz|risotto|quinoa|couscous|semoule/.test(premier)) return 'CEREALES';
+    if (/lentille|pois|haricot.*rouge|chiche/.test(premier)) return 'LEGUMINEUSES';
+    if (/pomme|frite|dauphin|puree|rosti/.test(premier)) return 'POMMES_DE_TERRE';
     if (/oeuf/.test(premier)) return 'OEUFS';
-    if (/steak|boeuf|hache|boulette|porc|cote|saucisse|knacki|lardon|bacon|jambon/.test(premier)) return 'VIANDE';
-    if (/poulet|dinde|escalope|cordon|nugget/.test(premier)) return 'VOLAILLE';
-    if (/poisson|colin|saumon|thon|crevette|baton|sardine/.test(premier)) return 'POISSON';
-    if (/pain|mie|croque|wrap|tortilla|pizza|burger/.test(premier)) return 'SANDWICH';
-    if (/courgette|brocoli|chou|carotte|legume|tomate|salade|epinard|haricot|poireau/.test(premier)) return 'LEGUMES';
-    if (/chocolat|farine|yaourt|fruit|banane|biscuit|creme/.test(tous)) return 'DESSERT';
+    if (/steak|boeuf|hache|boulette|brochette|jarret|porc|cote|saucisse|knacki|lardon|bacon|jambon/.test(premier)) return 'VIANDE';
+    if (/poulet|dinde|escalope|cordon|nugget|cuisse/.test(premier)) return 'VOLAILLE';
+    if (/poisson|colin|saumon|thon|crevette|baton|sardine|maquereau/.test(premier)) return 'POISSON';
+    if (/pain|mie|croque|wrap|tortilla|pizza|burger|gressin/.test(premier)) return 'SANDWICH';
+    if (/courgette|brocoli|chou|carotte|legume|tomate|salade|epinard|haricot|poireau|champignon|salsifi|poivron|ratatouille|macedoine/.test(premier)) return 'LEGUMES';
+    if (/chocolat|yaourt|fruit|banane|biscuit|peche|flan|avoine|coco|miel|nutella/.test(tous)) return 'DESSERT';
     if (/reste/.test(tous)) return 'ANTIGASPI';
-
+ 
     return 'AUTRE';
 }
-
-
+ 
 
 // ============================================================
 // RÉDIGER LA RECETTE APRÈS CHOIX DU PLAT
