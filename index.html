@@ -3605,65 +3605,98 @@ async function preparerVerificationPacks(articles) {
 
 // ============================================================
 // AFFICHER LA MODALE DE VÉRIFICATION
+// Version sans backticks imbriqués — plus sûre
 // ============================================================
 function afficherModaleVerifPacks() {
     const liste = document.getElementById('liste-verif-packs');
+    const packsDisponibles = [2, 4, 6, 8, 10, 12];
 
-    liste.innerHTML = produitsAVerifier.map((p, i) => {
-        const badgeRaison = p.raison === 'doublon'
-            ? `<span style="background:#fed7d7; color:#c53030; font-size:10px; padding:3px 8px; border-radius:10px; font-weight:bold;">⚠️ ${p.nbLignes} lignes fusionnées</span>`
-            : `<span style="background:#bee3f8; color:#2c5282; font-size:10px; padding:3px 8px; border-radius:10px; font-weight:bold;">📦 Souvent en pack</span>`;
+    let html = '';
 
-        return `
-        <div style="background:white; border-radius:14px; padding:14px; margin-bottom:12px; border:1px solid #e2e8f0;">
+    produitsAVerifier.forEach((p, i) => {
 
-            <div style="margin-bottom:10px;">
-                <b style="font-size:14px; color:#2d3748; display:block;">${p.nom}</b>
-                <div style="margin-top:5px;">${badgeRaison}</div>
-            </div>
+        // Badge selon la raison
+        let badgeRaison;
+        if (p.raison === 'doublon') {
+            badgeRaison = '<span style="background:#fed7d7; color:#c53030; font-size:10px; padding:3px 8px; border-radius:10px; font-weight:bold;">&#9888; '
+                + p.nbLignes + ' lignes fusionnees</span>';
+        } else {
+            badgeRaison = '<span style="background:#bee3f8; color:#2c5282; font-size:10px; padding:3px 8px; border-radius:10px; font-weight:bold;">&#128230; Souvent en pack</span>';
+        }
 
-            <!-- Emplacement -->
-            <select onchange="modifierEmplacementVerif(${i}, this.value)"
-                    style="width:100%; padding:8px; border:1px solid #cbd5e0; border-radius:8px; font-size:12px; margin-bottom:10px; background:#f7fafc;">
-                <option value="FRIGO" ${p.emplacement === 'FRIGO' ? 'selected' : ''}>🥦 FRIGO</option>
-                <option value="CONGELATEUR" ${p.emplacement === 'CONGELATEUR' ? 'selected' : ''}>❄️ CONGÉLATEUR</option>
-                <option value="PLACARD" ${p.emplacement === 'PLACARD' ? 'selected' : ''}>🍝 PLACARD</option>
-                <option value="ANIMAUX" ${p.emplacement === 'ANIMAUX' ? 'selected' : ''}>🐾 ANIMAUX</option>
-                <option value="SALLE_DE_BAIN" ${p.emplacement === 'SALLE_DE_BAIN' ? 'selected' : ''}>🚿 SALLE DE BAIN</option>
-                <option value="AUTRES" ${p.emplacement === 'AUTRES' ? 'selected' : ''}>📦 AUTRES</option>
-            </select>
+        // Options emplacement
+        const emplacements = [
+            ['FRIGO', '&#129382; FRIGO'],
+            ['CONGELATEUR', '&#10052;&#65039; CONGELATEUR'],
+            ['PLACARD', '&#127837; PLACARD'],
+            ['ANIMAUX', '&#128062; ANIMAUX'],
+            ['SALLE_DE_BAIN', '&#128703; SALLE DE BAIN'],
+            ['AUTRES', '&#128230; AUTRES']
+        ];
 
-            <!-- Quantité -->
-            <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
-                <button onclick="modifierQteVerif(${i}, -1)"
-                        style="background:#e2e8f0; border:none; border-radius:8px; width:40px; height:40px; cursor:pointer; font-size:20px; font-weight:bold;">−</button>
-                <input type="number" id="qte-verif-${i}" value="${p.quantite}" min="1"
-                       onchange="setQteVerif(${i}, this.value)"
-                       style="flex:1; padding:10px; border:2px solid #cbd5e0; border-radius:8px; font-size:18px; text-align:center; font-weight:bold;">
-                <button onclick="modifierQteVerif(${i}, 1)"
-                        style="background:#e2e8f0; border:none; border-radius:8px; width:40px; height:40px; cursor:pointer; font-size:20px; font-weight:bold;">+</button>
-            </div>
+        let optionsHtml = '';
+        emplacements.forEach(function(e) {
+            const selected = (p.emplacement === e[0]) ? ' selected' : '';
+            optionsHtml += '<option value="' + e[0] + '"' + selected + '>' + e[1] + '</option>';
+        });
 
-            <!-- Boutons packs rapides -->
-            <div style="display:flex; gap:6px; flex-wrap:wrap;">
-                <small style="font-size:11px; color:#718096; width:100%; margin-bottom:4px;">Pack de :</small>
-                ${[2, 4, 6, 8, 10, 12].map(n => `
-                    <button onclick="setQteVerif(${i}, ${n})"
-                            style="flex:1; background:#edf2f7; border:1px solid #cbd5e0; border-radius:8px; padding:8px 4px; cursor:pointer; font-size:13px; font-weight:bold; color:#4a5568;">
-                        ×${n}
-                    </button>
-                `).join('')}
-            </div>
+        // Boutons packs rapides
+        let boutonsPacks = '';
+        packsDisponibles.forEach(function(n) {
+            boutonsPacks += '<button onclick="setQteVerif(' + i + ', ' + n + ')" '
+                + 'style="flex:1; background:#edf2f7; border:1px solid #cbd5e0; border-radius:8px; padding:8px 4px; cursor:pointer; font-size:13px; font-weight:bold; color:#4a5568;">'
+                + '&times;' + n + '</button>';
+        });
 
-            <!-- Supprimer -->
-            <button onclick="supprimerLigneVerif(${i})"
-                    style="width:100%; background:none; border:none; color:#e53e3e; cursor:pointer; font-size:12px; margin-top:8px;">
-                🗑️ Ne pas ajouter ce produit
-            </button>
-        </div>`;
-    }).join('');
+        // Carte du produit
+        html += '<div style="background:white; border-radius:14px; padding:14px; margin-bottom:12px; border:1px solid #e2e8f0;">'
 
+            + '<div style="margin-bottom:10px;">'
+            + '<b style="font-size:14px; color:#2d3748; display:block;">' + p.nom + '</b>'
+            + '<div style="margin-top:5px;">' + badgeRaison + '</div>'
+            + '</div>'
+
+            + '<select onchange="modifierEmplacementVerif(' + i + ', this.value)" '
+            + 'style="width:100%; padding:8px; border:1px solid #cbd5e0; border-radius:8px; font-size:12px; margin-bottom:10px; background:#f7fafc;">'
+            + optionsHtml
+            + '</select>'
+
+            + '<div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">'
+            + '<button onclick="modifierQteVerif(' + i + ', -1)" '
+            + 'style="background:#e2e8f0; border:none; border-radius:8px; width:40px; height:40px; cursor:pointer; font-size:20px; font-weight:bold;">&minus;</button>'
+            + '<input type="number" id="qte-verif-' + i + '" value="' + p.quantite + '" min="1" '
+            + 'onchange="setQteVerif(' + i + ', this.value)" '
+            + 'style="flex:1; padding:10px; border:2px solid #cbd5e0; border-radius:8px; font-size:18px; text-align:center; font-weight:bold;">'
+            + '<button onclick="modifierQteVerif(' + i + ', 1)" '
+            + 'style="background:#e2e8f0; border:none; border-radius:8px; width:40px; height:40px; cursor:pointer; font-size:20px; font-weight:bold;">+</button>'
+            + '</div>'
+
+            + '<div style="display:flex; gap:6px; flex-wrap:wrap;">'
+            + '<small style="font-size:11px; color:#718096; width:100%; margin-bottom:4px;">Pack de :</small>'
+            + boutonsPacks
+            + '</div>'
+
+            + '<button onclick="supprimerLigneVerif(' + i + ')" '
+            + 'style="width:100%; background:none; border:none; color:#e53e3e; cursor:pointer; font-size:12px; margin-top:8px;">'
+            + '&#128465;&#65039; Ne pas ajouter ce produit</button>'
+
+            + '</div>';
+    });
+
+    liste.innerHTML = html;
     document.getElementById('modal-verif-packs').style.display = 'flex';
+}
+
+// ============================================================
+// SUPPRIMER UNE LIGNE — version corrigee
+// ============================================================
+function supprimerLigneVerif(index) {
+    produitsAVerifier.splice(index, 1);
+    if (produitsAVerifier.length === 0) {
+        validerVerifPacks();
+    } else {
+        afficherModaleVerifPacks();
+    }
 }
 
 // ============================================================
@@ -3686,21 +3719,6 @@ function setQteVerif(index, valeur) {
 // ============================================================
 function modifierEmplacementVerif(index, emplacement) {
     produitsAVerifier[index].emplacement = emplacement;
-}
-
-// ============================================================
-// SUPPRIMER UNE LIGNE
-// ============================================================
-function supprimerLigneVerif(index) {
-    produitsAVerifier[index].supprime = true;
-    afficherModaleVerifPacks();
-    // Retirer visuellement
-    produitsAVerifier = produitsAVerifier.filter(p => !p.supprime);
-    if (produitsAVerifier.length === 0) {
-        validerVerifPacks();
-    } else {
-        afficherModaleVerifPacks();
-    }
 }
 
 // ============================================================
@@ -3997,22 +4015,10 @@ async function effacerHistorique() {
     }
 }
 
-// ============================================================
-// FERMER
-// ============================================================
 function fermerHistoriqueScans() {
     document.getElementById('modal-historique').style.display = 'none';
 }
-</script>
 
-<!-- ============================================================
-4. MODIFICATIONS DES FONCTIONS EXISTANTES
-============================================================ -->
-<script>
-
-// ============================================================
-// REMPLACE appliquerRetrait() par cette version
-// ============================================================
 async function appliquerRetrait(qteARetirer) {
     if (!produitARetirer) return;
 
