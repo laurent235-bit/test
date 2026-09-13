@@ -2856,7 +2856,7 @@ async function changerEmplacementInventaire() {
 // ============================================================
 // DÉMARRER LE SCAN
 // ============================================================
-async function demarrerScanInventaire() {
+aasync function demarrerScanInventaire() {
     const statut = document.getElementById('statut-inventaire');
     statut.innerText = '📷 Démarrage de la caméra...';
     scanInventairePause = false;
@@ -2864,9 +2864,23 @@ async function demarrerScanInventaire() {
     try {
         scannerInventaire = new Html5Qrcode("video-inventaire");
 
+        // 1. Définition dynamique de la zone de scan (100% du flux vidéo)
+        const qrboxFunction = (viewfinderWidth, viewfinderHeight) => {
+            return {
+                width: Math.floor(viewfinderWidth * 0.95),
+                height: Math.floor(viewfinderHeight * 0.95)
+            };
+        };
+
         await scannerInventaire.start(
             { facingMode: "environment" },
-            { fps: 15, qrbox: { width: 300, height: 200 }, aspectRatio: 1.5 },
+            { 
+                fps: 20, // Légère augmentation pour plus de réactivité (15 -> 20)
+                qrbox: qrboxFunction, // Utilise 95% de la surface visible
+                experimentalFeatures: {
+                    useBarCodeDetectorIfSupported: true // Active l'accélération native du navigateur si dispo
+                }
+            },
             async (ean) => {
                 if (scanInventairePause) return;
                 if (derniersEANInventaire.includes(ean)) return;
