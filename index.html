@@ -3793,14 +3793,16 @@ async function validerVerifPacks() {
 
 // ============================================================
 // INSÉRER DANS SUPABASE
+// Avec gestion des prix pour le calcul des économies
 // ============================================================
 async function insererTousLesProduits(articles) {
     const statut = document.getElementById('statut-scan');
     if (statut) statut.innerText = `💾 Ajout de ${articles.length} produits...`;
-
+ 
     let ajoutes = 0;
     let fusionnes = 0;
-
+ 
+    // Estimation de date de péremption si non scannée
     const calculerDatePeremption = (nom, emplacement) => {
         if (emplacement !== 'FRIGO') return null;
         const n = nom.toLowerCase();
@@ -3814,15 +3816,16 @@ async function insererTousLesProduits(articles) {
         d.setDate(d.getDate() + jours);
         return d.toISOString().split('T')[0];
     };
-
+ 
     for (const a of articles) {
         try {
             const nomNettoye = (a.nom || '').trim().replace(/\s+/g, ' ');
             if (!nomNettoye) continue;
-
+ 
             const qte = parseInt(a.quantite) || 1;
             const emplacement = a.emplacement || 'PLACARD';
-
+ 
+            // Chercher si le produit existe déjà
             const { data: existant } = await monSupabase
                 .from('inventaire2')
                 .select('id, quantite, prix')
@@ -3831,14 +3834,48 @@ async function insererTousLesProduits(articles) {
                 .eq('proprietaire', utilisateurActuel)
                 .neq('etat', 'Vide')
                 .maybeSingle();
-
+ 
             if (existant) {
+                // Produit existant : on additionne les quantités
                 await monSupabase
                     .from('inventaire2')
                     .update({
                         quantite: (parseInt(existant.quantite) || 0) + qte,
                         etat: 'Plein',
-                        prix: a.prix ||
+                        prix: a.prix || existant.prix
+                    })
+                    .eq('id', existant.id);
+                fusionnes++;
+ 
+            } else {
+                // Nouveau produit
+                await monSupabase.from('inventaire2').insert([{
+                    nom: nomNettoye,
+                    nom_alexa: a.nom_alexa || nomNettoye.split(' ').slice(0, 2).join(' ').toLowerCase(),
+                    quantite: qte,
+                    emplacement: emplacement,
+                    etat: 'Plein',
+                    date_peremption: calculerDatePeremption(nomNettoye, emplacement),
+                    prix: a.prix || null,
+                    ean: a.ean || null,
+                    proprietaire: utilisateurActuel
+                }]);
+                ajoutes++;
+            }
+ 
+        } catch (err) {
+            console.error('Erreur insertion:', a.nom, err);
+        }
+    }
+ 
+    if (statut) {
+        statut.innerText = `✅ ${ajoutes} ajouté(s), ${fusionnes} fusionné(s)`;
+    }
+    afficherToast(`✅ ${ajoutes + fusionnes} produit(s) traité(s) !`);
+ 
+    await chargerTout();
+}
+ 
 let historiqueComplet = [];
 
 // ============================================================
