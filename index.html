@@ -280,6 +280,40 @@
         Scanne le code-barres puis la date au rangement des courses
     </p>
 </div>
+<div class="card" style="padding:15px; border:2px solid #38a169;">
+    <button onclick="ouvrirEconomies()"
+            style="background:linear-gradient(135deg,#38a169,#2f855a); color:white; border:none; border-radius:12px; padding:16px; cursor:pointer; font-size:15px; font-weight:bold; width:100%;">
+        &#128176; MES ÉCONOMIES
+    </button>
+    <p style="font-size:11px; color:#888; margin:8px 0 0 0; text-align:center;" id="apercu-economies">
+        Chargement...
+    </p>
+</div>
+
+<!-- 2. MODALE ÉCONOMIES — avant </body> -->
+<div id="modal-economies" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:9999; flex-direction:column; align-items:center; justify-content:flex-start; overflow-y:auto; padding:20px 0;">
+    <div style="width:94%; max-width:480px;">
+
+        <div style="background:linear-gradient(135deg,#38a169,#2f855a); border-radius:20px 20px 0 0; padding:25px; text-align:center; color:white;">
+            <div style="font-size:42px;">&#128176;</div>
+            <b style="font-size:19px; display:block; margin-top:8px;">Vos économies</b>
+            <p style="font-size:12px; opacity:0.85; margin:6px 0 0 0;">
+                Argent sauvé du gaspillage alimentaire
+            </p>
+        </div>
+
+        <div id="contenu-economies" style="background:#f7fafc; padding:18px;">
+            <p style="text-align:center; color:#a0aec0; font-size:13px;">Chargement...</p>
+        </div>
+
+        <div style="background:white; border-radius:0 0 20px 20px; padding:20px;">
+            <button onclick="fermerEconomies()"
+                    style="width:100%; background:#718096; color:white; border:none; border-radius:12px; padding:14px; cursor:pointer; font-size:15px; font-weight:bold;">
+                &#10005; FERMER
+            </button>
+        </div>
+    </div>
+</div>
 <div id="modal-verif-packs" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:10000; flex-direction:column; align-items:center; justify-content:flex-start; overflow-y:auto; padding:20px 0;">
     <div style="width:94%; max-width:480px;">
 
@@ -799,6 +833,9 @@ monSupabase = supabaseLib.createClient(elUrl.value, elKey.value);
             chargerPlanning()
         ]);
 await verifierPeremptions();
+        await rafraichirApercuEconomies();
+        await detecterPerimes();
+
     } catch (err) {
         console.error("Erreur critique au démarrage :", err);
         afficherToast("❌ Erreur de démarrage");
@@ -1526,14 +1563,24 @@ async function scannerTicket(input) {
 Extrais TOUS les articles alimentaires et ménagers.
 
 RÈGLES :
-- Nettoie les noms : enlève codes, poids, prix, promotions
+- Nettoie les noms : enlève codes, poids, promotions
 - Garde un nom clair et reconnaissable
 - Détermine l'emplacement : FRIGO, PLACARD, CONGELATEUR, ANIMAUX, SALLE_DE_BAIN, AUTRES
 - Extrais la quantité réelle (ex: "YAOURT X4" → quantite: 4)
 - Génère un nom_alexa court (2-3 mots max, prononçable)
 
+PRIX — important :
+- Extrais le prix UNITAIRE en euros pour chaque article
+- Si le ticket affiche un prix total pour plusieurs unités, divise par la quantité
+- Ignore les lignes de remise, total, TVA, rendu monnaie
+- Format décimal avec un point (ex: 2.45)
+- Si le prix n'est pas lisible, mets null
+
+VÉRIFICATION :
+- Relis le ticket ligne par ligne, n'oublie aucun article
+
 Réponds UNIQUEMENT en JSON valide :
-[{"nom":"...","nom_alexa":"...","quantite":1,"emplacement":"..."}]`
+[{"nom":"...","nom_alexa":"...","quantite":1,"emplacement":"...","prix":2.45}]`
                         },
                         { inline_data: { mime_type: mimeType, data: base64Data } }
                     ]
@@ -3176,12 +3223,14 @@ async function appliquerRetrait(qteARetirer) {
         const nouvelleQte = Math.max(0, qteActuelle - qteARetirer);
 
         if (nouvelleQte === 0) {
-            // Stock épuisé → liste de courses
             await monSupabase
                 .from('inventaire2')
                 .update({ quantite: 0, etat: 'Vide' })
                 .eq('id', produitARetirer.id)
                 .eq('proprietaire', utilisateurActuel);
+
+            await enregistrerHistorique(produitARetirer, 'vide', qteARetirer, 0);
+            await enregistrerEconomieSauvee(produitARetirer.id, produitARetirer.nom, qteARetirer);
 
             const msg = `🛒 ${produitARetirer.nom} → liste de courses`;
             statut.innerText = msg;
@@ -3196,6 +3245,9 @@ async function appliquerRetrait(qteARetirer) {
                 .update({ quantite: nouvelleQte })
                 .eq('id', produitARetirer.id)
                 .eq('proprietaire', utilisateurActuel);
+
+            await enregistrerHistorique(produitARetirer, 'retire', qteARetirer, nouvelleQte);
+            await enregistrerEconomieSauvee(produitARetirer.id, produitARetirer.nom, qteARetirer);
 
             const msg = `✅ ${produitARetirer.nom} −${qteARetirer} → reste ${nouvelleQte}`;
             statut.innerText = msg;
@@ -3442,24 +3494,29 @@ function ligneProduitPeremption(p, couleur) {
     const badge = p.date_scannee ? '' : ' <small style="opacity:0.6;">(est.)</small>';
 
     return `
-        <div style="display:flex; justify-content:space-between; align-items:center; background:white; border-radius:8px; padding:8px 12px; margin-top:6px;">
-            <div style="flex:1;">
+        <div style="background:white; border-radius:8px; padding:10px 12px; margin-top:6px;">
+            <div style="margin-bottom:8px;">
                 <b style="font-size:13px; color:#2d3748;">${p.nom}</b>
                 <small style="display:block; font-size:11px; color:${couleur};">
                     ${texteJours}${badge} • qté ${p.quantite}
                 </small>
             </div>
-            <button onclick="event.stopPropagation(); prolongerDate(${p.id}, '${p.date_peremption}')"
-                    style="background:#edf2f7; border:1px solid #cbd5e0; border-radius:6px; padding:6px 10px; cursor:pointer; font-size:11px; margin-right:6px;">
-                +2j
-            </button>
-            <button onclick="event.stopPropagation(); marquerConsomme(${p.id}, ${p.quantite})"
-                    style="background:#48bb78; color:white; border:none; border-radius:6px; padding:6px 10px; cursor:pointer; font-size:11px;">
-                ✓
-            </button>
+            <div style="display:flex; gap:6px;">
+                <button onclick="event.stopPropagation(); prolongerDate(${p.id}, '${p.date_peremption}')"
+                        style="flex:1; background:#edf2f7; border:1px solid #cbd5e0; border-radius:6px; padding:8px; cursor:pointer; font-size:11px;">
+                    +2j
+                </button>
+                <button onclick="event.stopPropagation(); marquerConsomme(${p.id}, ${p.quantite})"
+                        style="flex:1; background:#48bb78; color:white; border:none; border-radius:6px; padding:8px; cursor:pointer; font-size:11px; font-weight:bold;">
+                    ✓ Consommé
+                </button>
+                <button onclick="event.stopPropagation(); marquerJetePeremption(${p.id}, ${p.quantite})"
+                        style="flex:1; background:#e53e3e; color:white; border:none; border-radius:6px; padding:8px; cursor:pointer; font-size:11px; font-weight:bold;">
+                    🗑️ Jeté
+                </button>
+            </div>
         </div>`;
 }
-
 // ============================================================
 // BASCULER L'AFFICHAGE DES DÉTAILS
 // ============================================================
@@ -3744,7 +3801,6 @@ async function insererTousLesProduits(articles) {
     let ajoutes = 0;
     let fusionnes = 0;
 
-    // Estimation de date de péremption
     const calculerDatePeremption = (nom, emplacement) => {
         if (emplacement !== 'FRIGO') return null;
         const n = nom.toLowerCase();
@@ -3767,10 +3823,9 @@ async function insererTousLesProduits(articles) {
             const qte = parseInt(a.quantite) || 1;
             const emplacement = a.emplacement || 'PLACARD';
 
-            // Vérifier si le produit existe déjà en stock
             const { data: existant } = await monSupabase
                 .from('inventaire2')
-                .select('id, quantite')
+                .select('id, quantite, prix')
                 .ilike('nom', nomNettoye)
                 .eq('emplacement', emplacement)
                 .eq('proprietaire', utilisateurActuel)
@@ -3782,35 +3837,8 @@ async function insererTousLesProduits(articles) {
                     .from('inventaire2')
                     .update({
                         quantite: (parseInt(existant.quantite) || 0) + qte,
-                        etat: 'Plein'
-                    })
-                    .eq('id', existant.id);
-                fusionnes++;
-            } else {
-                await monSupabase.from('inventaire2').insert([{
-                    nom: nomNettoye,
-                    nom_alexa: a.nom_alexa || nomNettoye.split(' ').slice(0, 2).join(' ').toLowerCase(),
-                    quantite: qte,
-                    emplacement: emplacement,
-                    etat: 'Plein',
-                    date_peremption: calculerDatePeremption(nomNettoye, emplacement),
-                    ean: a.ean || null,
-                    proprietaire: utilisateurActuel
-                }]);
-                ajoutes++;
-            }
-        } catch (err) {
-            console.error('Erreur insertion:', a.nom, err);
-        }
-    }
-
-    if (statut) {
-        statut.innerText = `✅ ${ajoutes} ajouté(s), ${fusionnes} fusionné(s)`;
-    }
-    afficherToast(`✅ ${ajoutes + fusionnes} produit(s) traité(s) !`);
-
-    await chargerTout();
-}
+                        etat: 'Plein',
+                        prix: a.prix ||
 let historiqueComplet = [];
 
 // ============================================================
@@ -4019,64 +4047,7 @@ function fermerHistoriqueScans() {
     document.getElementById('modal-historique').style.display = 'none';
 }
 
-async function appliquerRetrait(qteARetirer) {
-    if (!produitARetirer) return;
 
-    const statut = document.getElementById('statut-scanner');
-    const historique = document.getElementById('historique-scans');
-
-    try {
-        const qteActuelle = parseInt(produitARetirer.quantite) || 0;
-        const nouvelleQte = Math.max(0, qteActuelle - qteARetirer);
-
-        if (nouvelleQte === 0) {
-            await monSupabase
-                .from('inventaire2')
-                .update({ quantite: 0, etat: 'Vide' })
-                .eq('id', produitARetirer.id)
-                .eq('proprietaire', utilisateurActuel);
-
-            // ← HISTORIQUE
-            await enregistrerHistorique(produitARetirer, 'vide', qteARetirer, 0);
-
-            const msg = `🛒 ${produitARetirer.nom} → liste de courses`;
-            statut.innerText = msg;
-            historique.innerHTML = `
-                <div style="background:#2d3748; color:#f6ad55; padding:8px 12px; border-radius:8px; margin-bottom:5px; font-size:12px; text-align:left;">
-                    ${msg}
-                </div>` + historique.innerHTML;
-
-        } else {
-            await monSupabase
-                .from('inventaire2')
-                .update({ quantite: nouvelleQte })
-                .eq('id', produitARetirer.id)
-                .eq('proprietaire', utilisateurActuel);
-
-            // ← HISTORIQUE
-            await enregistrerHistorique(produitARetirer, 'retire', qteARetirer, nouvelleQte);
-
-            const msg = `✅ ${produitARetirer.nom} −${qteARetirer} → reste ${nouvelleQte}`;
-            statut.innerText = msg;
-            historique.innerHTML = `
-                <div style="background:#2d3748; color:#48bb78; padding:8px 12px; border-radius:8px; margin-bottom:5px; font-size:12px; text-align:left;">
-                    ${msg}
-                </div>` + historique.innerHTML;
-        }
-
-        compteurScans++;
-        document.getElementById('compteur-scans').innerText = compteurScans;
-
-        if (navigator.vibrate) navigator.vibrate(200);
-        jouerBip();
-
-    } catch (err) {
-        console.error('Erreur retrait:', err);
-        statut.innerText = '❌ Erreur de mise à jour';
-    }
-
-    produitARetirer = null;
-}
 
 // ============================================================
 // REMPLACE marquerEntame() par cette version
@@ -4121,6 +4092,247 @@ async function marquerEntame() {
     }
 
     produitARetirer = null;
+}
+// ============================================================
+// ENREGISTRER UN PRODUIT SAUVÉ (consommé avant péremption)
+// ============================================================
+async function enregistrerEconomie(produit, quantite, type) {
+    try {
+        const prixUnitaire = parseFloat(produit.prix) || null;
+        if (!prixUnitaire) return;   // pas de prix connu, on n'enregistre pas
+
+        const montant = prixUnitaire * (quantite || 1);
+
+        await monSupabase.from('economies').insert([{
+            nom_produit: produit.nom,
+            type: type,                    // 'sauve' ou 'gaspille'
+            quantite: quantite || 1,
+            prix_unitaire: prixUnitaire,
+            montant: montant,
+            proprietaire: utilisateurActuel
+        }]);
+
+        await rafraichirApercuEconomies();
+
+    } catch (err) {
+        console.log('Economie non enregistree:', err.message);
+    }
+}
+
+// ============================================================
+// MARQUER UN PRODUIT COMME JETÉ (périmé)
+// À appeler depuis les alertes de péremption
+// ============================================================
+async function marquerJete(id, quantite) {
+    if (!utilisateurActuel) return;
+
+    if (!confirm('Marquer ce produit comme jete ?\n\nIl sera compte comme gaspillage.')) return;
+
+    try {
+        const { data: produit } = await monSupabase
+            .from('inventaire2')
+            .select('id, nom, prix, quantite')
+            .eq('id', id)
+            .maybeSingle();
+
+        if (produit) {
+            await enregistrerEconomie(produit, quantite || produit.quantite, 'gaspille');
+        }
+
+        await monSupabase
+            .from('inventaire2')
+            .update({ quantite: 0, etat: 'Vide' })
+            .eq('id', id)
+            .eq('proprietaire', utilisateurActuel);
+
+        afficherToast('Produit marque comme jete');
+        await chargerTout();
+        await verifierPeremptions();
+
+    } catch (err) {
+        console.error('Erreur marquage jete:', err);
+    }
+}
+
+// ============================================================
+// OUVRIR LE TABLEAU DE BORD
+// ============================================================
+async function ouvrirEconomies() {
+    if (!utilisateurActuel) {
+        utilisateurActuel = localStorage.getItem('monFrigo_User');
+    }
+    if (!utilisateurActuel) {
+        afficherToast('Connecte-toi d abord');
+        return;
+    }
+
+    document.getElementById('modal-economies').style.display = 'flex';
+    await chargerEconomies();
+}
+
+function fermerEconomies() {
+    document.getElementById('modal-economies').style.display = 'none';
+}
+
+// ============================================================
+// CHARGER ET AFFICHER LES ÉCONOMIES
+// ============================================================
+async function chargerEconomies() {
+    const contenu = document.getElementById('contenu-economies');
+
+    try {
+        const { data, error } = await monSupabase
+            .from('economies')
+            .select('*')
+            .eq('proprietaire', utilisateurActuel)
+            .order('date_evenement', { ascending: false });
+
+        if (error) throw error;
+
+        const evenements = data || [];
+
+        if (!evenements.length) {
+            contenu.innerHTML = '<p style="text-align:center; color:#a0aec0; font-size:13px; padding:30px 0;">'
+                + 'Aucune donnee pour le moment.<br><br>'
+                + 'Scannez vos tickets pour enregistrer les prix,<br>puis consommez vos produits avant peremption.'
+                + '</p>';
+            return;
+        }
+
+        // Calculs
+        const debutMois = new Date();
+        debutMois.setDate(1);
+        debutMois.setHours(0, 0, 0, 0);
+
+        let sauveMois = 0, gaspilleMois = 0;
+        let sauveTotal = 0, gaspilleTotal = 0;
+
+        evenements.forEach(function(e) {
+            const montant = parseFloat(e.montant) || 0;
+            const date = new Date(e.date_evenement);
+
+            if (e.type === 'sauve') {
+                sauveTotal += montant;
+                if (date >= debutMois) sauveMois += montant;
+            } else {
+                gaspilleTotal += montant;
+                if (date >= debutMois) gaspilleMois += montant;
+            }
+        });
+
+        const bilanMois = sauveMois - gaspilleMois;
+        const bilanTotal = sauveTotal - gaspilleTotal;
+
+        // Taux anti-gaspi
+        const totalMois = sauveMois + gaspilleMois;
+        const tauxMois = totalMois > 0 ? Math.round((sauveMois / totalMois) * 100) : 100;
+
+        // Construction de l'affichage
+        let html = '';
+
+        // Bloc principal du mois
+        html += '<div style="background:white; border-radius:16px; padding:20px; margin-bottom:14px; text-align:center;">'
+            + '<small style="font-size:11px; color:#718096; text-transform:uppercase; font-weight:bold;">Ce mois-ci</small>'
+            + '<div style="font-size:38px; font-weight:bold; color:#38a169; margin:8px 0;">'
+            + bilanMois.toFixed(2) + ' &euro;</div>'
+            + '<div style="display:flex; justify-content:space-around; margin-top:15px; padding-top:15px; border-top:1px solid #e2e8f0;">'
+            + '<div><div style="font-size:18px; font-weight:bold; color:#38a169;">' + sauveMois.toFixed(2) + ' &euro;</div>'
+            + '<small style="font-size:10px; color:#718096;">sauve</small></div>'
+            + '<div><div style="font-size:18px; font-weight:bold; color:#e53e3e;">' + gaspilleMois.toFixed(2) + ' &euro;</div>'
+            + '<small style="font-size:10px; color:#718096;">gaspille</small></div>'
+            + '</div></div>';
+
+        // Jauge anti-gaspi
+        let couleurJauge = '#e53e3e';
+        let messageJauge = 'A ameliorer';
+        if (tauxMois >= 90) { couleurJauge = '#38a169'; messageJauge = 'Excellent'; }
+        else if (tauxMois >= 75) { couleurJauge = '#48bb78'; messageJauge = 'Tres bien'; }
+        else if (tauxMois >= 50) { couleurJauge = '#ed8936'; messageJauge = 'Correct'; }
+
+        html += '<div style="background:white; border-radius:16px; padding:18px; margin-bottom:14px;">'
+            + '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">'
+            + '<b style="font-size:13px; color:#2d3748;">Taux anti-gaspi</b>'
+            + '<span style="font-size:20px; font-weight:bold; color:' + couleurJauge + ';">' + tauxMois + '%</span>'
+            + '</div>'
+            + '<div style="background:#e2e8f0; border-radius:10px; height:12px; overflow:hidden;">'
+            + '<div style="background:' + couleurJauge + '; height:100%; width:' + tauxMois + '%; border-radius:10px;"></div>'
+            + '</div>'
+            + '<small style="font-size:11px; color:' + couleurJauge + '; display:block; margin-top:8px; font-weight:bold;">'
+            + messageJauge + '</small>'
+            + '</div>';
+
+        // Total depuis le début
+        html += '<div style="background:white; border-radius:16px; padding:18px; margin-bottom:14px; text-align:center;">'
+            + '<small style="font-size:11px; color:#718096; text-transform:uppercase; font-weight:bold;">Depuis le debut</small>'
+            + '<div style="font-size:28px; font-weight:bold; color:#2d3748; margin-top:6px;">'
+            + bilanTotal.toFixed(2) + ' &euro;</div>'
+            + '</div>';
+
+        // Derniers mouvements
+        html += '<div style="background:white; border-radius:16px; padding:18px;">'
+            + '<b style="font-size:13px; color:#2d3748; display:block; margin-bottom:12px;">Derniers mouvements</b>';
+
+        evenements.slice(0, 15).forEach(function(e) {
+            const estSauve = e.type === 'sauve';
+            const couleur = estSauve ? '#38a169' : '#e53e3e';
+            const signe = estSauve ? '+' : '-';
+            const date = new Date(e.date_evenement).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+
+            html += '<div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid #f1f5f9;">'
+                + '<div style="flex:1;">'
+                + '<div style="font-size:12px; color:#2d3748;">' + e.nom_produit + '</div>'
+                + '<small style="font-size:10px; color:#a0aec0;">' + date + '</small>'
+                + '</div>'
+                + '<b style="font-size:13px; color:' + couleur + ';">'
+                + signe + parseFloat(e.montant).toFixed(2) + ' &euro;</b>'
+                + '</div>';
+        });
+
+        html += '</div>';
+
+        contenu.innerHTML = html;
+
+    } catch (err) {
+        console.error('Erreur chargement economies:', err);
+        contenu.innerHTML = '<p style="text-align:center; color:#e53e3e; font-size:13px;">Erreur de chargement</p>';
+    }
+}
+
+// ============================================================
+// APERÇU SOUS LE BOUTON
+// ============================================================
+async function rafraichirApercuEconomies() {
+    const apercu = document.getElementById('apercu-economies');
+    if (!apercu || !utilisateurActuel || !monSupabase) return;
+
+    try {
+        const debutMois = new Date();
+        debutMois.setDate(1);
+        debutMois.setHours(0, 0, 0, 0);
+
+        const { data } = await monSupabase
+            .from('economies')
+            .select('type, montant')
+            .eq('proprietaire', utilisateurActuel)
+            .gte('date_evenement', debutMois.toISOString());
+
+        if (!data || !data.length) {
+            apercu.innerText = 'Aucune donnee ce mois-ci';
+            return;
+        }
+
+        let sauve = 0, gaspille = 0;
+        data.forEach(function(e) {
+            const m = parseFloat(e.montant) || 0;
+            if (e.type === 'sauve') sauve += m; else gaspille += m;
+        });
+
+        const bilan = sauve - gaspille;
+        apercu.innerHTML = 'Ce mois-ci : <b style="color:#38a169;">' + bilan.toFixed(2) + ' &euro;</b> economises';
+
+    } catch (err) {
+        apercu.innerText = '';
+    }
 }
 </script>
 </body>
