@@ -761,6 +761,34 @@
             ⏭️ Passer ce produit
         </button>
     </div>
+	<div id="modal-perimes" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:10000; flex-direction:column; align-items:center; justify-content:flex-start; overflow-y:auto; padding:20px 0;">
+    <div style="width:94%; max-width:460px;">
+
+        <div style="background:white; border-radius:20px 20px 0 0; padding:22px; text-align:center;">
+            <div style="font-size:38px;">🗑️</div>
+            <b style="font-size:17px; color:#2d3748; display:block; margin-top:8px;">
+                Produits périmés
+            </b>
+            <p style="font-size:12px; color:#718096; margin:6px 0 0 0;">
+                Ces produits ont dépassé leur date depuis plus de 5 jours.<br>
+                Les avez-vous jetés ou consommés ?
+            </p>
+        </div>
+
+        <div id="liste-perimes" style="background:#f7fafc; padding:15px; max-height:55vh; overflow-y:auto;"></div>
+
+        <div style="background:white; border-radius:0 0 20px 20px; padding:18px;">
+            <button onclick="toutMarquerJete()"
+                    style="width:100%; background:#e53e3e; color:white; border:none; border-radius:12px; padding:14px; cursor:pointer; font-size:14px; font-weight:bold; margin-bottom:10px;">
+                🗑️ Tout marquer comme jeté
+            </button>
+            <button onclick="fermerModalePerimes()"
+                    style="width:100%; background:#718096; color:white; border:none; border-radius:12px; padding:12px; cursor:pointer; font-size:14px;">
+                Plus tard
+            </button>
+        </div>
+    </div>
+</div>
 </div>
 </div>
 <style>
@@ -4371,6 +4399,290 @@ async function rafraichirApercuEconomies() {
         apercu.innerText = '';
     }
 }
+/ ============================================================
+// 1. ENREGISTRER UN GASPILLAGE
+// ============================================================
+async function enregistrerGaspillage(id, nom, quantite) {
+    try {
+        const { data: produit } = await monSupabase
+            .from('inventaire2')
+            .select('nom, prix')
+            .eq('id', id)
+            .maybeSingle();
+
+        const prix = produit && produit.prix ? parseFloat(produit.prix) : null;
+        if (!prix) return;
+
+        await monSupabase.from('economies').insert([{
+            nom_produit: nom || (produit ? produit.nom : 'Produit'),
+            type: 'gaspille',
+            quantite: quantite || 1,
+            prix_unitaire: prix,
+            montant: prix * (quantite || 1),
+            proprietaire: utilisateurActuel
+        }]);
+
+        await rafraichirApercuEconomies();
+
+    } catch (err) {
+        console.log('Gaspillage non enregistre:', err.message);
+    }
+}
+
+
+// ============================================================
+// 2. ENREGISTRER UNE ECONOMIE (consomme avant peremption)
+// ============================================================
+async function enregistrerEconomieSauvee(id, nom, quantite) {
+    try {
+        const { data: produit } = await monSupabase
+            .from('inventaire2')
+            .select('nom, prix, date_peremption')
+            .eq('id', id)
+            .maybeSingle();
+
+        if (!produit || !produit.prix) return;
+
+        // Si le produit est deja perime, ce n'est pas une economie
+        if (produit.date_peremption) {
+            const datePeremption = new Date(produit.date_peremption);
+            if (new Date() > datePeremption) return;
+        }
+
+        const prix = parseFloat(produit.prix);
+
+        await monSupabase.from('economies').insert([{
+            nom_produit: nom || produit.nom,
+            type: 'sauve',
+            quantite: quantite || 1,
+            prix_unitaire: prix,
+            montant: prix * (quantite || 1),
+            proprietaire: utilisateurActuel
+        }]);
+
+        await rafraichirApercuEconomies();
+
+    } catch (err) {
+        console.log('Economie non enregistree:', err.message);
+    }
+}
+
+const DELAI_GRACE_PERIME = 5;
+let produitsPerimes = [];
+
+// ============================================================
+// 3. BOUTON "PERIME - JETE" dans la modale de quantite
+// ============================================================
+async function validerJetePerime() {
+    if (!produitARetirer) return;
+
+    document.getElementById('modal-quantite').style.display = 'none';
+
+    const p = produitARetirer;
+    const qte = parseInt(p.quantite) || 1;
+
+    await enregistrerGaspillage(p.id, p.nom, qte);
+
+    await monSupabase
+        .from('inventaire2')
+        .update({ quantite: 0, etat: 'Vide' })
+        .eq('id', p.id)
+        .eq('proprietaire', utilisateurActuel);
+
+    await enregistrerHistorique(p, 'vide', qte, 0);
+
+    const statut = document.getElementById('statut-scanner');
+    const historique = document.getElementById('historique-scans');
+
+    if (statut) statut.innerText = p.nom + ' marque comme perime';
+    if (historique) {
+        historique.innerHTML = '<div style="background:#2d3748; color:#fc8181; padding:8px 12px; border-radius:8px; margin-bottom:5px; font-size:12px; text-align:left;">'
+            + '🗑️ ' + p.nom + ' jete (perime)</div>' + historique.innerHTML;
+    }
+
+    compteurScans++;
+    document.getElementById('compteur-scans').innerText = compteurScans;
+
+    if (navigator.vibrate) navigator.vibrate(200);
+    jouerBip();
+
+    produitARetirer = null;
+}
+
+
+// ============================================================
+// 4. DETECTER LES PRODUITS PERIMES DEPUIS TROP LONGTEMPS
+// ============================================================
+async function detecterPerimes() {
+    if (!utilisateurActuel || !monSupabase) return;
+
+    try {
+        const limite = new Date();
+        limite.setDate(limite.getDate() - DELAI_GRACE_PERIME);
+
+        const { data, error } = await monSupabase
+            .from('inventaire2')
+            .select('id, nom, quantite, prix, date_peremption, emplacement')
+            .eq('proprietaire', utilisateurActuel)
+            .neq('etat', 'Vide')
+            .not('date_peremption', 'is', null)
+            .lt('date_peremption', limite.toISOString().split('T')[0]);
+
+        if (error || !data || !data.length) return;
+
+        produitsPerimes = data;
+        afficherModalePerimes();
+
+    } catch (err) {
+        console.error('Erreur detection perimes:', err);
+    }
+}
+
+
+// ============================================================
+// 5. AFFICHER LA MODALE DES PERIMES
+// ============================================================
+function afficherModalePerimes() {
+    const liste = document.getElementById('liste-perimes');
+    if (!liste) return;
+
+    let html = '';
+
+    produitsPerimes.forEach(function(p, i) {
+        const jours = Math.floor((new Date() - new Date(p.date_peremption)) / 86400000);
+        const prixTotal = p.prix ? (parseFloat(p.prix) * (parseInt(p.quantite) || 1)).toFixed(2) : null;
+
+        html += '<div style="background:white; border-radius:12px; padding:14px; margin-bottom:10px;">'
+            + '<div style="margin-bottom:10px;">'
+            + '<b style="font-size:14px; color:#2d3748; display:block;">' + p.nom + '</b>'
+            + '<small style="font-size:11px; color:#e53e3e;">Perime depuis ' + jours + ' jours'
+            + ' &bull; quantite ' + p.quantite
+            + (prixTotal ? ' &bull; ' + prixTotal + ' &euro;' : '')
+            + '</small></div>'
+            + '<div style="display:flex; gap:8px;">'
+            + '<button onclick="confirmerJete(' + i + ')" '
+            + 'style="flex:1; background:#e53e3e; color:white; border:none; border-radius:8px; padding:10px; cursor:pointer; font-size:12px; font-weight:bold;">Jete</button>'
+            + '<button onclick="confirmerConsomme(' + i + ')" '
+            + 'style="flex:1; background:#38a169; color:white; border:none; border-radius:8px; padding:10px; cursor:pointer; font-size:12px; font-weight:bold;">Consomme</button>'
+            + '<button onclick="prolongerPerime(' + i + ')" '
+            + 'style="flex:1; background:#edf2f7; color:#4a5568; border:1px solid #cbd5e0; border-radius:8px; padding:10px; cursor:pointer; font-size:12px;">+7j</button>'
+            + '</div></div>';
+    });
+
+    liste.innerHTML = html;
+    document.getElementById('modal-perimes').style.display = 'flex';
+}
+
+
+// ============================================================
+// 6. ACTIONS SUR LES PERIMES
+// ============================================================
+async function confirmerJete(index) {
+    const p = produitsPerimes[index];
+    if (!p) return;
+
+    await enregistrerGaspillage(p.id, p.nom, p.quantite);
+
+    await monSupabase
+        .from('inventaire2')
+        .update({ quantite: 0, etat: 'Vide' })
+        .eq('id', p.id)
+        .eq('proprietaire', utilisateurActuel);
+
+    retirerLignePerime(index);
+}
+
+async function confirmerConsomme(index) {
+    const p = produitsPerimes[index];
+    if (!p) return;
+
+    await monSupabase
+        .from('inventaire2')
+        .update({ quantite: 0, etat: 'Vide' })
+        .eq('id', p.id)
+        .eq('proprietaire', utilisateurActuel);
+
+    retirerLignePerime(index);
+}
+
+async function prolongerPerime(index) {
+    const p = produitsPerimes[index];
+    if (!p) return;
+
+    const nouvelleDate = new Date();
+    nouvelleDate.setDate(nouvelleDate.getDate() + 7);
+
+    await monSupabase
+        .from('inventaire2')
+        .update({ date_peremption: nouvelleDate.toISOString().split('T')[0] })
+        .eq('id', p.id)
+        .eq('proprietaire', utilisateurActuel);
+
+    retirerLignePerime(index);
+}
+
+async function toutMarquerJete() {
+    if (!confirm('Marquer les ' + produitsPerimes.length + ' produits comme jetes ?')) return;
+
+    for (const p of produitsPerimes) {
+        await enregistrerGaspillage(p.id, p.nom, p.quantite);
+        await monSupabase
+            .from('inventaire2')
+            .update({ quantite: 0, etat: 'Vide' })
+            .eq('id', p.id)
+            .eq('proprietaire', utilisateurActuel);
+    }
+
+    produitsPerimes = [];
+    fermerModalePerimes();
+    afficherToast('Produits perimes traites');
+    await chargerTout();
+}
+
+function retirerLignePerime(index) {
+    produitsPerimes.splice(index, 1);
+
+    if (produitsPerimes.length === 0) {
+        fermerModalePerimes();
+        afficherToast('Tous les produits perimes traites');
+        chargerTout();
+    } else {
+        afficherModalePerimes();
+    }
+}
+
+function fermerModalePerimes() {
+    document.getElementById('modal-perimes').style.display = 'none';
+    produitsPerimes = [];
+}
+
+
+// ============================================================
+// 7. MARQUER JETE depuis les alertes de peremption
+// ============================================================
+async function marquerJetePeremption(id, quantite) {
+    if (!utilisateurActuel) return;
+    if (!confirm('Marquer comme jete ?\n\nIl sera compte en gaspillage.')) return;
+
+    const { data: produit } = await monSupabase
+        .from('inventaire2')
+        .select('nom')
+        .eq('id', id)
+        .maybeSingle();
+
+    await enregistrerGaspillage(id, produit ? produit.nom : 'Produit', quantite);
+
+    await monSupabase
+        .from('inventaire2')
+        .update({ quantite: 0, etat: 'Vide' })
+        .eq('id', id)
+        .eq('proprietaire', utilisateurActuel);
+
+    afficherToast('Produit marque comme jete');
+    await chargerTout();
+    await verifierPeremptions();
+}
+
 </script>
 </body>
 </html>
