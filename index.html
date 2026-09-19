@@ -766,6 +766,43 @@
                 EAN : —
             </p>
         </div>
+		<div id="modal-association" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:10001; flex-direction:column; align-items:center; justify-content:flex-start; overflow-y:auto; padding:20px 0;">
+    <div style="width:94%; max-width:460px;">
+
+        <div style="background:white; border-radius:20px 20px 0 0; padding:20px; text-align:center;">
+            <div style="font-size:38px;">❓</div>
+            <b style="font-size:17px; color:#2d3748; display:block; margin-top:8px;">
+                Code-barres inconnu
+            </b>
+            <p style="font-size:12px; color:#718096; margin:8px 0 0 0;" id="association-info">
+                —
+            </p>
+
+            <input type="text" id="recherche-association"
+                   placeholder="🔍 Filtrer votre stock..."
+                   oninput="filtrerAssociation()"
+                   style="width:100%; padding:11px; border:2px solid #e2e8f0; border-radius:10px; font-size:14px; margin-top:14px;">
+        </div>
+
+        <div style="background:#f7fafc; padding:14px;">
+            <b style="font-size:12px; color:#4a5568; display:block; margin-bottom:10px;">
+                À quel produit de votre stock correspond-il ?
+            </b>
+            <div id="liste-association" style="max-height:45vh; overflow-y:auto;"></div>
+        </div>
+
+        <div style="background:white; border-radius:0 0 20px 20px; padding:18px;">
+            <button onclick="creerNouveauProduitAssociation()"
+                    style="width:100%; background:#3182ce; color:white; border:none; border-radius:12px; padding:13px; cursor:pointer; font-size:14px; font-weight:bold; margin-bottom:10px;">
+                ➕ Aucun — créer un nouveau produit
+            </button>
+            <button onclick="fermerAssociation()"
+                    style="width:100%; background:#718096; color:white; border:none; border-radius:12px; padding:12px; cursor:pointer; font-size:14px;">
+                ✕ Annuler
+            </button>
+        </div>
+    </div>
+</div>
 
         <label style="font-size:13px; color:#4a5568; font-weight:bold; display:block; margin-bottom:6px;">
             Quel est ce produit ?
@@ -2576,22 +2613,21 @@ async function traiterEANContinu(ean) {
     statut.innerText = '🔍 Recherche du produit...';
 
     try {
-        // 1. Chercher directement dans Supabase par EAN
+        // 1. Chercher par EAN dans le stock
         const { data: produits } = await monSupabase
             .from('inventaire2')
-            .select('id, nom, quantite')
+            .select('id, nom, quantite, emplacement')
             .eq('proprietaire', utilisateurActuel)
             .eq('ean', ean)
             .neq('etat', 'Vide');
 
-        if (produits?.length > 0) {
-            // Produit trouvé → demander la quantité
+        if (produits && produits.length > 0) {
             ouvrirModaleQuantite(produits[0]);
             return;
         }
 
-        // 2. EAN inconnu → passer par le Worker pour identifier
-        statut.innerText = '🌐 Identification du produit...';
+        // 2. EAN inconnu → identification via le Worker
+        statut.innerText = '🌐 Identification...';
 
         const response = await fetch('https://mon-assistant-cuisine.laurent235.workers.dev/identifier', {
             method: 'POST',
@@ -2604,11 +2640,11 @@ async function traiterEANContinu(ean) {
 
         const data = await response.json();
 
+        // 3. Trouvé automatiquement
         if (data.success && data.id) {
-            // Récupérer la quantité actuelle
             const { data: produit } = await monSupabase
                 .from('inventaire2')
-                .select('id, nom, quantite')
+                .select('id, nom, quantite, emplacement')
                 .eq('id', data.id)
                 .maybeSingle();
 
@@ -2618,12 +2654,9 @@ async function traiterEANContinu(ean) {
             }
         }
 
-        // Produit non trouvé
-        statut.innerText = `⚠️ Produit inconnu (${ean})`;
-        historique.innerHTML = `
-            <div style="background:#2d3748; color:#f6ad55; padding:8px 12px; border-radius:8px; margin-bottom:5px; font-size:12px; text-align:left;">
-                ⚠️ EAN ${ean} non trouvé
-            </div>` + historique.innerHTML;
+        // 4. Non trouvé → association manuelle
+        statut.innerText = '❓ Produit à identifier';
+        await ouvrirAssociation(ean, data.nomDetecte || null, 'poubelle');
 
     } catch (err) {
         console.error('Erreur:', err);
@@ -4932,6 +4965,236 @@ async function annulerAjoutCourses() {
 
     produitEpuise = null;
     await chargerTout();
+}
+let eanAAssocier = null;
+let nomDetecteAssociation = null;
+let stockAssociation = [];
+let contexteAssociation = 'poubelle';   // 'poubelle' | 'dates' | 'inventaire'
+
+// ============================================================
+// OUVRIR LA MODALE D'ASSOCIATION
+// ============================================================
+async function ouvrirAssociation(ean, nomDetecte, contexte) {
+    eanAAssocier = ean;
+    nomDetecteAssociation = nomDetecte || null;
+    contexteAssociation = contexte || 'poubelle';
+
+    const info = document.getElementById('association-info');
+    info.innerHTML = nomDetecte
+        ? 'Détecté : <b>' + nomDetecte + '</b><br><small>EAN ' + ean + '</small>'
+        : '<small>EAN ' + ean + '</small>';
+
+    document.getElementById('recherche-association').value = '';
+
+    // Charger le stock
+    try {
+        const { data } = await monSupabase
+            .from('inventaire2')
+            .select('id, nom, quantite, emplacement, ean')
+            .eq('proprietaire', utilisateurActuel)
+            .neq('etat', 'Vide')
+            .order('nom');
+
+        stockAssociation = data || [];
+
+        // Pré-filtrer si on a un nom détecté
+        if (nomDetecte) {
+            const mots = extraireMotsCles(nomDetecte);
+            stockAssociation.sort(function(a, b) {
+                const scoreA = compterMotsCommuns(a.nom, mots);
+                const scoreB = compterMotsCommuns(b.nom, mots);
+                return scoreB - scoreA;
+            });
+        }
+
+        afficherListeAssociation(stockAssociation);
+        document.getElementById('modal-association').style.display = 'flex';
+
+    } catch (err) {
+        console.error('Erreur chargement stock:', err);
+    }
+}
+
+// ============================================================
+// COMPTER LES MOTS EN COMMUN
+// ============================================================
+function compterMotsCommuns(nom, motsRecherche) {
+    const motsNom = extraireMotsCles(nom);
+    return motsRecherche.filter(function(m) {
+        return motsNom.some(function(mn) {
+            return mn === m || mn.indexOf(m) === 0 || m.indexOf(mn) === 0;
+        });
+    }).length;
+}
+
+// ============================================================
+// AFFICHER LA LISTE
+// ============================================================
+function afficherListeAssociation(produits) {
+    const liste = document.getElementById('liste-association');
+
+    if (!produits.length) {
+        liste.innerHTML = '<p style="text-align:center; color:#a0aec0; font-size:13px; padding:20px 0;">Aucun produit</p>';
+        return;
+    }
+
+    let html = '';
+    produits.forEach(function(p) {
+        const dejaEan = p.ean ? ' <small style="color:#a0aec0;">(a déjà un code)</small>' : '';
+
+        html += '<div onclick="associerEan(' + p.id + ')" '
+            + 'style="background:white; border-radius:10px; padding:12px; margin-bottom:6px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; border:1px solid #e2e8f0;">'
+            + '<div style="flex:1;">'
+            + '<b style="font-size:13px; color:#2d3748;">' + p.nom + '</b>' + dejaEan
+            + '<small style="display:block; font-size:11px; color:#718096;">' + p.emplacement + '</small>'
+            + '</div>'
+            + '<b style="font-size:17px; color:#38a169;">' + p.quantite + '</b>'
+            + '</div>';
+    });
+
+    liste.innerHTML = html;
+}
+
+// ============================================================
+// FILTRER PAR RECHERCHE
+// ============================================================
+function filtrerAssociation() {
+    const recherche = document.getElementById('recherche-association').value
+        .toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+    if (!recherche) {
+        afficherListeAssociation(stockAssociation);
+        return;
+    }
+
+    const filtres = stockAssociation.filter(function(p) {
+        const nom = (p.nom || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        return nom.indexOf(recherche) !== -1;
+    });
+
+    afficherListeAssociation(filtres);
+}
+
+// ============================================================
+// ASSOCIER L'EAN AU PRODUIT CHOISI
+// ============================================================
+async function associerEan(produitId) {
+    if (!eanAAssocier) return;
+
+    try {
+        await monSupabase
+            .from('inventaire2')
+            .update({ ean: eanAAssocier })
+            .eq('id', produitId)
+            .eq('proprietaire', utilisateurActuel);
+
+        // Récupérer le produit pour la suite
+        const { data: produit } = await monSupabase
+            .from('inventaire2')
+            .select('id, nom, quantite, emplacement')
+            .eq('id', produitId)
+            .maybeSingle();
+
+        document.getElementById('modal-association').style.display = 'none';
+        afficherToast('🔗 Code-barres associé à ' + (produit ? produit.nom : 'ce produit'));
+
+        // Reprendre le flux selon le contexte
+        if (produit) {
+            if (contexteAssociation === 'poubelle') {
+                ouvrirModaleQuantite(produit);
+            } else if (contexteAssociation === 'dates') {
+                produitEnCours = produit;
+                await passerEtapeDate();
+            } else if (contexteAssociation === 'inventaire') {
+                const nouvelleQte = (parseInt(produit.quantite) || 0) + 1;
+                await monSupabase
+                    .from('inventaire2')
+                    .update({ quantite: nouvelleQte, etat: 'Plein' })
+                    .eq('id', produit.id);
+                compteurInventaire++;
+                document.getElementById('compteur-inventaire').innerText = compteurInventaire;
+                ajouterHistoriqueInventaire('➕ ' + produit.nom + ' → ' + nouvelleQte, '#48bb78');
+            }
+        }
+
+        eanAAssocier = null;
+        nomDetecteAssociation = null;
+
+    } catch (err) {
+        console.error('Erreur association:', err);
+        afficherToast('❌ Erreur');
+    }
+}
+
+// ============================================================
+// CRÉER UN NOUVEAU PRODUIT
+// ============================================================
+async function creerNouveauProduitAssociation() {
+    const nomPropose = nomDetecteAssociation || '';
+    const nom = prompt('Nom du produit :', nomPropose);
+    if (!nom || !nom.trim()) return;
+
+    const emplacement = contexteAssociation === 'inventaire'
+        ? (emplacementInventaire || 'PLACARD')
+        : 'PLACARD';
+
+    try {
+        let nomAlexa = nom.toLowerCase();
+        try {
+            const reponseIA = await appelGemini(
+                'En 2-3 mots max, nom simplifie prononcable pour Alexa. Produit: "'
+                + nom + '". Reponds UNIQUEMENT le nom simplifie en minuscules.'
+            );
+            if (reponseIA) nomAlexa = reponseIA.trim().toLowerCase();
+        } catch(e) {
+            nomAlexa = nom.split(' ').slice(0, 2).join(' ').toLowerCase();
+        }
+
+        const { data: nouveau, error } = await monSupabase
+            .from('inventaire2')
+            .insert([{
+                nom: nom.trim(),
+                nom_alexa: nomAlexa,
+                ean: eanAAssocier,
+                quantite: 1,
+                emplacement: emplacement,
+                etat: 'Plein',
+                proprietaire: utilisateurActuel
+            }])
+            .select()
+            .maybeSingle();
+
+        if (error) throw error;
+
+        document.getElementById('modal-association').style.display = 'none';
+        afficherToast('🆕 ' + nom + ' créé');
+
+        if (contexteAssociation === 'inventaire' && nouveau) {
+            compteurInventaire++;
+            document.getElementById('compteur-inventaire').innerText = compteurInventaire;
+            ajouterHistoriqueInventaire('🆕 ' + nom, '#3182ce');
+        }
+
+        eanAAssocier = null;
+        nomDetecteAssociation = null;
+        await chargerTout();
+
+    } catch (err) {
+        console.error('Erreur creation:', err);
+        afficherToast('❌ Erreur de création');
+    }
+}
+
+// ============================================================
+// FERMER
+// ============================================================
+function fermerAssociation() {
+    document.getElementById('modal-association').style.display = 'none';
+    eanAAssocier = null;
+    nomDetecteAssociation = null;
+
+    const statut = document.getElementById('statut-scanner');
+    if (statut) statut.innerText = '🔍 En attente d\'un code-barres...';
 }
 </script>
 </body>
