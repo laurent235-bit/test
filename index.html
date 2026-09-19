@@ -452,7 +452,37 @@
         </div>
     </div>
 </div>
+<div id="modal-similaires" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:10001; flex-direction:column; align-items:center; justify-content:center;">
+    <div style="width:92%; max-width:420px; background:white; border-radius:20px; padding:25px;">
 
+        <div style="text-align:center; margin-bottom:18px;">
+            <div style="font-size:40px;">🛒</div>
+            <b style="font-size:17px; color:#2d3748; display:block; margin-top:8px;" id="similaires-titre">
+                Produit épuisé
+            </b>
+            <p style="font-size:12px; color:#718096; margin:6px 0 0 0;">
+                Ce produit est passé à zéro
+            </p>
+        </div>
+
+        <div style="background:#f0fff4; border:1px solid #9ae6b4; border-radius:12px; padding:14px; margin-bottom:18px;">
+            <b style="font-size:12px; color:#2f855a; display:block; margin-bottom:8px;">
+                Mais il vous reste :
+            </b>
+            <div id="similaires-liste"></div>
+        </div>
+
+        <button onclick="confirmerAjoutCourses()"
+                style="width:100%; background:#e53e3e; color:white; border:none; border-radius:12px; padding:14px; cursor:pointer; font-size:14px; font-weight:bold; margin-bottom:10px;">
+            🛒 Ajouter aux courses quand même
+        </button>
+
+        <button onclick="annulerAjoutCourses()"
+                style="width:100%; background:#38a169; color:white; border:none; border-radius:12px; padding:14px; cursor:pointer; font-size:14px; font-weight:bold;">
+            ✓ Pas besoin, j'en ai encore
+        </button>
+    </div>
+</div>
 <!-- ZONE RECETTE VOCALE -->
 <div id="zone-recette" style="display:none; margin-bottom:12px; padding:15px; background:#fff8e1; border-left:5px solid #ff9800; border-radius:10px;"></div>
 
@@ -3268,11 +3298,23 @@ async function appliquerRetrait(qteARetirer) {
                 </div>` + historique.innerHTML;
 
         } else {
+            // Mettre la quantite a zero sans passer en Vide tout de suite
             await monSupabase
                 .from('inventaire2')
-                .update({ quantite: nouvelleQte })
+                .update({ quantite: 0 })
                 .eq('id', produitARetirer.id)
                 .eq('proprietaire', utilisateurActuel);
+
+            // Verifier s'il existe un autre format du meme produit
+            const ajouterAuxCourses = await verifierAvantCourses(produitARetirer);
+
+            if (ajouterAuxCourses) {
+                await monSupabase
+                    .from('inventaire2')
+                    .update({ etat: 'Vide' })
+                    .eq('id', produitARetirer.id)
+                    .eq('proprietaire', utilisateurActuel);
+            }
 
             await enregistrerHistorique(produitARetirer, 'retire', qteARetirer, nouvelleQte);
             await enregistrerEconomieSauvee(produitARetirer.id, produitARetirer.nom, qteARetirer);
@@ -4682,7 +4724,168 @@ async function marquerJetePeremption(id, quantite) {
     await chargerTout();
     await verifierPeremptions();
 }
+============================================================
+2. FONCTIONS JS
+============================================================ 
 
+let produitEpuise = null;
+
+// Mots ignores lors de la comparaison
+const MOTS_IGNORES = [
+    'de', 'du', 'la', 'le', 'les', 'des', 'au', 'aux', 'et', 'a',
+    'bio', 'carrefour', 'leclerc', 'auchan', 'lidl', 'marque', 'repere',
+    'kg', 'g', 'gr', 'cl', 'ml', 'l', 'x', 'lot', 'pack'
+];
+
+// ============================================================
+// EXTRAIRE LES MOTS SIGNIFICATIFS D'UN NOM
+// ============================================================
+function extraireMotsCles(nom) {
+    return (nom || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[0-9]+/g, ' ')           // retire les chiffres
+        .replace(/[^a-z\s]/g, ' ')         // retire la ponctuation
+        .split(/\s+/)
+        .filter(function(m) {
+            return m.length >= 4 && MOTS_IGNORES.indexOf(m) === -1;
+        });
+}
+
+// ============================================================
+// CHERCHER LES PRODUITS SIMILAIRES EN STOCK
+// ============================================================
+async function chercherFormatsSimilaires(nomProduit, idExclu) {
+    try {
+        const motsRecherche = extraireMotsCles(nomProduit);
+        if (motsRecherche.length === 0) return [];
+
+        const { data, error } = await monSupabase
+            .from('inventaire2')
+            .select('id, nom, quantite, emplacement')
+            .eq('proprietaire', utilisateurActuel)
+            .neq('etat', 'Vide')
+            .gt('quantite', 0);
+
+        if (error || !data) return [];
+
+        const similaires = [];
+
+        data.forEach(function(p) {
+            if (p.id === idExclu) return;
+
+            const motsProduit = extraireMotsCles(p.nom);
+
+            // Compter les mots en commun
+            const communs = motsRecherche.filter(function(m) {
+                return motsProduit.some(function(mp) {
+                    return mp === m || mp.indexOf(m) === 0 || m.indexOf(mp) === 0;
+                });
+            });
+
+            // Au moins un mot significatif en commun
+            if (communs.length > 0) {
+                similaires.push({
+                    id: p.id,
+                    nom: p.nom,
+                    quantite: p.quantite,
+                    emplacement: p.emplacement,
+                    score: communs.length / motsRecherche.length
+                });
+            }
+        });
+
+        // Trier par pertinence
+        similaires.sort(function(a, b) { return b.score - a.score; });
+
+        // Garder les plus pertinents
+        return similaires.filter(function(s) { return s.score >= 0.5; }).slice(0, 4);
+
+    } catch (err) {
+        console.error('Erreur recherche similaires:', err);
+        return [];
+    }
+}
+
+// ============================================================
+// VERIFIER AVANT D'AJOUTER AUX COURSES
+// Retourne true si on doit ajouter directement
+// ============================================================
+async function verifierAvantCourses(produit) {
+    const similaires = await chercherFormatsSimilaires(produit.nom, produit.id);
+
+    if (similaires.length === 0) {
+        return true;   // rien de similaire, on ajoute aux courses
+    }
+
+    // On affiche la modale et on attend la decision
+    produitEpuise = produit;
+    afficherModaleSimilaires(produit, similaires);
+    return false;
+}
+
+// ============================================================
+// AFFICHER LA MODALE
+// ============================================================
+function afficherModaleSimilaires(produit, similaires) {
+    document.getElementById('similaires-titre').innerText = produit.nom + ' — épuisé';
+
+    let html = '';
+    similaires.forEach(function(s) {
+        html += '<div style="display:flex; justify-content:space-between; align-items:center; background:white; border-radius:8px; padding:10px 12px; margin-bottom:6px;">'
+            + '<div style="flex:1;">'
+            + '<b style="font-size:13px; color:#2d3748;">' + s.nom + '</b>'
+            + '<small style="display:block; font-size:11px; color:#718096;">' + s.emplacement + '</small>'
+            + '</div>'
+            + '<b style="font-size:16px; color:#38a169;">' + s.quantite + '</b>'
+            + '</div>';
+    });
+
+    document.getElementById('similaires-liste').innerHTML = html;
+    document.getElementById('modal-similaires').style.display = 'flex';
+}
+
+// ============================================================
+// CONFIRMER : ajouter aux courses malgre tout
+// ============================================================
+async function confirmerAjoutCourses() {
+    document.getElementById('modal-similaires').style.display = 'none';
+
+    if (produitEpuise) {
+        await monSupabase
+            .from('inventaire2')
+            .update({ quantite: 0, etat: 'Vide' })
+            .eq('id', produitEpuise.id)
+            .eq('proprietaire', utilisateurActuel);
+
+        afficherToast('🛒 ' + produitEpuise.nom + ' ajouté aux courses');
+    }
+
+    produitEpuise = null;
+    await chargerTout();
+}
+
+// ============================================================
+// ANNULER : le produit reste en stock a zero, pas dans les courses
+// ============================================================
+async function annulerAjoutCourses() {
+    document.getElementById('modal-similaires').style.display = 'none';
+
+    if (produitEpuise) {
+        // On retire la ligne du stock sans la mettre en courses
+        await monSupabase
+            .from('inventaire2')
+            .delete()
+            .eq('id', produitEpuise.id)
+            .eq('proprietaire', utilisateurActuel);
+
+        afficherToast('✓ ' + produitEpuise.nom + ' retiré du stock');
+    }
+
+    produitEpuise = null;
+    await chargerTout();
+}
 </script>
 </body>
 </html>
