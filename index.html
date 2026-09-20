@@ -1216,21 +1216,21 @@ async function lancerChefMode(mode) {
             p.nom.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
         );
 
+        // Texte de l'historique en minuscules pour comparaison
+        const historiqueTexte = window.historiqueChef.join(' | ').toLowerCase();
+
         // ── RECETTES DE LA BASE ──
-        const { data: recettes, error: errRecettes } = await monSupabase
+        const { data: recettes } = await monSupabase
             .from('recettes_chef')
             .select('id, nom, ingredients_cles, temps_minutes')
             .eq('mode', mode)
             .eq('actif', true);
 
-        if (errRecettes) throw errRecettes;
-
         const basiques = ['sel', 'poivre', 'huile', 'eau', 'beurre', 'sucre',
                           'farine', 'ail', 'oignon', 'bouillon', 'vinaigrette',
                           'mayonnaise', 'vanille', 'curry', 'vin'];
 
-        // Filtrer les recettes realisables
-        const candidates = (recettes || []).map(r => {
+        let candidates = (recettes || []).map(r => {
             const necessaires = r.ingredients_cles.filter(i => !basiques.includes(i));
             const presents = necessaires.filter(ing =>
                 nomsProduits.some(nom => nom.includes(ing))
@@ -1239,14 +1239,12 @@ async function lancerChefMode(mode) {
             const principalPresent = nomsProduits.some(nom =>
                 nom.includes(r.ingredients_cles[0])
             );
-            const dejaPropose = window.historiqueChef.some(h =>
-                h.toLowerCase().includes(r.nom.toLowerCase())
-            );
+            // Comparaison stricte sur le nom complet
+            const dejaPropose = historiqueTexte.includes(r.nom.toLowerCase());
 
             return {
                 nom: r.nom,
                 temps_minutes: r.temps_minutes,
-                famille: detecterFamille(r.ingredients_cles),
                 base: r.ingredients_cles[0],
                 taux,
                 principalPresent,
@@ -1255,29 +1253,31 @@ async function lancerChefMode(mode) {
             };
         }).filter(r => r.principalPresent && r.taux >= 0.75);
 
-        // Trier : non proposees d'abord, puis aleatoire
-        candidates.sort((a, b) => {
-            if (a.dejaPropose !== b.dejaPropose) return a.dejaPropose ? 1 : -1;
-            return (b.taux + Math.random() * 0.5) - (a.taux + Math.random() * 0.5);
-        });
+        // Ecarter completement les recettes deja proposees recemment
+        const candidatesNeuves = candidates.filter(r => !r.dejaPropose);
+        if (candidatesNeuves.length >= 2) {
+            candidates = candidatesNeuves;
+        }
 
-        // ── COMBINAISONS (mode quotidien uniquement) ──
+        candidates.sort(() => Math.random() - 0.5);
+
+        // ── CONSTRUCTION DE LA LISTE ──
         let propositions = [];
 
         if (mode === 'quotidien') {
             const categories = detecterCategories(nomsProduits);
-            const combinaisons = genererCombinaisons(categories, 6);
+            const combinaisons = genererCombinaisons(categories, 10);
 
-            // Retirer les combinaisons deja proposees
-            const combiFiltrees = combinaisons.filter(c =>
-                !window.historiqueChef.some(h =>
-                    h.toLowerCase().includes(c.nom.toLowerCase().substring(0, 20))
-                )
+            // Ecarter les combinaisons deja proposees (nom complet)
+            const combiNeuves = combinaisons.filter(c =>
+                !historiqueTexte.includes(c.nom.toLowerCase())
             );
 
-            // Melanger combinaisons et recettes nommees
-            propositions = combiFiltrees.slice(0, 5)
-                .concat(candidates.slice(0, 6));
+            const combiFinales = combiNeuves.length >= 4 ? combiNeuves : combinaisons;
+
+            // 6 combinaisons + 3 recettes nommees maximum
+            propositions = combiFinales.slice(0, 6)
+                .concat(candidates.slice(0, 3));
 
         } else {
             propositions = candidates.slice(0, 12);
@@ -1289,8 +1289,10 @@ async function lancerChefMode(mode) {
         }
 
         // ── PREPARATION DU PROMPT ──
+        const nbCombinaisons = propositions.filter(p => p.estCombinaison).length;
+
         const listeIdees = propositions
-            .map(p => `- ${p.nom} [${p.temps_minutes}min]${p.estCombinaison ? ' [simple]' : ''}`)
+            .map((p, i) => `${i + 1}. ${p.nom}${p.estCombinaison ? ' [assiette]' : ' [plat]'}`)
             .join('\n');
 
         const frigo = produits.filter(p => p.emplacement === 'FRIGO');
@@ -1304,12 +1306,20 @@ CONGÉLATEUR : ${congelo.map(p => p.nom).join(', ') || 'vide'}
 PLACARD : ${placard.map(p => p.nom).join(', ') || 'vide'}`;
 
         const dejaProposes = window.historiqueChef?.length
-            ? `INTERDICTION de reproposer : ${window.historiqueChef.slice(-6).join(' | ')}.`
+            ? `DÉJÀ PROPOSÉ RÉCEMMENT — ne pas reprendre : ${window.historiqueChef.slice(-5).join(' | ')}`
             : '';
 
         const demandeSpecifique = envie
             ? `L'utilisateur veut : "${envie}" — privilégie une idée qui correspond.`
             : '';
+
+        // Regle specifique au mode quotidien
+        const regleAssiettes = (mode === 'quotidien' && nbCombinaisons >= 2)
+            ? `\n2. IMPORTANT : Choisis AU MOINS 2 idées marquées [assiette].
+   Les [assiette] sont des repas simples viande + accompagnement, c'est ce que
+   l'utilisateur mange le plus souvent en semaine.
+   Au maximum 1 idée marquée [plat].`
+            : '\n2. Varie les bases : pas deux fois la même viande ou le même féculent.';
 
         const tonModes = {
             quotidien: 'Tu proposes des repas simples de semaine, rapides à faire.',
@@ -1326,7 +1336,7 @@ PLACARD : ${placard.map(p => p.nom).join(', ') || 'vide'}`;
 STOCK DISPONIBLE :
 ${listeStock}
 
-IDÉES POSSIBLES — choisir UNIQUEMENT dans cette liste :
+IDÉES POSSIBLES :
 ${listeIdees}
 
 ${demandeSpecifique}
@@ -1334,15 +1344,15 @@ ${demandeSpecifique}
 Ta mission : Choisir 3 idées de cette liste.
 
 RÈGLES :
-1. Choisis UNIQUEMENT parmi les idées listées — AUCUNE invention.
-2. Les 3 idées doivent être DIFFÉRENTES — pas deux fois la même base.
-3. Priorise les produits FRIGO et ENTAMÉ.
-4. Écris les noms EXACTEMENT comme dans la liste.
+1. Choisis UNIQUEMENT parmi les idées listées — AUCUNE invention.${regleAssiettes}
+3. Les 3 idées doivent être DIFFÉRENTES les unes des autres.
+4. Écris les noms EXACTEMENT comme dans la liste, sans le marqueur entre crochets.
 5. PAS de markdown, PAS de gras, PAS d'astérisques.
+
 ${dejaProposes}
 
 FORMAT : Une seule phrase naturelle avec exactement 3 propositions.
-Exemple : "Ce soir je peux faire un cordon bleu avec du riz et des haricots verts, des coquillettes au jambon, ou une omelette au fromage. Lequel te tente ?"
+Exemple : "Ce soir je peux faire un cordon bleu avec du riz et des haricots verts, un steak haché frites petits pois, ou des coquillettes au jambon. Lequel te tente ?"
 Termine OBLIGATOIREMENT par : "Lequel te tente ?"`;
 
         if (statut) statut.innerText = "🧠 Le Chef choisit...";
@@ -1370,12 +1380,12 @@ Termine OBLIGATOIREMENT par : "Lequel te tente ?"`;
         // ── MEMORISATION ──
         window.historiqueChef.push(
             reponse
-                .replace(/^.*?(je peux faire|vous proposer|préparer|proposer)\s*/i, '')
+                .replace(/^.*?(je peux faire|vous proposer|préparer|proposer|te proposer)\s*/i, '')
                 .replace(/lequel te tente \?/i, '')
                 .trim()
-                .substring(0, 200)
+                .substring(0, 250)
         );
-        if (window.historiqueChef.length > 10) window.historiqueChef.shift();
+        if (window.historiqueChef.length > 8) window.historiqueChef.shift();
         localStorage.setItem(`chefHistorique_${utilisateurActuel}`, JSON.stringify(window.historiqueChef));
 
         window.dernieresPropositions = reponse;
@@ -1443,6 +1453,7 @@ function detecterFamille(ingredients) {
 
     return 'AUTRE';
 }
+
 
 
 // DÉTECTER LA FAMILLE D'UNE RECETTE
