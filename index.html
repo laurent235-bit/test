@@ -380,28 +380,68 @@
     </div>
 
     <!-- Boutons modes -->
+    <div class="card" style="padding:15px; background:#fff8e1; border:2px solid #ff9800;">
+    <b style="color:#ff9800; font-size:15px;">👨‍🍳 QUE VOULEZ-VOUS MANGER ?</b>
+    <p style="font-size:12px; color:#888; margin:5px 0 12px 0;">Le Chef propose 3 idées avec votre stock</p>
+
+    <!-- Envie particulière -->
+    <div style="display:flex; gap:5px; margin-bottom:12px;">
+        <input type="text" id="chef-envie"
+               placeholder="🥦 Une envie particulière ?"
+               style="flex:1; padding:10px; border:1px solid #ffcc80; border-radius:8px; font-size:13px;"
+               onkeypress="if(event.key==='Enter') lancerChefMode('quotidien')">
+        <button onclick="document.getElementById('chef-envie').value=''"
+                style="background:#ffcc80; border:none; border-radius:8px; padding:0 12px; cursor:pointer; font-size:16px;">✕</button>
+    </div>
+
+    <!-- Mode silencieux -->
+    <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+        <input type="checkbox" id="mode-silencieux" style="width:18px; height:18px; cursor:pointer;">
+        <label for="mode-silencieux" style="font-size:13px; color:#555; cursor:pointer;">🔇 Mode silencieux</label>
+    </div>
+
+    <!-- Boutons modes -->
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+
         <button onclick="lancerChefMode('quotidien')"
-                style="background:#ff9800; color:white; border:none; border-radius:12px; padding:14px 8px; cursor:pointer; font-size:13px; font-weight:bold;">
-            👨‍🍳 Quotidien
+                style="background:#ff9800; color:white; border:none; border-radius:12px; padding:16px 8px; cursor:pointer; font-size:13px; font-weight:bold; grid-column:1/3;">
+            ⚡ EN SEMAINE<br><small style="font-weight:normal; opacity:0.9;">rapide, moins de 25 min</small>
         </button>
+
+        <button onclick="lancerChefMode('cookeo')"
+                style="background:#d32f2f; color:white; border:none; border-radius:12px; padding:14px 8px; cursor:pointer; font-size:13px; font-weight:bold;">
+            🍲 COOKEO
+        </button>
+
+        <button onclick="lancerChefMode('weekend')"
+                style="background:#6d4c41; color:white; border:none; border-radius:12px; padding:14px 8px; cursor:pointer; font-size:13px; font-weight:bold;">
+            🍷 WEEK-END
+        </button>
+
         <button onclick="lancerChefMode('monde')"
                 style="background:#3182ce; color:white; border:none; border-radius:12px; padding:14px 8px; cursor:pointer; font-size:13px; font-weight:bold;">
-            🌍 Monde
+            🌍 MONDE
         </button>
+
         <button onclick="lancerChefMode('healthy')"
                 style="background:#38a169; color:white; border:none; border-radius:12px; padding:14px 8px; cursor:pointer; font-size:13px; font-weight:bold;">
-            🥗 Healthy
+            🥗 HEALTHY
         </button>
+
         <button onclick="lancerChefMode('dessert')"
                 style="background:#8e24aa; color:white; border:none; border-radius:12px; padding:14px 8px; cursor:pointer; font-size:13px; font-weight:bold;">
-            🍰 Dessert
+            🍰 DESSERT
         </button>
+
         <button onclick="lancerChefMode('antigaspi')"
-                style="background:#2d3748; color:white; border:none; border-radius:12px; padding:14px 8px; cursor:pointer; font-size:13px; font-weight:bold; grid-column:1/3;">
-            ♻️ Anti-gaspi (finir les restes)
+                style="background:#2d3748; color:white; border:none; border-radius:12px; padding:14px 8px; cursor:pointer; font-size:13px; font-weight:bold;">
+            ♻️ ANTI-GASPI
         </button>
     </div>
+
+    <div id="statut-chef" style="text-align:center; margin-top:12px; font-size:13px; font-weight:bold; min-height:20px;"></div>
+    <div id="chef-resultats" style="margin-top:5px;"></div>
+</div>
 
     <div id="statut-chef" style="text-align:center; margin-top:10px; font-size:13px; font-weight:bold; min-height:20px;"></div>
     <div id="chef-resultats" style="margin-top:5px;"></div>
@@ -1088,8 +1128,56 @@ async function traiterResultatVocal(e) {
 
     faireParlerIA("Je n'ai pas compris. Tu peux me demander de supprimer un produit, d'appeler le chef, ou d'ajouter quelque chose au frigo.");
 }
-
-// ============================================================
+// Categories d'aliments reconnus dans le stock
+const CATEGORIES_REPAS = {
+    proteines: [
+        { mots: ['steak hache', 'steak', 'hache'], nom: 'steak haché' },
+        { mots: ['cordon bleu', 'cordon'], nom: 'cordon bleu' },
+        { mots: ['escalope'], nom: 'escalope de poulet' },
+        { mots: ['poulet', 'cuisse de poulet'], nom: 'poulet' },
+        { mots: ['dinde'], nom: 'dinde' },
+        { mots: ['nugget'], nom: 'nuggets' },
+        { mots: ['colin', 'poisson pane', 'pane'], nom: 'poisson pané' },
+        { mots: ['saumon'], nom: 'saumon' },
+        { mots: ['cabillaud'], nom: 'cabillaud' },
+        { mots: ['saucisse', 'knacki'], nom: 'saucisses' },
+        { mots: ['merguez'], nom: 'merguez' },
+        { mots: ['chipolata'], nom: 'chipolatas' },
+        { mots: ['brochette'], nom: 'brochettes' },
+        { mots: ['jambon'], nom: 'jambon' },
+        { mots: ['lardon'], nom: 'lardons' },
+        { mots: ['oeuf'], nom: 'oeufs' },
+        { mots: ['boulette'], nom: 'boulettes' },
+        { mots: ['cote de porc', 'porc'], nom: 'côte de porc' }
+    ],
+    feculents: [
+        { mots: ['frite'], nom: 'frites' },
+        { mots: ['puree', 'pomme de terre'], nom: 'purée' },
+        { mots: ['riz'], nom: 'riz' },
+        { mots: ['coquillette'], nom: 'coquillettes' },
+        { mots: ['pate', 'spaghetti', 'torsade', 'penne'], nom: 'pâtes' },
+        { mots: ['dauphin'], nom: 'pommes dauphines' },
+        { mots: ['rosti'], nom: 'röstis' },
+        { mots: ['semoule', 'couscous'], nom: 'semoule' },
+        { mots: ['quinoa'], nom: 'quinoa' },
+        { mots: ['lentille'], nom: 'lentilles' }
+    ],
+    legumes: [
+        { mots: ['haricot vert'], nom: 'haricots verts' },
+        { mots: ['petits pois', 'petit pois'], nom: 'petits pois carottes' },
+        { mots: ['carotte'], nom: 'carottes' },
+        { mots: ['brocoli'], nom: 'brocolis' },
+        { mots: ['courgette'], nom: 'courgettes' },
+        { mots: ['epinard'], nom: 'épinards' },
+        { mots: ['poele', 'legume'], nom: 'poêlée de légumes' },
+        { mots: ['ratatouille'], nom: 'ratatouille' },
+        { mots: ['salade'], nom: 'salade verte' },
+        { mots: ['chou fleur', 'chou-fleur'], nom: 'chou-fleur' },
+        { mots: ['salsifi'], nom: 'salsifis' },
+        { mots: ['poivron'], nom: 'poivrons' },
+        { mots: ['champignon'], nom: 'champignons' }
+    ]
+};
 async function lancerChefMode(mode) {
     if (!utilisateurActuel) {
         alert("Je ne sais pas qui tu es ! Reconnecte-toi.");
@@ -1104,19 +1192,14 @@ async function lancerChefMode(mode) {
     if (resultats) resultats.innerHTML = "";
 
     try {
-        // ── 1. HISTORIQUE PERSISTANT ──
+        // ── HISTORIQUE ──
         if (!window.historiqueChef) {
             window.historiqueChef = JSON.parse(
                 localStorage.getItem(`chefHistorique_${utilisateurActuel}`) || '[]'
             );
         }
-        if (!window.historiqueIngredients) {
-            window.historiqueIngredients = JSON.parse(
-                localStorage.getItem(`chefIngredients_${utilisateurActuel}`) || '[]'
-            );
-        }
 
-        // ── 2. STOCK ──
+        // ── STOCK ──
         const { data: produits, error: errProduits } = await monSupabase
             .from('inventaire2')
             .select('nom, quantite, emplacement, etat')
@@ -1129,7 +1212,11 @@ async function lancerChefMode(mode) {
             return;
         }
 
-        // ── 3. RECETTES ──
+        const nomsProduits = produits.map(p =>
+            p.nom.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        );
+
+        // ── RECETTES DE LA BASE ──
         const { data: recettes, error: errRecettes } = await monSupabase
             .from('recettes_chef')
             .select('id, nom, ingredients_cles, temps_minutes')
@@ -1137,136 +1224,73 @@ async function lancerChefMode(mode) {
             .eq('actif', true);
 
         if (errRecettes) throw errRecettes;
-        if (!recettes?.length) {
-            if (statut) statut.innerText = "❌ Aucune recette disponible.";
-            return;
-        }
-
-        // ── 4. NORMALISATION ──
-        const nomsProduits = produits.map(p =>
-            p.nom.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-        );
 
         const basiques = ['sel', 'poivre', 'huile', 'eau', 'beurre', 'sucre',
                           'farine', 'ail', 'oignon', 'bouillon', 'vinaigrette',
-                          'mayonnaise', 'vanille'];
+                          'mayonnaise', 'vanille', 'curry', 'vin'];
 
-        // Ingrédients trop présents récemment (à éviter)
-        const ingredientsSatures = window.historiqueIngredients.slice(-6);
-
-        // ── 5. SCORING ──
-        const recettesScores = recettes.map(r => {
+        // Filtrer les recettes realisables
+        const candidates = (recettes || []).map(r => {
             const necessaires = r.ingredients_cles.filter(i => !basiques.includes(i));
-
             const presents = necessaires.filter(ing =>
                 nomsProduits.some(nom => nom.includes(ing))
             );
-
-            const tauxCouverture = necessaires.length > 0
-                ? presents.length / necessaires.length
-                : 1;
-
+            const taux = necessaires.length > 0 ? presents.length / necessaires.length : 1;
             const principalPresent = nomsProduits.some(nom =>
                 nom.includes(r.ingredients_cles[0])
             );
-
             const dejaPropose = window.historiqueChef.some(h =>
                 h.toLowerCase().includes(r.nom.toLowerCase())
             );
 
-            // Pénalité si la recette contient un ingrédient saturé
-            const ingredientSature = r.ingredients_cles.some(i =>
-                ingredientsSatures.includes(i)
-            );
-
             return {
-                ...r,
-                score: presents.length,
-                tauxCouverture,
+                nom: r.nom,
+                temps_minutes: r.temps_minutes,
+                famille: detecterFamille(r.ingredients_cles),
+                base: r.ingredients_cles[0],
+                taux,
                 principalPresent,
                 dejaPropose,
-                ingredientSature,
-                famille: detecterFamille(r.ingredients_cles),
-                ingredientsUtiles: necessaires
+                estCombinaison: false
             };
+        }).filter(r => r.principalPresent && r.taux >= 0.75);
+
+        // Trier : non proposees d'abord, puis aleatoire
+        candidates.sort((a, b) => {
+            if (a.dejaPropose !== b.dejaPropose) return a.dejaPropose ? 1 : -1;
+            return (b.taux + Math.random() * 0.5) - (a.taux + Math.random() * 0.5);
         });
 
-        let candidates = recettesScores.filter(r =>
-            r.principalPresent && r.tauxCouverture >= 0.75
-        );
+        // ── COMBINAISONS (mode quotidien uniquement) ──
+        let propositions = [];
 
-        if (candidates.length < 6) {
-            candidates = recettesScores.filter(r =>
-                r.principalPresent && r.tauxCouverture >= 0.6
+        if (mode === 'quotidien') {
+            const categories = detecterCategories(nomsProduits);
+            const combinaisons = genererCombinaisons(categories, 6);
+
+            // Retirer les combinaisons deja proposees
+            const combiFiltrees = combinaisons.filter(c =>
+                !window.historiqueChef.some(h =>
+                    h.toLowerCase().includes(c.nom.toLowerCase().substring(0, 20))
+                )
             );
+
+            // Melanger combinaisons et recettes nommees
+            propositions = combiFiltrees.slice(0, 5)
+                .concat(candidates.slice(0, 6));
+
+        } else {
+            propositions = candidates.slice(0, 12);
         }
 
-        if (candidates.length === 0) {
-            if (statut) statut.innerText = "❌ Aucune recette réalisable avec ton stock.";
+        if (propositions.length === 0) {
+            if (statut) statut.innerText = "❌ Aucune idée avec ton stock actuel.";
             return;
         }
 
-        console.log(`📋 ${candidates.length} recettes candidates`);
-
-        // ── 6. DIVERSITÉ PAR FAMILLE ──
-        const parFamille = {};
-        candidates.forEach(r => {
-            if (!parFamille[r.famille]) parFamille[r.famille] = [];
-            parFamille[r.famille].push(r);
-        });
-
-        Object.keys(parFamille).forEach(f => {
-            parFamille[f].sort((a, b) => {
-                // Non proposées en priorité
-                if (a.dejaPropose !== b.dejaPropose) return a.dejaPropose ? 1 : -1;
-                // Puis ingrédients non saturés
-                if (a.ingredientSature !== b.ingredientSature) return a.ingredientSature ? 1 : -1;
-                // Puis aléatoire pondéré
-                return (b.tauxCouverture + Math.random() * 0.5)
-                     - (a.tauxCouverture + Math.random() * 0.5);
-            });
-        });
-
-        const familles = Object.keys(parFamille).sort(() => Math.random() - 0.5);
-
-        // ── 7. SÉLECTION AVEC DIVERSITÉ D'INGRÉDIENTS ──
-        // On construit une liste où un même ingrédient n'apparaît
-        // pas dans trop de recettes proposées à Gemini
-        const recettesAEnvoyer = [];
-        const compteurIngredients = {};
-
-        familles.forEach(f => {
-            parFamille[f].forEach(r => {
-                if (recettesAEnvoyer.length >= 15) return;
-
-                // Vérifier qu'aucun ingrédient n'est déjà trop représenté
-                const trop = r.ingredientsUtiles.some(ing =>
-                    (compteurIngredients[ing] || 0) >= 2
-                );
-
-                if (!trop) {
-                    recettesAEnvoyer.push(r);
-                    r.ingredientsUtiles.forEach(ing => {
-                        compteurIngredients[ing] = (compteurIngredients[ing] || 0) + 1;
-                    });
-                }
-            });
-        });
-
-        // Si trop peu de recettes après filtrage, on complète
-        if (recettesAEnvoyer.length < 6) {
-            familles.forEach(f => {
-                parFamille[f].slice(0, 2).forEach(r => {
-                    if (!recettesAEnvoyer.includes(r) && recettesAEnvoyer.length < 15) {
-                        recettesAEnvoyer.push(r);
-                    }
-                });
-            });
-        }
-
-        // ── 8. PRÉPARATION DU PROMPT ──
-        const listeRecettes = recettesAEnvoyer
-            .map(r => `- ${r.nom} [famille:${r.famille}] [base:${r.ingredients_cles[0]}]`)
+        // ── PREPARATION DU PROMPT ──
+        const listeIdees = propositions
+            .map(p => `- ${p.nom} [${p.temps_minutes}min]${p.estCombinaison ? ' [simple]' : ''}`)
             .join('\n');
 
         const frigo = produits.filter(p => p.emplacement === 'FRIGO');
@@ -1279,44 +1303,51 @@ ENTAMÉ : ${entames.map(p => p.nom).join(', ') || 'aucun'}
 CONGÉLATEUR : ${congelo.map(p => p.nom).join(', ') || 'vide'}
 PLACARD : ${placard.map(p => p.nom).join(', ') || 'vide'}`;
 
-        const platsDejaProposés = window.historiqueChef?.length
-            ? `INTERDICTION de reproposer : ${window.historiqueChef.slice(-8).join(' | ')}.`
+        const dejaProposes = window.historiqueChef?.length
+            ? `INTERDICTION de reproposer : ${window.historiqueChef.slice(-6).join(' | ')}.`
             : '';
 
         const demandeSpecifique = envie
-            ? `L'utilisateur veut : "${envie}" — privilégie une recette qui correspond.`
+            ? `L'utilisateur veut : "${envie}" — privilégie une idée qui correspond.`
             : '';
 
-        const prompt = `Tu es un assistant cuisine.
+        const tonModes = {
+            quotidien: 'Tu proposes des repas simples de semaine, rapides à faire.',
+            weekend: 'Tu proposes des plats du week-end, plus longs mais savoureux.',
+            cookeo: 'Tu proposes des recettes à faire au Cookeo.',
+            monde: 'Tu proposes des plats inspirés de cuisines du monde.',
+            healthy: 'Tu proposes des repas légers et équilibrés.',
+            dessert: 'Tu proposes des desserts simples.',
+            antigaspi: 'Tu proposes des plats pour utiliser les restes.'
+        };
+
+        const prompt = `${tonModes[mode] || tonModes.quotidien}
 
 STOCK DISPONIBLE :
 ${listeStock}
 
-RECETTES POSSIBLES — choisir UNIQUEMENT parmi cette liste :
-${listeRecettes}
+IDÉES POSSIBLES — choisir UNIQUEMENT dans cette liste :
+${listeIdees}
 
 ${demandeSpecifique}
 
-Ta mission : Choisir 3 recettes de cette liste.
+Ta mission : Choisir 3 idées de cette liste.
 
-RÈGLES ABSOLUES :
-1. Choisis UNIQUEMENT parmi les recettes listées — AUCUNE invention.
-2. Les 3 recettes DOIVENT avoir des FAMILLES DIFFÉRENTES (voir [famille:...]).
-3. Les 3 recettes DOIVENT avoir des INGRÉDIENTS DE BASE DIFFÉRENTS (voir [base:...]).
-   Si une recette est à base de lardons, les deux autres ne doivent PAS contenir de lardons.
-   Même règle pour les œufs, le riz, les pâtes, le poulet.
-4. Priorise les produits FRIGO et ENTAMÉ.
-5. Écris les noms EXACTEMENT comme dans la liste.
-6. PAS de markdown, PAS de gras, PAS d'astérisques.
-${platsDejaProposés}
+RÈGLES :
+1. Choisis UNIQUEMENT parmi les idées listées — AUCUNE invention.
+2. Les 3 idées doivent être DIFFÉRENTES — pas deux fois la même base.
+3. Priorise les produits FRIGO et ENTAMÉ.
+4. Écris les noms EXACTEMENT comme dans la liste.
+5. PAS de markdown, PAS de gras, PAS d'astérisques.
+${dejaProposes}
 
-FORMAT STRICT : Une seule phrase naturelle avec exactement 3 noms de recettes.
-Exemple : "Ce soir je peux faire des spaghetti carbonara, un steak frites, ou une omelette au fromage. Lequel te tente ?"
+FORMAT : Une seule phrase naturelle avec exactement 3 propositions.
+Exemple : "Ce soir je peux faire un cordon bleu avec du riz et des haricots verts, des coquillettes au jambon, ou une omelette au fromage. Lequel te tente ?"
 Termine OBLIGATOIREMENT par : "Lequel te tente ?"`;
 
         if (statut) statut.innerText = "🧠 Le Chef choisit...";
 
-        // ── 9. APPEL GEMINI ──
+        // ── APPEL GEMINI ──
         let reponse = null;
         let tentatives = 0;
         while (!reponse && tentatives < 3) {
@@ -1336,7 +1367,7 @@ Termine OBLIGATOIREMENT par : "Lequel te tente ?"`;
             }
         }
 
-        // ── 10. MÉMORISATION ──
+        // ── MEMORISATION ──
         window.historiqueChef.push(
             reponse
                 .replace(/^.*?(je peux faire|vous proposer|préparer|proposer)\s*/i, '')
@@ -1344,18 +1375,8 @@ Termine OBLIGATOIREMENT par : "Lequel te tente ?"`;
                 .trim()
                 .substring(0, 200)
         );
-        if (window.historiqueChef.length > 12) window.historiqueChef.shift();
+        if (window.historiqueChef.length > 10) window.historiqueChef.shift();
         localStorage.setItem(`chefHistorique_${utilisateurActuel}`, JSON.stringify(window.historiqueChef));
-
-        // Mémoriser les ingrédients de base proposés
-        const basesProposees = recettesAEnvoyer
-            .slice(0, 3)
-            .map(r => r.ingredients_cles[0]);
-        window.historiqueIngredients.push(...basesProposees);
-        if (window.historiqueIngredients.length > 12) {
-            window.historiqueIngredients = window.historiqueIngredients.slice(-12);
-        }
-        localStorage.setItem(`chefIngredients_${utilisateurActuel}`, JSON.stringify(window.historiqueIngredients));
 
         window.dernieresPropositions = reponse;
         window.attenteChoixRecette = true;
@@ -1363,7 +1384,7 @@ Termine OBLIGATOIREMENT par : "Lequel te tente ?"`;
 
         if (statut) statut.innerText = "🎤 Dis-moi ton choix ou clique sur un plat !";
 
-        // ── 11. AFFICHAGE ──
+        // ── AFFICHAGE ──
         if (resultats) {
             resultats.innerHTML = `
                 <div style="background:white; padding:12px; border-radius:12px; border:1px solid #ddd; margin-top:5px;">
@@ -1398,6 +1419,31 @@ Termine OBLIGATOIREMENT par : "Lequel te tente ?"`;
         if (statut) statut.innerText = "❌ Le Chef a eu un problème. Réessaie dans quelques secondes.";
     }
 }
+
+
+// ============================================================
+// DETECTER LA FAMILLE D'UNE RECETTE
+// ============================================================
+function detecterFamille(ingredients) {
+    const premier = ingredients[0] || '';
+    const tous = ingredients.join(' ');
+
+    if (/pate|spaghetti|macaroni|tagliatelle|lasagne|nouille|coquillette|vermicelle/.test(premier)) return 'PATES';
+    if (/riz|risotto|quinoa|couscous|semoule/.test(premier)) return 'CEREALES';
+    if (/lentille|pois|haricot rouge|haricot blanc|chiche|flageolet/.test(premier)) return 'LEGUMINEUSES';
+    if (/pomme de terre|frite|dauphin|puree|rosti/.test(premier)) return 'POMMES_DE_TERRE';
+    if (/oeuf/.test(premier)) return 'OEUFS';
+    if (/steak|boeuf|hache|boulette|brochette|jarret|porc|cote|saucisse|knacki|lardon|bacon|jambon|veau|agneau|canard|merguez/.test(premier)) return 'VIANDE';
+    if (/poulet|dinde|escalope|cordon|nugget|cuisse/.test(premier)) return 'VOLAILLE';
+    if (/poisson|colin|saumon|thon|crevette|baton|sardine|maquereau|cabillaud/.test(premier)) return 'POISSON';
+    if (/pain|mie|croque|wrap|tortilla|pizza|burger|gyoza|nem/.test(premier)) return 'SANDWICH';
+    if (/courgette|brocoli|chou|carotte|legume|tomate|salade|epinard|haricot vert|poireau|champignon|salsifi|poivron|ratatouille|potiron|navet/.test(premier)) return 'LEGUMES';
+    if (/chocolat|yaourt|fruit|banane|biscuit|mascarpone|miel/.test(tous)) return 'DESSERT';
+    if (/reste/.test(tous)) return 'ANTIGASPI';
+
+    return 'AUTRE';
+}
+
 
 // DÉTECTER LA FAMILLE D'UNE RECETTE
 // Garantit la diversité des propositions
@@ -5195,6 +5241,90 @@ function fermerAssociation() {
 
     const statut = document.getElementById('statut-scanner');
     if (statut) statut.innerText = '🔍 En attente d\'un code-barres...';
+}
+// ============================================================
+// DETECTER LES ALIMENTS PRESENTS PAR CATEGORIE
+// ============================================================
+function detecterCategories(nomsProduits) {
+    const trouves = { proteines: [], feculents: [], legumes: [] };
+
+    Object.keys(CATEGORIES_REPAS).forEach(function(cat) {
+        CATEGORIES_REPAS[cat].forEach(function(item) {
+            const present = item.mots.some(function(mot) {
+                return nomsProduits.some(function(nom) {
+                    return nom.indexOf(mot) !== -1;
+                });
+            });
+            if (present) {
+                trouves[cat].push(item.nom);
+            }
+        });
+    });
+
+    return trouves;
+}
+
+// ============================================================
+// GENERER DES COMBINAISONS DE REPAS
+// ============================================================
+function genererCombinaisons(categories, nombre) {
+    const combinaisons = [];
+
+    const prot = categories.proteines.slice();
+    const fec = categories.feculents.slice();
+    const leg = categories.legumes.slice();
+
+    if (prot.length === 0) return combinaisons;
+
+    // Melanger pour varier a chaque appel
+    const melanger = function(arr) {
+        return arr.sort(function() { return Math.random() - 0.5; });
+    };
+
+    melanger(prot);
+    melanger(fec);
+    melanger(leg);
+
+    const utilisees = { prot: [], fec: [], leg: [] };
+
+    for (let i = 0; i < prot.length && combinaisons.length < nombre; i++) {
+        const p = prot[i];
+
+        // Choisir un feculent pas encore utilise
+        const fecDispo = fec.filter(function(f) {
+            return utilisees.fec.indexOf(f) === -1;
+        });
+        const f = fecDispo.length > 0 ? fecDispo[0] : (fec.length > 0 ? fec[i % fec.length] : null);
+
+        // Choisir un legume pas encore utilise
+        const legDispo = leg.filter(function(l) {
+            return utilisees.leg.indexOf(l) === -1;
+        });
+        const l = legDispo.length > 0 ? legDispo[0] : (leg.length > 0 ? leg[i % leg.length] : null);
+
+        let nom = p;
+        if (f && l) {
+            nom = p + ', ' + f + ' et ' + l;
+        } else if (f) {
+            nom = p + ' et ' + f;
+        } else if (l) {
+            nom = p + ' et ' + l;
+        }
+
+        combinaisons.push({
+            nom: nom.charAt(0).toUpperCase() + nom.slice(1),
+            famille: 'COMBINAISON',
+            base: p,
+            temps_minutes: 20,
+            estCombinaison: true
+        });
+
+        utilisees.prot.push(p);
+        if (f) utilisees.fec.push(f);
+        if (l) utilisees.leg.push(l);
+    }
+
+    return combinaisons;
 }
 </script>
 </body>
