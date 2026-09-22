@@ -401,43 +401,63 @@
     </div>
 
     <!-- Boutons modes -->
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+   <div class="card" style="padding:15px; background:#fff8e1; border:2px solid #ff9800;">
 
-        <button onclick="lancerChefMode('quotidien')"
-                style="background:#ff9800; color:white; border:none; border-radius:12px; padding:16px 8px; cursor:pointer; font-size:13px; font-weight:bold; grid-column:1/3;">
-            ⚡ EN SEMAINE<br><small style="font-weight:normal; opacity:0.9;">rapide, moins de 25 min</small>
+    <b style="color:#ff9800; font-size:15px;">👨‍🍳 LE CHEF</b>
+    <p style="font-size:12px; color:#888; margin:5px 0 12px 0;">
+        Demande-lui ce que tu veux manger
+    </p>
+
+    <!-- Raccourcis rapides -->
+    <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px;">
+        <button onclick="chefRaccourci('quotidien')"
+                style="flex:1; min-width:85px; background:#ff9800; color:white; border:none; border-radius:10px; padding:11px 6px; cursor:pointer; font-size:12px; font-weight:bold;">
+            ⚡ Rapide
         </button>
-
-        <button onclick="lancerChefMode('cookeo')"
-                style="background:#d32f2f; color:white; border:none; border-radius:12px; padding:14px 8px; cursor:pointer; font-size:13px; font-weight:bold;">
-            🍲 COOKEO
+        <button onclick="chefRaccourci('cookeo')"
+                style="flex:1; min-width:85px; background:#d32f2f; color:white; border:none; border-radius:10px; padding:11px 6px; cursor:pointer; font-size:12px; font-weight:bold;">
+            🍲 Cookeo
         </button>
-
-        <button onclick="lancerChefMode('weekend')"
-                style="background:#6d4c41; color:white; border:none; border-radius:12px; padding:14px 8px; cursor:pointer; font-size:13px; font-weight:bold;">
-            🍷 WEEK-END
+        <button onclick="chefRaccourci('weekend')"
+                style="flex:1; min-width:85px; background:#6d4c41; color:white; border:none; border-radius:10px; padding:11px 6px; cursor:pointer; font-size:12px; font-weight:bold;">
+            🍷 Week-end
         </button>
-
-        <button onclick="lancerChefMode('monde')"
-                style="background:#3182ce; color:white; border:none; border-radius:12px; padding:14px 8px; cursor:pointer; font-size:13px; font-weight:bold;">
-            🌍 MONDE
-        </button>
-
-        <button onclick="lancerChefMode('healthy')"
-                style="background:#38a169; color:white; border:none; border-radius:12px; padding:14px 8px; cursor:pointer; font-size:13px; font-weight:bold;">
-            🥗 HEALTHY
-        </button>
-
-        <button onclick="lancerChefMode('dessert')"
-                style="background:#8e24aa; color:white; border:none; border-radius:12px; padding:14px 8px; cursor:pointer; font-size:13px; font-weight:bold;">
-            🍰 DESSERT
-        </button>
-
-        <button onclick="lancerChefMode('antigaspi')"
-                style="background:#2d3748; color:white; border:none; border-radius:12px; padding:14px 8px; cursor:pointer; font-size:13px; font-weight:bold;">
-            ♻️ ANTI-GASPI
+        <button onclick="chefRaccourci('antigaspi')"
+                style="flex:1; min-width:85px; background:#2d3748; color:white; border:none; border-radius:10px; padding:11px 6px; cursor:pointer; font-size:12px; font-weight:bold;">
+            ♻️ Anti-gaspi
         </button>
     </div>
+
+    <!-- Zone de conversation -->
+    <div id="chef-conversation" style="background:white; border-radius:12px; padding:12px; margin-bottom:10px; max-height:340px; overflow-y:auto; display:none;"></div>
+
+    <!-- Saisie -->
+    <div style="display:flex; gap:6px;">
+        <input type="text" id="chef-message"
+               placeholder="💬 Un truc rapide sans poisson..."
+               style="flex:1; padding:12px; border:1px solid #ffcc80; border-radius:10px; font-size:14px;"
+               onkeypress="if(event.key==='Enter') envoyerMessageChef()">
+        <button onclick="envoyerMessageChef()"
+                style="background:#ff9800; color:white; border:none; border-radius:10px; padding:0 18px; cursor:pointer; font-size:18px; font-weight:bold;">
+            ➤
+        </button>
+    </div>
+
+    <!-- Options -->
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-top:10px;">
+        <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:#555; cursor:pointer;">
+            <input type="checkbox" id="mode-silencieux" style="width:16px; height:16px; cursor:pointer;">
+            🔇 Silencieux
+        </label>
+        <button onclick="reinitialiserChef()"
+                style="background:none; border:none; color:#a0616a; cursor:pointer; font-size:12px;">
+            🔄 Nouvelle conversation
+        </button>
+    </div>
+
+    <div id="statut-chef" style="text-align:center; margin-top:8px; font-size:12px; font-weight:bold; min-height:18px; color:#ff9800;"></div>
+</div>
+
 
     <div id="statut-chef" style="text-align:center; margin-top:12px; font-size:13px; font-weight:bold; min-height:20px;"></div>
     <div id="chef-resultats" style="margin-top:5px;"></div>
@@ -1178,259 +1198,320 @@ const CATEGORIES_REPAS = {
         { mots: ['champignon'], nom: 'champignons' }
     ]
 };
-async function lancerChefMode(mode) {
+// Historique de la conversation en cours
+let conversationChef = [];
+let contexteStock = null;
+
+
+// ============================================================
+// RACCOURCIS — equivalents des anciens boutons
+// ============================================================
+function chefRaccourci(mode) {
+    const phrases = {
+        quotidien: 'Un repas rapide pour ce soir',
+        cookeo: 'Une recette au Cookeo',
+        weekend: 'Un bon plat pour le week-end',
+        antigaspi: 'Quelque chose avec ce qui doit être mangé en priorité',
+        healthy: 'Un repas léger et équilibré',
+        dessert: 'Un dessert simple'
+    };
+    document.getElementById('chef-message').value = phrases[mode] || phrases.quotidien;
+    envoyerMessageChef(mode);
+}
+
+
+// ============================================================
+// ENVOYER UN MESSAGE AU CHEF
+// ============================================================
+async function envoyerMessageChef(modeForce) {
+    const input = document.getElementById('chef-message');
+    const message = input.value.trim();
+    if (!message) return;
+
     if (!utilisateurActuel) {
-        alert("Je ne sais pas qui tu es ! Reconnecte-toi.");
+        utilisateurActuel = localStorage.getItem('monFrigo_User');
+    }
+    if (!utilisateurActuel) {
+        afficherToast('Connecte-toi d abord');
         return;
     }
 
     const statut = document.getElementById('statut-chef');
-    const resultats = document.getElementById('chef-resultats');
-    const envie = document.getElementById('chef-envie')?.value.trim() || '';
+    const zone = document.getElementById('chef-conversation');
 
-    if (statut) statut.innerText = "👨‍🍳 Le Chef regarde ton stock...";
-    if (resultats) resultats.innerHTML = "";
+    input.value = '';
+    zone.style.display = 'block';
+
+    // Afficher le message de l'utilisateur
+    ajouterBulleChef(message, 'moi');
+    statut.innerText = '👨‍🍳 Le Chef réfléchit...';
 
     try {
-        // ── HISTORIQUE ──
-        if (!window.historiqueChef) {
-            window.historiqueChef = JSON.parse(
-                localStorage.getItem(`chefHistorique_${utilisateurActuel}`) || '[]'
-            );
+        // Charger le contexte stock si pas encore fait
+        if (!contexteStock) {
+            contexteStock = await construireContexteStock();
         }
 
-        // ── STOCK ──
-        const { data: produits, error: errProduits } = await monSupabase
-            .from('inventaire2')
-            .select('nom, quantite, emplacement, etat')
-            .eq('proprietaire', utilisateurActuel)
-            .neq('etat', 'Vide');
+        // Detecter le mode a partir du message
+        const mode = modeForce || detecterModeMessage(message);
 
-        if (errProduits) throw errProduits;
-        if (!produits?.length) {
-            if (statut) statut.innerText = "❌ Stock vide !";
+        // Construire les idees realisables
+        const idees = await construireIdees(mode, contexteStock);
+
+        if (idees.length === 0) {
+            ajouterBulleChef("Je ne trouve rien de réalisable avec ton stock actuel. Tu veux que je regarde dans un autre registre ?", 'chef');
+            statut.innerText = '';
             return;
         }
 
-        const nomsProduits = produits.map(p =>
-            p.nom.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-        );
+        // Prompt avec historique de conversation
+        const prompt = construirePromptConversation(message, idees, contexteStock, mode);
 
-        // Texte de l'historique en minuscules pour comparaison
-        const historiqueTexte = window.historiqueChef.join(' | ').toLowerCase();
-
-        // ── RECETTES DE LA BASE ──
-        const { data: recettes } = await monSupabase
-            .from('recettes_chef')
-            .select('id, nom, ingredients_cles, temps_minutes')
-            .eq('mode', mode)
-            .eq('actif', true);
-
-        const basiques = ['sel', 'poivre', 'huile', 'eau', 'beurre', 'sucre',
-                          'farine', 'ail', 'oignon', 'bouillon', 'vinaigrette',
-                          'mayonnaise', 'vanille', 'curry', 'vin'];
-
-        let candidates = (recettes || []).map(r => {
-            const necessaires = r.ingredients_cles.filter(i => !basiques.includes(i));
-            const presents = necessaires.filter(ing =>
-                nomsProduits.some(nom => nom.includes(ing))
-            );
-            const taux = necessaires.length > 0 ? presents.length / necessaires.length : 1;
-            const principalPresent = nomsProduits.some(nom =>
-                nom.includes(r.ingredients_cles[0])
-            );
-            // Comparaison stricte sur le nom complet
-            const dejaPropose = historiqueTexte.includes(r.nom.toLowerCase());
-
-            return {
-                nom: r.nom,
-                temps_minutes: r.temps_minutes,
-                base: r.ingredients_cles[0],
-                taux,
-                principalPresent,
-                dejaPropose,
-                estCombinaison: false
-            };
-        }).filter(r => r.principalPresent && r.taux >= 0.75);
-
-        // Ecarter completement les recettes deja proposees recemment
-        const candidatesNeuves = candidates.filter(r => !r.dejaPropose);
-        if (candidatesNeuves.length >= 2) {
-            candidates = candidatesNeuves;
-        }
-
-        candidates.sort(() => Math.random() - 0.5);
-
-        // ── CONSTRUCTION DE LA LISTE ──
-        let propositions = [];
-
-        if (mode === 'quotidien') {
-            const categories = detecterCategories(nomsProduits);
-            const combinaisons = genererCombinaisons(categories, 10);
-
-            // Ecarter les combinaisons deja proposees (nom complet)
-            const combiNeuves = combinaisons.filter(c =>
-                !historiqueTexte.includes(c.nom.toLowerCase())
-            );
-
-            const combiFinales = combiNeuves.length >= 4 ? combiNeuves : combinaisons;
-
-            // 6 combinaisons + 3 recettes nommees maximum
-            propositions = combiFinales.slice(0, 6)
-                .concat(candidates.slice(0, 3));
-
-        } else {
-            propositions = candidates.slice(0, 12);
-        }
-
-        if (propositions.length === 0) {
-            if (statut) statut.innerText = "❌ Aucune idée avec ton stock actuel.";
-            return;
-        }
-
-        // ── PREPARATION DU PROMPT ──
-        const nbCombinaisons = propositions.filter(p => p.estCombinaison).length;
-
-        const listeIdees = propositions
-            .map((p, i) => `${i + 1}. ${p.nom}${p.estCombinaison ? ' [assiette]' : ' [plat]'}`)
-            .join('\n');
-
-        const frigo = produits.filter(p => p.emplacement === 'FRIGO');
-        const congelo = produits.filter(p => p.emplacement === 'CONGELATEUR');
-        const placard = produits.filter(p => p.emplacement === 'PLACARD');
-        const entames = produits.filter(p => p.etat === 'Entamé');
-
-        const listeStock = `FRIGO : ${frigo.map(p => p.nom).join(', ') || 'vide'}
-ENTAMÉ : ${entames.map(p => p.nom).join(', ') || 'aucun'}
-CONGÉLATEUR : ${congelo.map(p => p.nom).join(', ') || 'vide'}
-PLACARD : ${placard.map(p => p.nom).join(', ') || 'vide'}`;
-
-        const dejaProposes = window.historiqueChef?.length
-            ? `DÉJÀ PROPOSÉ RÉCEMMENT — ne pas reprendre : ${window.historiqueChef.slice(-5).join(' | ')}`
-            : '';
-
-        const demandeSpecifique = envie
-            ? `L'utilisateur veut : "${envie}" — privilégie une idée qui correspond.`
-            : '';
-
-        // Regle specifique au mode quotidien
-        const regleAssiettes = (mode === 'quotidien' && nbCombinaisons >= 2)
-            ? `\n2. IMPORTANT : Choisis AU MOINS 2 idées marquées [assiette].
-   Les [assiette] sont des repas simples viande + accompagnement, c'est ce que
-   l'utilisateur mange le plus souvent en semaine.
-   Au maximum 1 idée marquée [plat].`
-            : '\n2. Varie les bases : pas deux fois la même viande ou le même féculent.';
-
-        const tonModes = {
-            quotidien: 'Tu proposes des repas simples de semaine, rapides à faire.',
-            weekend: 'Tu proposes des plats du week-end, plus longs mais savoureux.',
-            cookeo: 'Tu proposes des recettes à faire au Cookeo.',
-            monde: 'Tu proposes des plats inspirés de cuisines du monde.',
-            healthy: 'Tu proposes des repas légers et équilibrés.',
-            dessert: 'Tu proposes des desserts simples.',
-            antigaspi: 'Tu proposes des plats pour utiliser les restes.'
-        };
-
-        const prompt = `${tonModes[mode] || tonModes.quotidien}
-
-STOCK DISPONIBLE :
-${listeStock}
-
-IDÉES POSSIBLES :
-${listeIdees}
-
-${demandeSpecifique}
-
-Ta mission : Choisir 3 idées de cette liste.
-
-RÈGLES :
-1. Choisis UNIQUEMENT parmi les idées listées — AUCUNE invention.${regleAssiettes}
-3. Les 3 idées doivent être DIFFÉRENTES les unes des autres.
-4. Écris les noms EXACTEMENT comme dans la liste, sans le marqueur entre crochets.
-5. PAS de markdown, PAS de gras, PAS d'astérisques.
-
-${dejaProposes}
-
-FORMAT : Une seule phrase naturelle avec exactement 3 propositions.
-Exemple : "Ce soir je peux faire un cordon bleu avec du riz et des haricots verts, un steak haché frites petits pois, ou des coquillettes au jambon. Lequel te tente ?"
-Termine OBLIGATOIREMENT par : "Lequel te tente ?"`;
-
-        if (statut) statut.innerText = "🧠 Le Chef choisit...";
-
-        // ── APPEL GEMINI ──
         let reponse = null;
         let tentatives = 0;
         while (!reponse && tentatives < 3) {
             try {
                 reponse = await appelGemini({
                     contents: [{ parts: [{ text: prompt }] }],
-                    generationConfig: { temperature: 0.9 }
+                    generationConfig: { temperature: 0.85 }
                 });
             } catch(e) {
                 tentatives++;
                 if (tentatives < 3) {
-                    if (statut) statut.innerText = `⏳ Le Chef est débordé, réessai ${tentatives}/3...`;
-                    await new Promise(r => setTimeout(r, 3000));
+                    statut.innerText = `⏳ Réessai ${tentatives}/3...`;
+                    await new Promise(r => setTimeout(r, 2500));
                 } else {
                     throw e;
                 }
             }
         }
 
-        // ── MEMORISATION ──
-        window.historiqueChef.push(
-            reponse
-                .replace(/^.*?(je peux faire|vous proposer|préparer|proposer|te proposer)\s*/i, '')
-                .replace(/lequel te tente \?/i, '')
-                .trim()
-                .substring(0, 250)
-        );
-        if (window.historiqueChef.length > 8) window.historiqueChef.shift();
-        localStorage.setItem(`chefHistorique_${utilisateurActuel}`, JSON.stringify(window.historiqueChef));
+        // Memoriser l'echange
+        conversationChef.push({ role: 'moi', texte: message });
+        conversationChef.push({ role: 'chef', texte: reponse });
+        if (conversationChef.length > 10) {
+            conversationChef = conversationChef.slice(-10);
+        }
+
+        ajouterBulleChef(reponse, 'chef');
 
         window.dernieresPropositions = reponse;
         window.attenteChoixRecette = true;
         window.modeChefActuel = mode;
 
-        if (statut) statut.innerText = "🎤 Dis-moi ton choix ou clique sur un plat !";
-
-        // ── AFFICHAGE ──
-        if (resultats) {
-            resultats.innerHTML = `
-                <div style="background:white; padding:12px; border-radius:12px; border:1px solid #ddd; margin-top:5px;">
-                    <p style="margin:0 0 12px 0; font-size:14px; color:#333; line-height:1.6;">${reponse}</p>
-                    <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                        <button onclick="choisirEtRedigerRecette('${mode}', 'premier plat')"
-                                style="flex:1; min-width:80px; background:#e3f2fd; color:#1a73e8; border:2px solid #1a73e8; border-radius:8px; padding:10px 5px; cursor:pointer; font-weight:bold; font-size:12px;">
-                            🍽️ Plat 1
-                        </button>
-                        <button onclick="choisirEtRedigerRecette('${mode}', 'deuxième plat')"
-                                style="flex:1; min-width:80px; background:#e8f5e9; color:#34a853; border:2px solid #34a853; border-radius:8px; padding:10px 5px; cursor:pointer; font-weight:bold; font-size:12px;">
-                            🍽️ Plat 2
-                        </button>
-                        <button onclick="choisirEtRedigerRecette('${mode}', 'troisième plat')"
-                                style="flex:1; min-width:80px; background:#fce4ec; color:#ea4335; border:2px solid #ea4335; border-radius:8px; padding:10px 5px; cursor:pointer; font-weight:bold; font-size:12px;">
-                            🍽️ Plat 3
-                        </button>
-                        <button onclick="lancerChefMode('${mode}')"
-                                style="width:100%; background:#718096; color:white; border:none; border-radius:8px; padding:10px; cursor:pointer; font-size:12px; font-weight:bold; margin-top:4px;">
-                            🔄 Autres idées
-                        </button>
-                    </div>
-                </div>`;
-        }
+        statut.innerText = '';
 
         if (!document.getElementById('mode-silencieux')?.checked) {
             faireParlerIA(reponse);
         }
 
     } catch (err) {
-        console.error("Erreur Chef :", err);
-        if (statut) statut.innerText = "❌ Le Chef a eu un problème. Réessaie dans quelques secondes.";
+        console.error('Erreur Chef :', err);
+        ajouterBulleChef("Désolé, j'ai eu un problème. Réessaie dans quelques secondes.", 'chef');
+        statut.innerText = '';
     }
 }
 
 
+// ============================================================
+// AFFICHER UNE BULLE DE CONVERSATION
+// ============================================================
+function ajouterBulleChef(texte, qui) {
+    const zone = document.getElementById('chef-conversation');
+
+    const estMoi = qui === 'moi';
+    const bulle = document.createElement('div');
+    bulle.style.cssText = 'margin-bottom:10px; display:flex; '
+        + (estMoi ? 'justify-content:flex-end;' : 'justify-content:flex-start;');
+
+    const contenu = document.createElement('div');
+    contenu.style.cssText = 'max-width:85%; padding:10px 13px; border-radius:14px; font-size:13px; line-height:1.5; '
+        + (estMoi
+            ? 'background:#ff9800; color:white; border-bottom-right-radius:4px;'
+            : 'background:#f1f5f9; color:#2d3748; border-bottom-left-radius:4px;');
+    contenu.innerText = texte;
+
+    bulle.appendChild(contenu);
+    zone.appendChild(bulle);
+
+    // Boutons de choix si le chef propose des plats
+    if (!estMoi && /lequel te tente/i.test(texte)) {
+        const boutons = document.createElement('div');
+        boutons.style.cssText = 'display:flex; gap:6px; margin:0 0 12px 0; flex-wrap:wrap;';
+        boutons.innerHTML =
+            '<button onclick="choisirEtRedigerRecette(window.modeChefActuel, \'premier plat\')" '
+            + 'style="flex:1; min-width:70px; background:#e3f2fd; color:#1a73e8; border:1px solid #1a73e8; border-radius:8px; padding:8px 4px; cursor:pointer; font-weight:bold; font-size:11px;">🍽️ 1</button>'
+            + '<button onclick="choisirEtRedigerRecette(window.modeChefActuel, \'deuxième plat\')" '
+            + 'style="flex:1; min-width:70px; background:#e8f5e9; color:#34a853; border:1px solid #34a853; border-radius:8px; padding:8px 4px; cursor:pointer; font-weight:bold; font-size:11px;">🍽️ 2</button>'
+            + '<button onclick="choisirEtRedigerRecette(window.modeChefActuel, \'troisième plat\')" '
+            + 'style="flex:1; min-width:70px; background:#fce4ec; color:#ea4335; border:1px solid #ea4335; border-radius:8px; padding:8px 4px; cursor:pointer; font-weight:bold; font-size:11px;">🍽️ 3</button>';
+        zone.appendChild(boutons);
+    }
+
+    zone.scrollTop = zone.scrollHeight;
+}
+
+
+// ============================================================
+// CONSTRUIRE LE CONTEXTE STOCK
+// ============================================================
+async function construireContexteStock() {
+    const { data: produits } = await monSupabase
+        .from('inventaire2')
+        .select('nom, quantite, emplacement, etat, date_peremption')
+        .eq('proprietaire', utilisateurActuel)
+        .neq('etat', 'Vide');
+
+    if (!produits?.length) return null;
+
+    const nomsProduits = produits.map(p =>
+        p.nom.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    );
+
+    // Produits urgents
+    const urgents = produits.filter(p => {
+        if (p.etat === 'Entamé') return true;
+        if (!p.date_peremption) return false;
+        const jours = Math.ceil((new Date(p.date_peremption) - new Date()) / 86400000);
+        return jours <= 3;
+    });
+
+    return {
+        produits,
+        nomsProduits,
+        urgents,
+        texte: `FRIGO : ${produits.filter(p => p.emplacement === 'FRIGO').map(p => p.nom).join(', ') || 'vide'}
+CONGÉLATEUR : ${produits.filter(p => p.emplacement === 'CONGELATEUR').map(p => p.nom).join(', ') || 'vide'}
+PLACARD : ${produits.filter(p => p.emplacement === 'PLACARD').map(p => p.nom).join(', ') || 'vide'}
+À FINIR EN PRIORITÉ : ${urgents.map(p => p.nom).join(', ') || 'rien d urgent'}`
+    };
+}
+
+
+// ============================================================
+// DETECTER LE MODE DEPUIS LE MESSAGE
+// ============================================================
+function detecterModeMessage(message) {
+    const m = message.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+    if (/cookeo|cocotte|pression/.test(m)) return 'cookeo';
+    if (/week.?end|dimanche|samedi|mijote|longtemps|temps devant/.test(m)) return 'weekend';
+    if (/leger|equilibre|healthy|sain|dietetique|calorie|regime/.test(m)) return 'healthy';
+    if (/dessert|sucre|gateau|gouter/.test(m)) return 'dessert';
+    if (/gaspi|reste|perime|finir|jeter/.test(m)) return 'antigaspi';
+    if (/monde|exotique|asiatique|italien|mexicain|indien|depayse/.test(m)) return 'monde';
+
+    return 'quotidien';
+}
+
+
+// ============================================================
+// CONSTRUIRE LES IDEES REALISABLES
+// ============================================================
+async function construireIdees(mode, contexte) {
+    const { data: recettes } = await monSupabase
+        .from('recettes_chef')
+        .select('nom, ingredients_cles, temps_minutes')
+        .eq('mode', mode)
+        .eq('actif', true);
+
+    const basiques = ['sel', 'poivre', 'huile', 'eau', 'beurre', 'sucre',
+                      'farine', 'ail', 'oignon', 'bouillon', 'vinaigrette',
+                      'mayonnaise', 'vanille', 'curry', 'vin'];
+
+    const candidates = (recettes || []).map(r => {
+        const necessaires = r.ingredients_cles.filter(i => !basiques.includes(i));
+        const presents = necessaires.filter(ing =>
+            contexte.nomsProduits.some(nom => nom.includes(ing))
+        );
+        const taux = necessaires.length > 0 ? presents.length / necessaires.length : 1;
+        const principalPresent = contexte.nomsProduits.some(nom =>
+            nom.includes(r.ingredients_cles[0])
+        );
+        return {
+            nom: r.nom,
+            temps: r.temps_minutes,
+            taux,
+            principalPresent,
+            estCombinaison: false
+        };
+    }).filter(r => r.principalPresent && r.taux >= 0.75);
+
+    candidates.sort(() => Math.random() - 0.5);
+
+    // Combinaisons pour le mode quotidien
+    if (mode === 'quotidien') {
+        const categories = detecterCategories(contexte.nomsProduits);
+        const combinaisons = genererCombinaisons(categories, 8);
+        return combinaisons.slice(0, 6).map(c => ({
+            nom: c.nom,
+            temps: 20,
+            estCombinaison: true
+        })).concat(candidates.slice(0, 4));
+    }
+
+    return candidates.slice(0, 12);
+}
+
+
+// ============================================================
+// CONSTRUIRE LE PROMPT AVEC HISTORIQUE
+// ============================================================
+function construirePromptConversation(message, idees, contexte, mode) {
+
+    const listeIdees = idees
+        .map((p, i) => `${i + 1}. ${p.nom} (${p.temps} min)${p.estCombinaison ? ' [assiette simple]' : ''}`)
+        .join('\n');
+
+    // Historique de la conversation
+    let historique = '';
+    if (conversationChef.length > 0) {
+        historique = '\nCONVERSATION EN COURS :\n'
+            + conversationChef.map(c =>
+                (c.role === 'moi' ? 'Utilisateur : ' : 'Toi : ') + c.texte
+              ).join('\n')
+            + '\n';
+    }
+
+    const regleAssiettes = mode === 'quotidien'
+        ? `\n- Privilégie les idées marquées [assiette simple] : c'est ce que l'utilisateur mange le plus souvent en semaine. Au moins 2 sur 3.`
+        : '';
+
+    return `Tu es le Chef, un assistant cuisine familier et direct.
+Tu aides l'utilisateur à décider quoi manger avec ce qu'il a chez lui.
+
+STOCK DISPONIBLE :
+${contexte.texte}
+
+IDÉES RÉALISABLES — tu ne peux proposer QUE celles-ci :
+${listeIdees}
+${historique}
+NOUVELLE DEMANDE DE L'UTILISATEUR : "${message}"
+
+RÈGLES :
+- Réponds naturellement, comme dans une conversation. Pas de liste à puces.
+- Propose exactement 3 idées choisies UNIQUEMENT dans la liste ci-dessus.
+- Tiens compte de la demande : si l'utilisateur exclut un aliment, ne le propose pas. S'il veut du rapide, prends les temps les plus courts.
+- Si la conversation a déjà eu lieu, ne reproposez pas les mêmes plats.
+- Si l'utilisateur dit non ou demande autre chose, propose vraiment autre chose.${regleAssiettes}
+- Écris les noms des plats exactement comme dans la liste, sans les marqueurs entre crochets ni les durées.
+- PAS de markdown, PAS de gras, PAS d'astérisques.
+- Deux phrases maximum.
+- Termine par : "Lequel te tente ?"`;
+}
+
+
+// ============================================================
+// REINITIALISER LA CONVERSATION
+// ============================================================
+function reinitialiserChef() {
+    conversationChef = [];
+    contexteStock = null;
+    document.getElementById('chef-conversation').innerHTML = '';
+    document.getElementById('chef-conversation').style.display = 'none';
+    document.getElementById('chef-message').value = '';
+    document.getElementById('statut-chef').innerText = '';
+}
 // ============================================================
 // DETECTER LA FAMILLE D'UNE RECETTE
 // ============================================================
