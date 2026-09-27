@@ -1335,7 +1335,7 @@ function construirePromptAgent(message, idees, contexte, mode) {
     if (idees.realisables.length > 0) {
         sections += '\nPLATS RÉALISABLES (tu as tous les ingrédients) :\n'
             + idees.realisables.map(function(r) {
-                const urgent = r.utiliseUrgent ? ' [utilise un produit à finir]' : '';
+                const urgent = r.produitUrgent ? ' [permet de finir : ' + r.produitUrgent + ']' : '';
                 return '- ' + r.nom + ' (' + r.temps + ' min)' + urgent;
               }).join('\n') + '\n';
     }
@@ -1348,22 +1348,28 @@ function construirePromptAgent(message, idees, contexte, mode) {
     }
 
     let historique = '';
+    let interdits = '';
     if (conversationChef.length > 0) {
         historique = '\nCONVERSATION EN COURS :\n'
             + conversationChef.map(function(c) {
                 return (c.role === 'moi' ? 'Utilisateur : ' : 'Toi : ') + c.texte;
               }).join('\n') + '\n';
+
+        interdits = `\nIMPORTANT : tu as déjà proposé des plats dans cette conversation.
+Si l'utilisateur demande "autre chose", "et encore", "d'autres idées" ou équivalent,
+propose des plats DIFFÉRENTS de tout ce que tu as déjà cité.
+Ne répète jamais une proposition précédente, même reformulée.\n`;
     }
 
     return `Tu es le Chef, un assistant cuisine familier, direct et honnête.
 Tu connais exactement le contenu du frigo et des placards de l'utilisateur.
 
-STOCK DISPONIBLE :
+STOCK DISPONIBLE (pour ton information uniquement) :
 ${contexte.texte}
 
 CE QUE TU PEUX PROPOSER :
 ${sections}
-${historique}
+${historique}${interdits}
 DEMANDE DE L'UTILISATEUR : "${message}"
 
 COMMENT RÉPONDRE :
@@ -1374,7 +1380,7 @@ Si l'utilisateur demande un plat PRÉCIS :
   puis propose soit de le faire sans, soit une alternative de la liste.
   Exemple : "Il te manque la crème pour la carbonara. Tu peux la faire à
   l'italienne sans crème, ou sinon je te fais des pâtes aux lardons."
-- S'il n'apparaît nulle part : dis-lui que tu n'as pas de quoi, en une phrase,
+- S'il n'apparaît nulle part : dis-lui en une phrase que tu n'as pas de quoi,
   et propose une alternative proche prise dans les listes.
 
 Si l'utilisateur demande une idée générale :
@@ -1382,13 +1388,30 @@ Si l'utilisateur demande une idée générale :
 - En mode quotidien, privilégie les assiettes simples : au moins 2 sur 3.
 - Termine par "Lequel te tente ?"
 
-Si un plat utilise un produit marqué [utilise un produit à finir], mentionne-le
-brièvement : c'est un bon argument pour éviter le gaspillage.
+NOMS DES PLATS — RÈGLE STRICTE :
+Le STOCK ci-dessus contient les noms bruts des produits tels qu'ils figurent sur
+les tickets de caisse. Ces noms sont laids et techniques.
+N'utilise JAMAIS ces noms dans ta réponse.
+Écris uniquement les noms des plats tels qu'ils apparaissent dans les listes
+de propositions, sans les durées ni les mentions entre crochets.
+
+Exemple de ce qu'il ne faut PAS faire :
+  "Panes colin Alaska MSC avec des Frites Classiques 1kg"
+Exemple correct :
+  "du poisson pané avec des frites"
+
+Ne propose jamais deux fois le même plat dans une même réponse, même si deux
+produits différents du stock y correspondent.
+
+PRODUITS À FINIR :
+Certains plats portent la mention [permet de finir : nom du produit].
+Tu peux le signaler brièvement en nommant ce produit précis.
+N'invente JAMAIS qu'un plat permet de finir un produit : sans la mention,
+n'en parle pas du tout.
 
 RÈGLES ABSOLUES :
 - Ne propose JAMAIS un plat absent des listes ci-dessus.
 - Ne prétends jamais qu'un ingrédient est disponible s'il ne l'est pas.
-- Écris les noms des plats exactement comme dans les listes.
 - Pas de markdown, pas de gras, pas d'astérisques, pas de listes à puces.
 - Trois phrases maximum. Ton naturel, comme un pote qui cuisine bien.`;
 }
@@ -1542,28 +1565,37 @@ async function construireIdees(mode, contexte, messageUtilisateur) {
     const ingredientForce = detecterIngredientForce(messageUtilisateur);
     const ingredientsExclus = detecterIngredientExclu(messageUtilisateur);
 
+    // Plats deja cites dans la conversation
+    const dejaCites = conversationChef
+        .filter(function(c) { return c.role === 'chef'; })
+        .map(function(c) {
+            return c.texte.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        })
+        .join(' | ');
+
     console.log('🔍 Forcé :', ingredientForce, '| Exclus :', ingredientsExclus);
 
     // ── EVALUER CHAQUE RECETTE ──
     const evaluees = recettes.map(function(r) {
+        const nomNorm = r.nom.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
         const necessaires = r.ingredients_cles.filter(function(i) {
             return basiques.indexOf(i) === -1;
         });
 
         // Exclusion demandee par l'utilisateur
         const estExclue = ingredientsExclus.some(function(ex) {
+            const mots = SYNONYMES_INGREDIENTS[ex] || [ex];
             return r.ingredients_cles.some(function(i) {
-                const mots = SYNONYMES_INGREDIENTS[ex] || [ex];
                 return mots.some(function(m) { return i.indexOf(m) !== -1; });
             });
         });
         if (estExclue) return null;
 
-        // Ingredient impose : la recette doit le contenir
+        // Ingredient impose par l'utilisateur
         let repondALaDemande = false;
         if (ingredientForce) {
             const motsForce = SYNONYMES_INGREDIENTS[ingredientForce] || [ingredientForce];
-            const nomNorm = r.nom.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
             repondALaDemande = r.ingredients_cles.some(function(i) {
                 return motsForce.some(function(m) { return i.indexOf(m) !== -1; });
             }) || motsForce.some(function(m) { return nomNorm.indexOf(m) !== -1; });
@@ -1571,7 +1603,7 @@ async function construireIdees(mode, contexte, messageUtilisateur) {
             if (!repondALaDemande) return null;
         }
 
-        // Presence des ingredients
+        // Presence des ingredients dans le stock
         const presents = [];
         const manquants = [];
         necessaires.forEach(function(ing) {
@@ -1581,23 +1613,39 @@ async function construireIdees(mode, contexte, messageUtilisateur) {
 
         const taux = necessaires.length > 0 ? presents.length / necessaires.length : 1;
 
-        // L'ingredient principal doit toujours etre present
         const principalPresent = necessaires.length === 0
             || matchIngredient(necessaires[0], contexte.nomsProduits);
 
-        // Bonus produits urgents
-        const utiliseUrgent = necessaires.some(function(ing) {
-            return contexte.urgents.some(function(u) {
-                const nomU = u.nom.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-                const mots = SYNONYMES_INGREDIENTS[ing] || [ing];
-                return mots.some(function(m) { return nomU.indexOf(m) !== -1; });
+        // ── PRODUIT URGENT REELLEMENT UTILISE ──
+        // Matching strict sur mots entiers pour eviter les faux positifs
+        let produitUrgentUtilise = null;
+        for (let i = 0; i < presents.length; i++) {
+            const ing = presents[i];
+            const mots = SYNONYMES_INGREDIENTS[ing] || [ing];
+
+            const trouve = contexte.urgents.find(function(u) {
+                const nomU = u.nom.toLowerCase()
+                    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                const motsProduit = nomU.split(/[\s,\-'()]+/);
+
+                return mots.some(function(m) {
+                    return motsProduit.some(function(mp) {
+                        return mp === m || mp.indexOf(m) === 0;
+                    });
+                });
             });
-        });
+
+            if (trouve) { produitUrgentUtilise = trouve.nom; break; }
+        }
+
+        // Deja propose dans la conversation
+        const dejaPropose = dejaCites.indexOf(nomNorm) !== -1;
 
         let score = taux * 10;
-        if (utiliseUrgent) score += 5;
+        if (produitUrgentUtilise) score += 5;
         if (repondALaDemande) score += 20;
         if (r.mode === mode) score += 3;
+        if (dejaPropose) score -= 50;
 
         return {
             nom: r.nom,
@@ -1607,51 +1655,81 @@ async function construireIdees(mode, contexte, messageUtilisateur) {
             manquants: manquants,
             nbManquants: manquants.length,
             principalPresent: principalPresent,
-            utiliseUrgent: utiliseUrgent,
+            produitUrgent: produitUrgentUtilise,
+            dejaPropose: dejaPropose,
             score: score,
             estCombinaison: false
         };
     }).filter(function(r) { return r !== null; });
 
-    // ── REALISABLES : tout est en stock ──
-    const realisables = evaluees
-        .filter(function(r) { return r.nbManquants === 0; })
-        .sort(function(a, b) { return b.score - a.score; });
+    // ── REALISABLES ──
+    let realisables = evaluees.filter(function(r) { return r.nbManquants === 0; });
 
-    // ── PRESQUE : il manque un seul ingredient, mais on a le principal ──
-    const presque = evaluees
-        .filter(function(r) { return r.nbManquants === 1 && r.principalPresent; })
-        .sort(function(a, b) { return b.score - a.score; });
+    const realisablesNeufs = realisables.filter(function(r) { return !r.dejaPropose; });
+    if (realisablesNeufs.length >= 3) realisables = realisablesNeufs;
 
-    // ── COMBINAISONS (mode quotidien) ──
+    realisables.sort(function(a, b) { return b.score - a.score; });
+
+    // ── PRESQUE REALISABLES ──
+    let presque = evaluees.filter(function(r) {
+        return r.nbManquants === 1 && r.principalPresent;
+    });
+
+    const presqueNeufs = presque.filter(function(r) { return !r.dejaPropose; });
+    if (presqueNeufs.length >= 2) presque = presqueNeufs;
+
+    presque.sort(function(a, b) { return b.score - a.score; });
+
+    // ── COMBINAISONS ──
     let combinaisons = [];
-    if (mode === 'quotidien' && !ingredientForce) {
+    if (mode === 'quotidien') {
         const categories = detecterCategories(contexte.nomsProduits);
-        combinaisons = genererCombinaisons(categories, 8).slice(0, 6);
-    } else if (mode === 'quotidien' && ingredientForce) {
-        // Garder seulement les combinaisons contenant l'ingredient demande
-        const categories = detecterCategories(contexte.nomsProduits);
-        const motsForce = SYNONYMES_INGREDIENTS[ingredientForce] || [ingredientForce];
-        combinaisons = genererCombinaisons(categories, 10).filter(function(c) {
+        let brutes = genererCombinaisons(categories, 12);
+
+        // Filtrer sur l'ingredient impose
+        if (ingredientForce) {
+            const motsForce = SYNONYMES_INGREDIENTS[ingredientForce] || [ingredientForce];
+            brutes = brutes.filter(function(c) {
+                const n = c.nom.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                return motsForce.some(function(m) { return n.indexOf(m) !== -1; });
+            });
+        }
+
+        // Retirer les exclusions
+        if (ingredientsExclus.length > 0) {
+            brutes = brutes.filter(function(c) {
+                const n = c.nom.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                return !ingredientsExclus.some(function(ex) {
+                    const mots = SYNONYMES_INGREDIENTS[ex] || [ex];
+                    return mots.some(function(m) { return n.indexOf(m) !== -1; });
+                });
+            });
+        }
+
+        // Retirer celles deja citees
+        const brutesNeuves = brutes.filter(function(c) {
             const n = c.nom.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-            return motsForce.some(function(m) { return n.indexOf(m) !== -1; });
-        }).slice(0, 5);
+            return dejaCites.indexOf(n) === -1;
+        });
+
+        combinaisons = (brutesNeuves.length >= 3 ? brutesNeuves : brutes).slice(0, 6);
     }
 
     // Melanger le haut du panier pour varier
-    const topRealisables = realisables.slice(0, 10);
-    topRealisables.sort(function() { return Math.random() - 0.5; });
+    const top = realisables.slice(0, 10);
+    top.sort(function() { return Math.random() - 0.5; });
 
     console.log('📋 Réalisables :', realisables.length,
                 '| Presque :', presque.length,
                 '| Combinaisons :', combinaisons.length);
 
     return {
-        realisables: topRealisables.slice(0, 8),
+        realisables: top.slice(0, 8),
         presque: presque.slice(0, 5),
         combinaisons: combinaisons
     };
 }
+
 
 function detecterIngredientExclu(message) {
     const msg = message.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
