@@ -409,6 +409,13 @@
     </p>
 
     <!-- Raccourcis rapides -->
+    <div class="card" style="padding:15px; background:#fff8e1; border:2px solid #ff9800;">
+
+    <b style="color:#ff9800; font-size:15px;">👨‍🍳 LE CHEF</b>
+    <p style="font-size:12px; color:#888; margin:5px 0 12px 0;">
+        Demande-lui ce que tu veux manger
+    </p>
+
     <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px;">
         <button onclick="chefRaccourci('quotidien')"
                 style="flex:1; min-width:85px; background:#ff9800; color:white; border:none; border-radius:10px; padding:11px 6px; cursor:pointer; font-size:12px; font-weight:bold;">
@@ -428,13 +435,11 @@
         </button>
     </div>
 
-    <!-- Zone de conversation -->
-    <div id="chef-conversation" style="background:white; border-radius:12px; padding:12px; margin-bottom:10px; max-height:340px; overflow-y:auto; display:none;"></div>
+    <div id="chef-conversation" style="background:white; border-radius:12px; padding:12px; margin-bottom:10px; max-height:360px; overflow-y:auto; display:none;"></div>
 
-    <!-- Saisie -->
     <div style="display:flex; gap:6px;">
         <input type="text" id="chef-message"
-               placeholder="💬 Un truc rapide sans poisson..."
+               placeholder="💬 Je peux faire une carbonara ?"
                style="flex:1; padding:12px; border:1px solid #ffcc80; border-radius:10px; font-size:14px;"
                onkeypress="if(event.key==='Enter') envoyerMessageChef()">
         <button onclick="envoyerMessageChef()"
@@ -443,7 +448,6 @@
         </button>
     </div>
 
-    <!-- Options -->
     <div style="display:flex; align-items:center; justify-content:space-between; margin-top:10px;">
         <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:#555; cursor:pointer;">
             <input type="checkbox" id="mode-silencieux" style="width:16px; height:16px; cursor:pointer;">
@@ -454,6 +458,10 @@
             🔄 Nouvelle conversation
         </button>
     </div>
+
+    <div id="statut-chef" style="text-align:center; margin-top:8px; font-size:12px; font-weight:bold; min-height:18px; color:#ff9800;"></div>
+</div>
+
 
     <div id="statut-chef" style="text-align:center; margin-top:8px; font-size:12px; font-weight:bold; min-height:18px; color:#ff9800;"></div>
 </div>
@@ -1241,31 +1249,35 @@ async function envoyerMessageChef(modeForce) {
 
     input.value = '';
     zone.style.display = 'block';
-
-    // Afficher le message de l'utilisateur
     ajouterBulleChef(message, 'moi');
     statut.innerText = '👨‍🍳 Le Chef réfléchit...';
 
     try {
-        // Charger le contexte stock si pas encore fait
+        // Recharger le stock a chaque message
+        contexteStock = await construireContexteStock();
+
         if (!contexteStock) {
-            contexteStock = await construireContexteStock();
-        }
-
-        // Detecter le mode a partir du message
-        const mode = modeForce || detecterModeMessage(message);
-
-        // Construire les idees realisables
-        const idees = await construireIdees(mode, contexteStock, message);
-
-        if (idees.length === 0) {
-            ajouterBulleChef("Je ne trouve rien de réalisable avec ton stock actuel. Tu veux que je regarde dans un autre registre ?", 'chef');
+            ajouterBulleChef("Ton stock est vide, je ne peux rien te proposer. Scanne un ticket de caisse pour commencer.", 'chef');
             statut.innerText = '';
             return;
         }
 
-        // Prompt avec historique de conversation
-        const prompt = construirePromptConversation(message, idees, contexteStock, mode);
+        const mode = modeForce || detecterModeMessage(message);
+
+        // Passe le message pour detecter les ingredients imposes ou exclus
+        const idees = await construireIdees(mode, contexteStock, message);
+
+        const rienDuTout = idees.realisables.length === 0
+            && idees.presque.length === 0
+            && idees.combinaisons.length === 0;
+
+        if (rienDuTout) {
+            ajouterBulleChef("Je ne trouve rien qui corresponde avec ce que tu as. Tu veux que je regarde autre chose ?", 'chef');
+            statut.innerText = '';
+            return;
+        }
+
+        const prompt = construirePromptAgent(message, idees, contexteStock, mode);
 
         let reponse = null;
         let tentatives = 0;
@@ -1286,11 +1298,10 @@ async function envoyerMessageChef(modeForce) {
             }
         }
 
-        // Memoriser l'echange
         conversationChef.push({ role: 'moi', texte: message });
         conversationChef.push({ role: 'chef', texte: reponse });
-        if (conversationChef.length > 10) {
-            conversationChef = conversationChef.slice(-10);
+        if (conversationChef.length > 12) {
+            conversationChef = conversationChef.slice(-12);
         }
 
         ajouterBulleChef(reponse, 'chef');
@@ -1311,7 +1322,138 @@ async function envoyerMessageChef(modeForce) {
         statut.innerText = '';
     }
 }
+// ============================================================
+// ANALYSER LES RECETTES
+// Realisables / presque realisables / impossibles
+// ============================================================
+async function analyserRecettes(message, mode, contexte) {
 
+    // Charger TOUTE la base (pas seulement le mode courant)
+    const { data: toutesRecettes } = await monSupabase
+        .from('recettes_chef')
+        .select('nom, mode, ingredients_cles, temps_minutes')
+        .eq('actif', true);
+
+    const basiques = ['sel', 'poivre', 'huile', 'eau', 'beurre', 'sucre',
+                      'farine', 'ail', 'oignon', 'bouillon', 'vinaigrette',
+                      'mayonnaise', 'vanille', 'curry', 'vin'];
+
+    const evaluees = (toutesRecettes || []).map(r => {
+        const necessaires = r.ingredients_cles.filter(i => !basiques.includes(i));
+        const presents = [];
+        const manquants = [];
+
+        necessaires.forEach(ing => {
+            const trouve = contexte.nomsProduits.some(nom => nom.includes(ing));
+            if (trouve) presents.push(ing); else manquants.push(ing);
+        });
+
+        const taux = necessaires.length > 0 ? presents.length / necessaires.length : 1;
+
+        return {
+            nom: r.nom,
+            mode: r.mode,
+            temps: r.temps_minutes,
+            taux,
+            manquants,
+            nbManquants: manquants.length
+        };
+    });
+
+    // Realisables : tout est la
+    const realisables = evaluees
+        .filter(r => r.nbManquants === 0)
+        .sort(() => Math.random() - 0.5);
+
+    // Presque : il manque 1 seul ingredient
+    const presque = evaluees
+        .filter(r => r.nbManquants === 1)
+        .sort((a, b) => b.taux - a.taux);
+
+    // Combinaisons du mode quotidien
+    let combinaisons = [];
+    if (mode === 'quotidien') {
+        const categories = detecterCategories(contexte.nomsProduits);
+        combinaisons = genererCombinaisons(categories, 8);
+    }
+
+    return {
+        // Prioriser le mode demande puis le reste
+        realisablesMode: realisables.filter(r => r.mode === mode).slice(0, 8),
+        realisablesAutres: realisables.filter(r => r.mode !== mode).slice(0, 8),
+        presque: presque.slice(0, 6),
+        combinaisons: combinaisons.slice(0, 6)
+    };
+}
+function construirePromptAgent(message, idees, contexte, mode) {
+
+    let sections = '';
+
+    if (idees.combinaisons.length > 0) {
+        sections += '\nASSIETTES SIMPLES (tu as tout, idéal en semaine) :\n'
+            + idees.combinaisons.map(function(c) { return '- ' + c.nom; }).join('\n') + '\n';
+    }
+
+    if (idees.realisables.length > 0) {
+        sections += '\nPLATS RÉALISABLES (tu as tous les ingrédients) :\n'
+            + idees.realisables.map(function(r) {
+                const urgent = r.utiliseUrgent ? ' [utilise un produit à finir]' : '';
+                return '- ' + r.nom + ' (' + r.temps + ' min)' + urgent;
+              }).join('\n') + '\n';
+    }
+
+    if (idees.presque.length > 0) {
+        sections += '\nPRESQUE RÉALISABLES (il manque UN ingrédient) :\n'
+            + idees.presque.map(function(r) {
+                return '- ' + r.nom + ' — il manque : ' + r.manquants.join(', ');
+              }).join('\n') + '\n';
+    }
+
+    let historique = '';
+    if (conversationChef.length > 0) {
+        historique = '\nCONVERSATION EN COURS :\n'
+            + conversationChef.map(function(c) {
+                return (c.role === 'moi' ? 'Utilisateur : ' : 'Toi : ') + c.texte;
+              }).join('\n') + '\n';
+    }
+
+    return `Tu es le Chef, un assistant cuisine familier, direct et honnête.
+Tu connais exactement le contenu du frigo et des placards de l'utilisateur.
+
+STOCK DISPONIBLE :
+${contexte.texte}
+
+CE QUE TU PEUX PROPOSER :
+${sections}
+${historique}
+DEMANDE DE L'UTILISATEUR : "${message}"
+
+COMMENT RÉPONDRE :
+
+Si l'utilisateur demande un plat PRÉCIS :
+- S'il figure dans les réalisables : confirme et propose-le.
+- S'il figure dans les "presque réalisables" : dis franchement ce qui manque,
+  puis propose soit de le faire sans, soit une alternative de la liste.
+  Exemple : "Il te manque la crème pour la carbonara. Tu peux la faire à
+  l'italienne sans crème, ou sinon je te fais des pâtes aux lardons."
+- S'il n'apparaît nulle part : dis-lui que tu n'as pas de quoi, en une phrase,
+  et propose une alternative proche prise dans les listes.
+
+Si l'utilisateur demande une idée générale :
+- Propose 3 idées prises dans les listes ci-dessus.
+- En mode quotidien, privilégie les assiettes simples : au moins 2 sur 3.
+- Termine par "Lequel te tente ?"
+
+Si un plat utilise un produit marqué [utilise un produit à finir], mentionne-le
+brièvement : c'est un bon argument pour éviter le gaspillage.
+
+RÈGLES ABSOLUES :
+- Ne propose JAMAIS un plat absent des listes ci-dessus.
+- Ne prétends jamais qu'un ingrédient est disponible s'il ne l'est pas.
+- Écris les noms des plats exactement comme dans les listes.
+- Pas de markdown, pas de gras, pas d'astérisques, pas de listes à puces.
+- Trois phrases maximum. Ton naturel, comme un pote qui cuisine bien.`;
+}
 
 // ============================================================
 // AFFICHER UNE BULLE DE CONVERSATION
@@ -1334,7 +1476,7 @@ function ajouterBulleChef(texte, qui) {
     bulle.appendChild(contenu);
     zone.appendChild(bulle);
 
-    // Boutons de choix si le chef propose des plats
+    // Boutons de choix seulement si plusieurs propositions
     if (!estMoi && /lequel te tente/i.test(texte)) {
         const boutons = document.createElement('div');
         boutons.style.cssText = 'display:flex; gap:6px; margin:0 0 12px 0; flex-wrap:wrap;';
@@ -1368,7 +1510,6 @@ async function construireContexteStock() {
         p.nom.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     );
 
-    // Produits urgents
     const urgents = produits.filter(p => {
         if (p.etat === 'Entamé') return true;
         if (!p.date_peremption) return false;
@@ -1403,165 +1544,227 @@ function detecterModeMessage(message) {
 
     return 'quotidien';
 }
-
 // ============================================================
-// CONSTRUIRE LES IDEES (Version Conversationnelle & Intelligente)
+// SYNONYMES D'INGREDIENTS
+// Declares au niveau global pour etre reutilisables
 // ============================================================
+const SYNONYMES_INGREDIENTS = {
+    'pate':         ['pate', 'pates', 'spaghetti', 'coquillette', 'macaroni', 'tagliatelle', 'torsade', 'penne', 'vermicelle'],
+    'riz':          ['riz', 'basmati', 'risotto'],
+    'viande':       ['steak', 'hache', 'boeuf', 'viande'],
+    'steak hache':  ['steak', 'hache'],
+    'poulet':       ['poulet', 'filet', 'cuisse'],
+    'dinde':        ['dinde', 'escalope'],
+    'poisson':      ['colin', 'saumon', 'thon', 'poisson', 'baton', 'cabillaud', 'maquereau'],
+    'colin':        ['colin', 'poisson', 'baton'],
+    'pomme de terre': ['pomme de terre', 'puree', 'dauphin', 'rosti'],
+    'frite':        ['frite'],
+    'cordon bleu':  ['cordon'],
+    'lardon':       ['lardon', 'bacon', 'poitrine'],
+    'oeuf':         ['oeuf'],
+    'fromage':      ['fromage', 'emmental', 'gruyere', 'rape', 'comte'],
+    'creme':        ['creme'],
+    'jambon':       ['jambon'],
+    'saucisse':     ['saucisse', 'knacki', 'chipolata', 'merguez'],
+    'haricot vert': ['haricot vert', 'haricots verts'],
+    'petits pois':  ['petits pois', 'petit pois'],
+    'tomate':       ['tomate', 'coulis', 'concasse'],
+    'legume':       ['legume', 'poelee', 'julienne'],
+    'champignon':   ['champignon'],
+    'carotte':      ['carotte'],
+    'courgette':    ['courgette'],
+    'brocoli':      ['brocoli'],
+    'salade':       ['salade', 'laitue', 'batavia'],
+    'pain de mie':  ['pain de mie', 'mie'],
+    'lentille':     ['lentille'],
+    'chocolat':     ['chocolat'],
+    'yaourt':       ['yaourt']
+};
 // ============================================================
 // CONSTRUIRE LES IDEES (Version Conversationnelle & Anti-Bug)
 // ============================================================
-async function construireIdees(mode, contexte, messageUtilisateur = "") {
-    // 1. Récupérer les recettes depuis Supabase
+async function construireIdees(mode, contexte, messageUtilisateur) {
+    messageUtilisateur = messageUtilisateur || '';
+
     const { data: recettes, error } = await monSupabase
         .from('recettes_chef')
-        .select('nom, ingredients_cles, temps_minutes')
+        .select('nom, mode, ingredients_cles, temps_minutes')
         .eq('actif', true);
 
     if (error || !recettes) {
         console.error('Erreur chargement recettes :', error);
-        return [];
+        return { realisables: [], presque: [], combinaisons: [] };
     }
 
     const basiques = ['sel', 'poivre', 'huile', 'eau', 'beurre', 'sucre',
                       'farine', 'ail', 'oignon', 'bouillon', 'vinaigrette',
                       'mayonnaise', 'vanille', 'curry', 'vin', 'lait'];
 
-    const synonymes = {
-        'pate': ['pates', 'spaghetti', 'coquillettes', 'macaroni', 'tagliatelle'],
-        'viande': ['steak', 'hache', 'boeuf', 'viande'],
-        'poulet': ['filet', 'poulet', 'dinde', 'escalope'],
-        'poisson': ['colin', 'saumon', 'thon', 'poisson', 'baton'],
-        'pomme': ['terre', 'frite', 'dauphin', 'pomme'],
-        'cordon bleu': ['cordon', 'bleu']
-    };
+    const ingredientForce = detecterIngredientForce(messageUtilisateur);
+    const ingredientsExclus = detecterIngredientExclu(messageUtilisateur);
 
-    function matchIngredient(ingRecherche, stockNoms) {
-        const motsCles = synonymes[ingRecherche] || [ingRecherche];
-        return stockNoms.some(stockItem => motsCles.some(m => stockItem.includes(m)));
-    }
+    console.log('🔍 Forcé :', ingredientForce, '| Exclus :', ingredientsExclus);
 
-    // 2. Détecter si l'utilisateur impose un ingrédient dans sa phrase (ex: "avec du riz")
-    const msgNorm = messageUtilisateur.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    let ingredientForce = null;
+    // ── EVALUER CHAQUE RECETTE ──
+    const evaluees = recettes.map(function(r) {
+        const necessaires = r.ingredients_cles.filter(function(i) {
+            return basiques.indexOf(i) === -1;
+        });
 
-    for (const [cle, motsCles] of Object.entries(synonymes)) {
-        if (motsCles.some(m => msgNorm.includes(m))) {
-            ingredientForce = cle;
-            break;
-        }
-    }
-    // Sécurité supplémentaire pour des mots courants non-présents dans les synonymes exacts
-    if (!ingredientForce) {
-        if (msgNorm.includes('riz')) ingredientForce = 'riz';
-        else if (msgNorm.includes('oeuf')) ingredientForce = 'oeuf';
-        else if (msgNorm.includes('lardon')) ingredientForce = 'lardon';
-    }
+        // Exclusion demandee par l'utilisateur
+        const estExclue = ingredientsExclus.some(function(ex) {
+            return r.ingredients_cles.some(function(i) {
+                const mots = SYNONYMES_INGREDIENTS[ex] || [ex];
+                return mots.some(function(m) { return i.indexOf(m) !== -1; });
+            });
+        });
+        if (estExclue) return null;
 
-    // 3. Traiter et filtrer les recettes candidates
-    const candidates = recettes.map(r => {
-        const necessaires = r.ingredients_cles.filter(i => !basiques.includes(i));
-        
-        if (necessaires.length === 0) {
-            return { nom: r.nom, temps: r.temps_minutes, score: 5, estCombinaison: false };
-        }
-
-        // 🚨 RÈGLE 1 : Si l'utilisateur force un ingrédient, la recette DOIT contenir cet ingrédient
+        // Ingredient impose : la recette doit le contenir
+        let repondALaDemande = false;
         if (ingredientForce) {
-            const contientForce = r.ingredients_cles.some(i => i.includes(ingredientForce)) || 
-                                  r.nom.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').includes(ingredientForce);
-            if (!contientForce) return null; // On rejette tout ce qui ne correspond pas à la demande
+            const motsForce = SYNONYMES_INGREDIENTS[ingredientForce] || [ingredientForce];
+            const nomNorm = r.nom.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            repondALaDemande = r.ingredients_cles.some(function(i) {
+                return motsForce.some(function(m) { return i.indexOf(m) !== -1; });
+            }) || motsForce.some(function(m) { return nomNorm.indexOf(m) !== -1; });
+
+            if (!repondALaDemande) return null;
         }
 
-        // 🚨 RÈGLE 2 : Le premier ingrédient est le cœur du plat (ex: tomate, poulet, saumon...)
-        const ingredientPrincipal = necessaires[0];
-        const aLePrincipal = matchIngredient(ingredientPrincipal, contexte.nomsProduits);
-        
-        // Si on n'a pas le principal ET qu'on ne force pas un ingrédient spécifique, on écarte
-        if (!aLePrincipal && !ingredientForce) {
-            return null;
-        }
+        // Presence des ingredients
+        const presents = [];
+        const manquants = [];
+        necessaires.forEach(function(ing) {
+            if (matchIngredient(ing, contexte.nomsProduits)) presents.push(ing);
+            else manquants.push(ing);
+        });
 
-        // Calculer le taux de présence des ingrédients nécessaires
-        const presents = necessaires.filter(ing => matchIngredient(ing, contexte.nomsProduits));
-        const taux = presents.length / necessaires.length;
+        const taux = necessaires.length > 0 ? presents.length / necessaires.length : 1;
 
-        // Bonus si un ingrédient est dans les produits URGENTS du frigo
-        const utiliseUrgent = necessaires.some(ing => 
-            contexte.urgents.some(u => u.nom.toLowerCase().includes(ing))
-        );
+        // L'ingredient principal doit toujours etre present
+        const principalPresent = necessaires.length === 0
+            || matchIngredient(necessaires[0], contexte.nomsProduits);
+
+        // Bonus produits urgents
+        const utiliseUrgent = necessaires.some(function(ing) {
+            return contexte.urgents.some(function(u) {
+                const nomU = u.nom.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                const mots = SYNONYMES_INGREDIENTS[ing] || [ing];
+                return mots.some(function(m) { return nomU.indexOf(m) !== -1; });
+            });
+        });
 
         let score = taux * 10;
         if (utiliseUrgent) score += 5;
-        if (ingredientForce) score += 20; // Gros bonus si ça répond pile à la demande
+        if (repondALaDemande) score += 20;
+        if (r.mode === mode) score += 3;
 
         return {
             nom: r.nom,
+            mode: r.mode,
             temps: r.temps_minutes,
-            taux,
-            utiliseUrgent,
-            score,
+            taux: taux,
+            manquants: manquants,
+            nbManquants: manquants.length,
+            principalPresent: principalPresent,
+            utiliseUrgent: utiliseUrgent,
+            score: score,
             estCombinaison: false
         };
-    }).filter(r => r !== null); // Nettoyage des recettes rejetées
+    }).filter(function(r) { return r !== null; });
 
-    // 4. Trier par pertinence / score
-    candidates.sort((a, b) => b.score - a.score);
+    // ── REALISABLES : tout est en stock ──
+    const realisables = evaluees
+        .filter(function(r) { return r.nbManquants === 0; })
+        .sort(function(a, b) { return b.score - a.score; });
 
-    // Retourner un top 6 varié
-    const topSelection = candidates.slice(0, 6);
-    topSelection.sort(() => Math.random() - 0.5);
+    // ── PRESQUE : il manque un seul ingredient, mais on a le principal ──
+    const presque = evaluees
+        .filter(function(r) { return r.nbManquants === 1 && r.principalPresent; })
+        .sort(function(a, b) { return b.score - a.score; });
 
-    return topSelection;
-}
-// ============================================================
-// CONSTRUIRE LE PROMPT AVEC HISTORIQUE
-// ============================================================
-function construirePromptConversation(message, idees, contexte, mode) {
-
-    const listeIdees = idees
-        .map((p, i) => `${i + 1}. ${p.nom} (${p.temps} min)${p.estCombinaison ? ' [assiette simple]' : ''}`)
-        .join('\n');
-
-    // Historique de la conversation
-    let historique = '';
-    if (conversationChef.length > 0) {
-        historique = '\nCONVERSATION EN COURS :\n'
-            + conversationChef.map(c =>
-                (c.role === 'moi' ? 'Utilisateur : ' : 'Toi : ') + c.texte
-              ).join('\n')
-            + '\n';
+    // ── COMBINAISONS (mode quotidien) ──
+    let combinaisons = [];
+    if (mode === 'quotidien' && !ingredientForce) {
+        const categories = detecterCategories(contexte.nomsProduits);
+        combinaisons = genererCombinaisons(categories, 8).slice(0, 6);
+    } else if (mode === 'quotidien' && ingredientForce) {
+        // Garder seulement les combinaisons contenant l'ingredient demande
+        const categories = detecterCategories(contexte.nomsProduits);
+        const motsForce = SYNONYMES_INGREDIENTS[ingredientForce] || [ingredientForce];
+        combinaisons = genererCombinaisons(categories, 10).filter(function(c) {
+            const n = c.nom.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            return motsForce.some(function(m) { return n.indexOf(m) !== -1; });
+        }).slice(0, 5);
     }
 
-    const regleAssiettes = mode === 'quotidien'
-        ? `\n- Privilégie les idées marquées [assiette simple] : c'est ce que l'utilisateur mange le plus souvent en semaine. Au moins 2 sur 3.`
-        : '';
+    // Melanger le haut du panier pour varier
+    const topRealisables = realisables.slice(0, 10);
+    topRealisables.sort(function() { return Math.random() - 0.5; });
 
-    return `Tu es le Chef, un assistant cuisine familier et direct.
-Tu aides l'utilisateur à décider quoi manger avec ce qu'il a chez lui.
+    console.log('📋 Réalisables :', realisables.length,
+                '| Presque :', presque.length,
+                '| Combinaisons :', combinaisons.length);
 
-STOCK DISPONIBLE :
-${contexte.texte}
-
-IDÉES RÉALISABLES — tu ne peux proposer QUE celles-ci :
-${listeIdees}
-${historique}
-NOUVELLE DEMANDE DE L'UTILISATEUR : "${message}"
-
-RÈGLES :
-- Réponds naturellement, comme dans une conversation. Pas de liste à puces.
-- Propose exactement 3 idées choisies UNIQUEMENT dans la liste ci-dessus.
-- Tiens compte de la demande : si l'utilisateur exclut un aliment, ne le propose pas. S'il veut du rapide, prends les temps les plus courts.
-- Si la conversation a déjà eu lieu, ne reproposez pas les mêmes plats.
-- Si l'utilisateur dit non ou demande autre chose, propose vraiment autre chose.${regleAssiettes}
-- Écris les noms des plats exactement comme dans la liste, sans les marqueurs entre crochets ni les durées.
-- PAS de markdown, PAS de gras, PAS d'astérisques.
-- Deux phrases maximum.
-- Termine par : "Lequel te tente ?"
-RÈGLE ABSOLUE DE COHÉRENCE : Si l'utilisateur demande "quoi d'autre avec [ingrédient]" (ex: du riz), tu DOIS proposer UNIQUEMENT des plats de la liste qui contiennent cet ingrédient. Ne propose JAMAIS de plats sans cet ingrédient (interdiction de proposer des pâtes si l'utilisateur demande du riz).
-- Si la liste fournie ci-dessus ne contient pas assez d'options avec cet ingrédient, dis-le clairement au lieu de proposer autre chose.`;
+    return {
+        realisables: topRealisables.slice(0, 8),
+        presque: presque.slice(0, 5),
+        combinaisons: combinaisons
+    };
 }
 
+function detecterIngredientExclu(message) {
+    const msg = message.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const exclusions = [];
 
+    const regex = /\b(sans|pas de|pas d|aucun)\s+([a-z]+)/g;
+    let m;
+    while ((m = regex.exec(msg)) !== null) {
+        const mot = m[2];
+        for (const cle in SYNONYMES_INGREDIENTS) {
+            if (SYNONYMES_INGREDIENTS[cle].some(function(s) { return s.indexOf(mot) === 0; })) {
+                exclusions.push(cle);
+            }
+        }
+    }
+
+    return exclusions;
+}
+
+// ============================================================
+// DETECTER UN INGREDIENT IMPOSE DANS LA DEMANDE
+// Cherche des tournures explicites, pas juste la presence du mot
+// ============================================================
+function detecterIngredientForce(message) {
+    const msg = message.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+    // Si la phrase exclut, on ne force pas
+    if (/\b(sans|pas de|pas d|aucun|eviter)\b/.test(msg)) return null;
+
+    // Tournures qui indiquent une envie precise
+    const marqueurs = /\b(avec|envie de|envie d|je veux|plutot|a base de|du|de la|des)\s+/;
+    if (!marqueurs.test(msg)) return null;
+
+    for (const cle in SYNONYMES_INGREDIENTS) {
+        const mots = SYNONYMES_INGREDIENTS[cle];
+        const trouve = mots.some(function(m) {
+            return new RegExp('\\b' + m).test(msg);
+        });
+        if (trouve) return cle;
+    }
+
+    return null;
+}
+// ============================================================
+// TESTER SI UN INGREDIENT EST PRESENT DANS LE STOCK
+// ============================================================
+function matchIngredient(ingRecherche, stockNoms) {
+    const motsCles = SYNONYMES_INGREDIENTS[ingRecherche] || [ingRecherche];
+    return stockNoms.some(function(stockItem) {
+        return motsCles.some(function(m) { return stockItem.indexOf(m) !== -1; });
+    });
+}
 // ============================================================
 // REINITIALISER LA CONVERSATION
 // ============================================================
