@@ -1414,12 +1414,14 @@ function detecterModeMessage(message) {
 // ============================================================
 // CONSTRUIRE LES IDEES REALISABLES (Version Anti-Aberration)
 // ============================================================
-async function construireIdees(mode, contexte) {
+// ============================================================
+// CONSTRUIRE LES IDEES (Version Conversationnelle & Intelligente)
+// ============================================================
+async function construireIdees(mode, contexte, messageUtilisateur = "") {
     const { data: recettes, error } = await monSupabase
         .from('recettes_chef')
         .select('nom, ingredients_cles, temps_minutes')
-        .eq('mode', mode)
-        .eq('actif', true);
+        .eq('actif', true); // On peut même élargir à tous les modes si la discussion est ouverte
 
     if (error || !recettes) return [];
 
@@ -1432,7 +1434,8 @@ async function construireIdees(mode, contexte) {
         'viande': ['steak', 'hache', 'boeuf', 'viande'],
         'poulet': ['filet', 'poulet', 'dinde', 'escalope'],
         'poisson': ['colin', 'saumon', 'thon', 'poisson', 'baton'],
-        'pomme': ['terre', 'frite', 'dauphin', 'pomme']
+        'pomme': ['terre', 'frite', 'dauphin', 'pomme'],
+        'cordon bleu': ['cordon', 'bleu']
     };
 
     function matchIngredient(ingRecherche, stockNoms) {
@@ -1440,55 +1443,54 @@ async function construireIdees(mode, contexte) {
         return stockNoms.some(stockItem => motsCles.some(m => stockItem.includes(m)));
     }
 
+    // 🔍 NOUVEAU : Est-ce que l'utilisateur cite un ingrédient particulier dans sa phrase ?
+    const msgNorm = messageUtilisateur.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    let ingredientForce = null;
+    
+    // On cherche si un ingrédient clé connu est présent dans le message de l'utilisateur
+    for (const [cle, motsCles] of Object.entries(synonymes)) {
+        if (motsCles.some(m => msgNorm.includes(m))) {
+            ingredientForce = cle;
+            break;
+        }
+    }
+
     const candidates = recettes.map(r => {
         const necessaires = r.ingredients_cles.filter(i => !basiques.includes(i));
-        
-        if (necessaires.length === 0) {
-            return { nom: r.nom, temps: r.temps_minutes, score: 5, estCombinaison: false };
-        }
+        if (necessaires.length === 0) return { nom: r.nom, temps: r.temps_minutes, score: 5 };
 
-        // 🚨 RÈGLE D'OR : Le PREMIER ingrédient de la liste est le cœur du plat (ex: 'tomate' pour tomates farcies)
-        // S'il n'est pas dans le frigo, la recette est purement et simplement rejetée (score = 0)
+        // Règle d'or : le premier ingrédient est le cœur du plat
         const ingredientPrincipal = necessaires[0];
         const aLePrincipal = matchIngredient(ingredientPrincipal, contexte.nomsProduits);
         
-        if (!aLePrincipal) {
-            return null; // On dégage la recette tout de suite
+        // EXCEPTION : Si l'utilisateur force un ingrédient dans sa phrase (ex: "avec des cordons bleus"),
+        // on s'assure que la recette l'utilise !
+        if (ingredientForce && !r.ingredients_cles.some(i => i.includes(ingredientForce))) {
+            return null; // On écarte ce qui ne correspond pas à sa demande textuelle
         }
 
-        // Pour le reste des ingrédients, on calcule le taux de présence
+        if (!aLePrincipal && !ingredientForce) return null;
+
         const presents = necessaires.filter(ing => matchIngredient(ing, contexte.nomsProduits));
         const taux = presents.length / necessaires.length;
-
-        // Bonus si un ingrédient est urgent
-        const utiliseUrgent = necessaires.some(ing => 
-            contexte.urgents.some(u => u.nom.toLowerCase().includes(ing))
-        );
-
+        
         let score = taux * 10;
-        if (utiliseUrgent) score += 5;
+        // Si la recette contient l'ingrédient demandé par l'utilisateur, on met un score maximal !
+        if (ingredientForce && r.ingredients_cles.some(i => i.includes(ingredientForce))) {
+            score += 20; 
+        }
 
         return {
             nom: r.nom,
             temps: r.temps_minutes,
             taux,
-            utiliseUrgent,
-            score,
-            estCombinaison: false
+            score
         };
-    }).filter(r => r !== null); // On nettoie les recettes rejetées (null)
+    }).filter(r => r !== null);
 
-    // Filtrer pour ne garder que les recettes faisables à au moins 75%
-    let faisables = candidates.filter(r => r.taux >= 0.75);
-
-    faisables.sort((a, b) => b.score - a.score);
-
-    const topSelection = faisables.slice(0, 6);
-    topSelection.sort(() => Math.random() - 0.5);
-
-    return topSelection;
+    candidates.sort((a, b) => b.score - a.score);
+    return candidates.slice(0, 6);
 }
-
 // ============================================================
 // CONSTRUIRE LE PROMPT AVEC HISTORIQUE
 // ============================================================
