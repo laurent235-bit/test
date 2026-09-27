@@ -1325,10 +1325,15 @@ async function analyserRecettes(message, mode, contexte) {
 }
 function construirePromptAgent(message, idees, contexte, mode) {
 
+    // Compter les propositions disponibles
+    const nbTotal = idees.combinaisons.length
+                  + idees.realisables.length
+                  + idees.presque.length;
+
     let sections = '';
 
     if (idees.combinaisons.length > 0) {
-        sections += '\nASSIETTES SIMPLES (tu as tout, idéal en semaine) :\n'
+        sections += '\nASSIETTES SIMPLES (tu as tout) :\n'
             + idees.combinaisons.map(function(c) { return '- ' + c.nom; }).join('\n') + '\n';
     }
 
@@ -1341,9 +1346,9 @@ function construirePromptAgent(message, idees, contexte, mode) {
     }
 
     if (idees.presque.length > 0) {
-        sections += '\nPRESQUE RÉALISABLES (il manque UN ingrédient) :\n'
+        sections += '\nNON RÉALISABLES — il manque un ingrédient :\n'
             + idees.presque.map(function(r) {
-                return '- ' + r.nom + ' — il manque : ' + r.manquants.join(', ');
+                return '- ' + r.nom + ' — MANQUE : ' + r.manquants.join(', ');
               }).join('\n') + '\n';
     }
 
@@ -1355,16 +1360,22 @@ function construirePromptAgent(message, idees, contexte, mode) {
                 return (c.role === 'moi' ? 'Utilisateur : ' : 'Toi : ') + c.texte;
               }).join('\n') + '\n';
 
-        interdits = `\nIMPORTANT : tu as déjà proposé des plats dans cette conversation.
-Si l'utilisateur demande "autre chose", "et encore", "d'autres idées" ou équivalent,
-propose des plats DIFFÉRENTS de tout ce que tu as déjà cité.
+        interdits = `\nTu as déjà proposé des plats dans cette conversation.
+Si l'utilisateur demande autre chose, propose des plats DIFFÉRENTS.
 Ne répète jamais une proposition précédente, même reformulée.\n`;
     }
+
+    // Consigne sur le nombre de propositions
+    const consigneNombre = nbTotal >= 3
+        ? 'Propose 3 idées différentes.'
+        : (nbTotal === 2
+            ? 'Tu n\'as que 2 idées possibles : propose-les toutes les deux et dis qu\'il n\'y a pas plus de choix avec le stock actuel.'
+            : 'Tu n\'as qu\'une seule idée possible : propose-la et dis franchement que c\'est la seule option avec le stock actuel.');
 
     return `Tu es le Chef, un assistant cuisine familier, direct et honnête.
 Tu connais exactement le contenu du frigo et des placards de l'utilisateur.
 
-STOCK DISPONIBLE (pour ton information uniquement) :
+STOCK DISPONIBLE (information interne, ne le récite pas) :
 ${contexte.texte}
 
 CE QUE TU PEUX PROPOSER :
@@ -1372,49 +1383,54 @@ ${sections}
 ${historique}${interdits}
 DEMANDE DE L'UTILISATEUR : "${message}"
 
+NOMBRE DE PROPOSITIONS :
+${consigneNombre}
+Ne propose JAMAIS deux fois le même plat dans une même réponse.
+S'il n'y a qu'une ou deux idées possibles, dis-le franchement plutôt que de te répéter.
+
 COMMENT RÉPONDRE :
 
 Si l'utilisateur demande un plat PRÉCIS :
-- S'il figure dans les réalisables : confirme et propose-le.
-- S'il figure dans les "presque réalisables" : dis franchement ce qui manque,
-  puis propose soit de le faire sans, soit une alternative de la liste.
-  Exemple : "Il te manque la crème pour la carbonara. Tu peux la faire à
-  l'italienne sans crème, ou sinon je te fais des pâtes aux lardons."
-- S'il n'apparaît nulle part : dis-lui en une phrase que tu n'as pas de quoi,
-  et propose une alternative proche prise dans les listes.
+- S'il est dans les réalisables : confirme et propose-le.
+- S'il est dans les NON RÉALISABLES : dis clairement ce qui manque, puis propose
+  une alternative réalisable.
+  Exemple : "Il te manque la crème pour la carbonara. Par contre je peux te faire
+  des pâtes aux lardons."
+- S'il n'apparaît nulle part : dis en une phrase que tu n'as pas de quoi, et
+  propose une alternative des listes.
 
 Si l'utilisateur demande une idée générale :
-- Propose 3 idées prises dans les listes ci-dessus.
-- En mode quotidien, privilégie les assiettes simples : au moins 2 sur 3.
+- Propose des idées prises dans les listes.
+- En mode quotidien, privilégie les assiettes simples.
 - Termine par "Lequel te tente ?"
 
 NOMS DES PLATS — RÈGLE STRICTE :
-Le STOCK ci-dessus contient les noms bruts des produits tels qu'ils figurent sur
-les tickets de caisse. Ces noms sont laids et techniques.
+Le STOCK contient les noms bruts des tickets de caisse, laids et techniques.
 N'utilise JAMAIS ces noms dans ta réponse.
-Écris uniquement les noms des plats tels qu'ils apparaissent dans les listes
-de propositions, sans les durées ni les mentions entre crochets.
+Écris uniquement les noms des plats tels qu'ils figurent dans les listes,
+sans les durées ni les mentions entre crochets.
 
-Exemple de ce qu'il ne faut PAS faire :
-  "Panes colin Alaska MSC avec des Frites Classiques 1kg"
-Exemple correct :
-  "du poisson pané avec des frites"
-
-Ne propose jamais deux fois le même plat dans une même réponse, même si deux
-produits différents du stock y correspondent.
+Mauvais : "Panes colin Alaska MSC avec des Frites Classiques 1kg"
+Correct : "du poisson pané avec des frites"
 
 PRODUITS À FINIR :
 Certains plats portent la mention [permet de finir : nom du produit].
-Tu peux le signaler brièvement en nommant ce produit précis.
-N'invente JAMAIS qu'un plat permet de finir un produit : sans la mention,
-n'en parle pas du tout.
+Tu peux le signaler en nommant ce produit précis, et uniquement celui-là.
+Si la mention est absente, ne parle PAS de produit à finir.
+N'invente jamais qu'un plat permet de finir quelque chose.
+
+COHÉRENCE :
+Les plats de la section NON RÉALISABLES ne sont PAS faisables.
+Ne dis jamais qu'ils permettent de finir un produit, puisqu'ils manquent
+justement d'un ingrédient.
 
 RÈGLES ABSOLUES :
-- Ne propose JAMAIS un plat absent des listes ci-dessus.
+- Ne propose JAMAIS un plat absent des listes.
 - Ne prétends jamais qu'un ingrédient est disponible s'il ne l'est pas.
-- Pas de markdown, pas de gras, pas d'astérisques, pas de listes à puces.
+- Pas de markdown, pas de gras, pas d'astérisques.
 - Trois phrases maximum. Ton naturel, comme un pote qui cuisine bien.`;
 }
+
 
 
 // ============================================================
@@ -1617,13 +1633,23 @@ async function construireIdees(mode, contexte, messageUtilisateur) {
             || matchIngredient(necessaires[0], contexte.nomsProduits);
 
         // ── PRODUIT URGENT REELLEMENT UTILISE ──
-        // Matching strict sur mots entiers pour eviter les faux positifs
+        // On ne signale que les produits perissables du frigo,
+        // jamais l'ingredient principal du plat (evident),
+        // jamais les produits secs du placard.
         let produitUrgentUtilise = null;
-        for (let i = 0; i < presents.length; i++) {
-            const ing = presents[i];
+
+        // On ignore le premier ingredient : c'est la base du plat,
+        // inutile de dire "les pates permettent de finir les pates"
+        const ingredientsSecondaires = presents.slice(1);
+
+        for (let i = 0; i < ingredientsSecondaires.length; i++) {
+            const ing = ingredientsSecondaires[i];
             const mots = SYNONYMES_INGREDIENTS[ing] || [ing];
 
             const trouve = contexte.urgents.find(function(u) {
+                // Uniquement les produits du frigo
+                if (u.emplacement !== 'FRIGO') return false;
+
                 const nomU = u.nom.toLowerCase()
                     .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
                 const motsProduit = nomU.split(/[\s,\-'()]+/);
