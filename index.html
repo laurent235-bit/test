@@ -1411,25 +1411,22 @@ function detecterModeMessage(message) {
 // ============================================================
 // CONSTRUIRE LES IDEES REALISABLES (Version Optimisée Quotidien)
 // ============================================================
+// ============================================================
+// CONSTRUIRE LES IDEES REALISABLES (Version Anti-Aberration)
+// ============================================================
 async function construireIdees(mode, contexte) {
-    // 1. Récupérer les recettes du mode demandé
     const { data: recettes, error } = await monSupabase
         .from('recettes_chef')
         .select('nom, ingredients_cles, temps_minutes')
         .eq('mode', mode)
         .eq('actif', true);
 
-    if (error || !recettes) {
-        console.error('Erreur chargement recettes :', error);
-        return [];
-    }
+    if (error || !recettes) return [];
 
-    // Invariables de cuisine (ne bloquent pas si absents du stock)
     const basiques = ['sel', 'poivre', 'huile', 'eau', 'beurre', 'sucre',
                       'farine', 'ail', 'oignon', 'bouillon', 'vinaigrette',
                       'mayonnaise', 'vanille', 'curry', 'vin', 'lait'];
 
-    // Dictionnaire de synonymes pour éviter les blocages bêtes (ex: pates = spaghetti = coquillettes)
     const synonymes = {
         'pate': ['pates', 'spaghetti', 'coquillettes', 'macaroni', 'tagliatelle'],
         'viande': ['steak', 'hache', 'boeuf', 'viande'],
@@ -1439,32 +1436,37 @@ async function construireIdees(mode, contexte) {
     };
 
     function matchIngredient(ingRecherche, stockNoms) {
-        // Vérifie si l'ingrédient recherché est présent dans le stock ou via ses synonymes
         const motsCles = synonymes[ingRecherche] || [ingRecherche];
         return stockNoms.some(stockItem => motsCles.some(m => stockItem.includes(m)));
     }
 
-    // 2. Évaluer chaque recette par rapport au stock réel
     const candidates = recettes.map(r => {
-        // Isoler les ingrédients non-basiques nécessaires
         const necessaires = r.ingredients_cles.filter(i => !basiques.includes(i));
         
         if (necessaires.length === 0) {
             return { nom: r.nom, temps: r.temps_minutes, score: 5, estCombinaison: false };
         }
 
-        // Compter combien d'ingrédients nécessaires sont présents dans le frigo/placard
+        // 🚨 RÈGLE D'OR : Le PREMIER ingrédient de la liste est le cœur du plat (ex: 'tomate' pour tomates farcies)
+        // S'il n'est pas dans le frigo, la recette est purement et simplement rejetée (score = 0)
+        const ingredientPrincipal = necessaires[0];
+        const aLePrincipal = matchIngredient(ingredientPrincipal, contexte.nomsProduits);
+        
+        if (!aLePrincipal) {
+            return null; // On dégage la recette tout de suite
+        }
+
+        // Pour le reste des ingrédients, on calcule le taux de présence
         const presents = necessaires.filter(ing => matchIngredient(ing, contexte.nomsProduits));
         const taux = presents.length / necessaires.length;
 
-        // Bonus si un des ingrédients de la recette fait partie des PRODUITS URGENTS à écouler
+        // Bonus si un ingrédient est urgent
         const utiliseUrgent = necessaires.some(ing => 
             contexte.urgents.some(u => u.nom.toLowerCase().includes(ing))
         );
 
-        // On calcule un score de pertinence
         let score = taux * 10;
-        if (utiliseUrgent) score += 5; // Gros bonus anti-gaspi / urgence
+        if (utiliseUrgent) score += 5;
 
         return {
             nom: r.nom,
@@ -1474,27 +1476,17 @@ async function construireIdees(mode, contexte) {
             score,
             estCombinaison: false
         };
-    });
+    }).filter(r => r !== null); // On nettoie les recettes rejetées (null)
 
-    // Filtrer pour ne garder que ce qui est réalisable à au moins 60-70% (ou 100% si pas de basiques)
-    let faisables = candidates.filter(r => r.taux >= 0.6);
+    // Filtrer pour ne garder que les recettes faisables à au moins 75%
+    let faisables = candidates.filter(r => r.taux >= 0.75);
 
-    // Trier par score (les plus urgents et les mieux assortis en premier)
     faisables.sort((a, b) => b.score - a.score);
 
-    // Mélanger un tout petit peu le top pour ne pas toujours proposer exactement la même chose
-    // (on mélange juste les 5 premiers par exemple)
     const topSelection = faisables.slice(0, 6);
     topSelection.sort(() => Math.random() - 0.5);
 
-    // 3. Gestion spécifique pour le mode "quotidien" : injecter des assemblages express si besoin
-    if (mode === 'quotidien') {
-        // Si on a des produits d'inventaire, on peut aussi s'assurer d'avoir un mix sympa
-        const combiQuotidien = topSelection.slice(0, 8);
-        return combiQuotidien;
-    }
-
-    return faisables.slice(0, 10);
+    return topSelection;
 }
 
 // ============================================================
