@@ -3230,12 +3230,11 @@ async function passerEtapeDate() {
     etapeActuelle = 'date';
 
     document.getElementById('titre-etape').innerText = '2️⃣ PHOTOGRAPHIE LA DATE';
-    traiter.getElementById('soustitre-etape').innerText = 'Tourne l\'emballage vers la date';
+    document.getElementById('soustitre-etape').innerText = 'Tourne l\'emballage vers la date';
     document.getElementById('zone-codebarre').style.display = 'none';
     document.getElementById('zone-date').style.display = 'block';
     document.getElementById('produit-detecte').innerText = produitEnCours.nom;
 
-    // Démarrer la caméra pour la photo
     try {
         streamPhotoDate = await navigator.mediaDevices.getUserMedia({
             video: { facingMode: 'environment' }
