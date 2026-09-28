@@ -1190,7 +1190,6 @@ async function envoyerMessageChef(modeForce) {
     statut.innerText = '👨‍🍳 Le Chef réfléchit...';
 
     try {
-        // Recharger le stock a chaque message
         contexteStock = await construireContexteStock();
 
         if (!contexteStock) {
@@ -1201,10 +1200,13 @@ async function envoyerMessageChef(modeForce) {
 
         const mode = modeForce || detecterModeMessage(message);
 
-        // Passe le message pour detecter les ingredients imposes ou exclus
+        // Chercher si l'utilisateur nomme un plat precis
+        const platNomme = await detecterPlatNomme(message, contexteStock);
+
         const idees = await construireIdees(mode, contexteStock, message);
 
-        const rienDuTout = idees.realisables.length === 0
+        const rienDuTout = !platNomme
+            && idees.realisables.length === 0
             && idees.presque.length === 0
             && idees.combinaisons.length === 0;
 
@@ -1214,7 +1216,7 @@ async function envoyerMessageChef(modeForce) {
             return;
         }
 
-        const prompt = construirePromptAgent(message, idees, contexteStock, mode);
+        const prompt = construirePromptAgent(message, idees, contexteStock, mode, platNomme);
 
         let reponse = null;
         let tentatives = 0;
@@ -1259,7 +1261,6 @@ async function envoyerMessageChef(modeForce) {
         statut.innerText = '';
     }
 }
-
 // ============================================================
 // ANALYSER LES RECETTES
 // Realisables / presque realisables / impossibles
@@ -1323,14 +1324,23 @@ async function analyserRecettes(message, mode, contexte) {
         combinaisons: combinaisons.slice(0, 6)
     };
 }
-function construirePromptAgent(message, idees, contexte, mode) {
+function construirePromptAgent(message, idees, contexte, mode, platNomme) {
 
-    // Compter les propositions disponibles
     const nbTotal = idees.combinaisons.length
                   + idees.realisables.length
                   + idees.presque.length;
 
     let sections = '';
+
+    // ── LE PLAT DEMANDE EXPLICITEMENT ──
+    if (platNomme) {
+        sections += '\nPLAT QUE L UTILISATEUR SEMBLE DEMANDER :\n'
+            + '- ' + platNomme.nom + ' (' + platNomme.temps + ' min)\n'
+            + '  Ingrédients nécessaires : ' + platNomme.ingredients.join(', ') + '\n'
+            + (platNomme.realisable
+                ? '  ÉTAT : tu as TOUT ce qu il faut.\n'
+                : '  ÉTAT : il MANQUE — ' + platNomme.manquants.join(', ') + '\n');
+    }
 
     if (idees.combinaisons.length > 0) {
         sections += '\nASSIETTES SIMPLES (tu as tout) :\n'
@@ -1365,12 +1375,22 @@ Si l'utilisateur demande autre chose, propose des plats DIFFÉRENTS.
 Ne répète jamais une proposition précédente, même reformulée.\n`;
     }
 
-    // Consigne sur le nombre de propositions
     const consigneNombre = nbTotal >= 3
         ? 'Propose 3 idées différentes.'
         : (nbTotal === 2
-            ? 'Tu n\'as que 2 idées possibles : propose-les toutes les deux et dis qu\'il n\'y a pas plus de choix avec le stock actuel.'
-            : 'Tu n\'as qu\'une seule idée possible : propose-la et dis franchement que c\'est la seule option avec le stock actuel.');
+            ? 'Tu n as que 2 idées possibles : propose-les et dis qu il n y a pas plus de choix.'
+            : 'Tu n as qu une seule idée possible : propose-la et dis que c est la seule option.');
+
+    // Consigne specifique si un plat est demande
+    const consignePlat = platNomme
+        ? `\nPRIORITÉ ABSOLUE — L'utilisateur parle du plat "${platNomme.nom}".
+Ta réponse DOIT porter sur ce plat, pas sur autre chose.
+${platNomme.realisable
+    ? 'Il a tout ce qu il faut : confirme-lui et donne un conseil utile (accompagnement, astuce). Ne propose PAS d autres plats à la place.'
+    : 'Il lui manque : ' + platNomme.manquants.join(', ') + '. Dis-le clairement, puis propose soit de faire sans ou avec un remplacement, soit une alternative des listes.'}
+Si l'utilisateur exclut un ingrédient (par exemple "sans riz"), tiens-en compte :
+propose un autre accompagnement plutôt que de refuser le plat.\n`
+        : '';
 
     return `Tu es le Chef, un assistant cuisine familier, direct et honnête.
 Tu connais exactement le contenu du frigo et des placards de l'utilisateur.
@@ -1380,57 +1400,44 @@ ${contexte.texte}
 
 CE QUE TU PEUX PROPOSER :
 ${sections}
-${historique}${interdits}
+${historique}${interdits}${consignePlat}
 DEMANDE DE L'UTILISATEUR : "${message}"
-
-NOMBRE DE PROPOSITIONS :
-${consigneNombre}
-Ne propose JAMAIS deux fois le même plat dans une même réponse.
-S'il n'y a qu'une ou deux idées possibles, dis-le franchement plutôt que de te répéter.
 
 COMMENT RÉPONDRE :
 
-Si l'utilisateur demande un plat PRÉCIS :
-- S'il est dans les réalisables : confirme et propose-le.
-- S'il est dans les NON RÉALISABLES : dis clairement ce qui manque, puis propose
-  une alternative réalisable.
-  Exemple : "Il te manque la crème pour la carbonara. Par contre je peux te faire
-  des pâtes aux lardons."
-- S'il n'apparaît nulle part : dis en une phrase que tu n'as pas de quoi, et
-  propose une alternative des listes.
+Distingue le type de demande :
+- Une QUESTION sur le stock ("est-ce que j ai du poulet ?") : réponds
+  factuellement d'après le stock, sans forcément proposer de plats.
+- Une ANNONCE de décision ("je vais faire un chili") : accompagne-le,
+  confirme qu'il a ce qu'il faut ou dis ce qui manque. Ne propose pas
+  autre chose à la place.
+- Une DEMANDE D'IDÉES : propose des plats des listes.
+  ${consigneNombre}
+  Termine par "Lequel te tente ?"
 
-Si l'utilisateur demande une idée générale :
-- Propose des idées prises dans les listes.
-- En mode quotidien, privilégie les assiettes simples.
-- Termine par "Lequel te tente ?"
+Ne propose JAMAIS deux fois le même plat dans une même réponse.
 
 NOMS DES PLATS — RÈGLE STRICTE :
 Le STOCK contient les noms bruts des tickets de caisse, laids et techniques.
-N'utilise JAMAIS ces noms dans ta réponse.
-Écris uniquement les noms des plats tels qu'ils figurent dans les listes,
-sans les durées ni les mentions entre crochets.
+N'utilise JAMAIS ces noms dans ta réponse, même pour les desserts tout prêts.
 
-Mauvais : "Panes colin Alaska MSC avec des Frites Classiques 1kg"
-Correct : "du poisson pané avec des frites"
+Mauvais : "Danette Liégeois chocolat", "Panes colin Alaska MSC"
+Correct : "une crème au chocolat", "du poisson pané"
 
 PRODUITS À FINIR :
 Certains plats portent la mention [permet de finir : nom du produit].
 Tu peux le signaler en nommant ce produit précis, et uniquement celui-là.
-Si la mention est absente, ne parle PAS de produit à finir.
-N'invente jamais qu'un plat permet de finir quelque chose.
+Sans la mention, n'en parle pas.
 
 COHÉRENCE :
-Les plats de la section NON RÉALISABLES ne sont PAS faisables.
-Ne dis jamais qu'ils permettent de finir un produit, puisqu'ils manquent
-justement d'un ingrédient.
+Les plats en NON RÉALISABLES ne sont pas faisables : ne dis jamais qu'ils
+permettent de finir un produit.
 
 RÈGLES ABSOLUES :
-- Ne propose JAMAIS un plat absent des listes.
 - Ne prétends jamais qu'un ingrédient est disponible s'il ne l'est pas.
 - Pas de markdown, pas de gras, pas d'astérisques.
 - Trois phrases maximum. Ton naturel, comme un pote qui cuisine bien.`;
 }
-
 
 
 // ============================================================
@@ -5725,6 +5732,95 @@ function genererCombinaisons(categories, nombre) {
 
     return combinaisons;
 }
+// Mots a ignorer quand on compare les noms de plats
+const MOTS_VIDES_PLAT = ['de', 'du', 'la', 'le', 'les', 'des', 'au', 'aux',
+                         'et', 'a', 'en', 'un', 'une', 'avec', 'sans',
+                         'pour', 'ce', 'soir', 'midi', 'faire', 'veux',
+                         'voudrais', 'peux', 'envie', 'plutot', 'maison'];
+						 
+						 
+// ============================================================
+// NORMALISER UN TEXTE POUR COMPARAISON
+// ============================================================
+function motsSignificatifs(texte) {
+    return (texte || '')
+        .toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z\s]/g, ' ')
+        .split(/\s+/)
+        .filter(function(m) {
+            return m.length >= 3 && MOTS_VIDES_PLAT.indexOf(m) === -1;
+        });
+}
+						 
+async function detecterPlatNomme(message, contexte) {
+    const motsMessage = motsSignificatifs(message);
+    if (motsMessage.length === 0) return null;
+
+    const { data: recettes } = await monSupabase
+        .from('recettes_chef')
+        .select('nom, mode, ingredients_cles, temps_minutes')
+        .eq('actif', true);
+
+    if (!recettes) return null;
+
+    const basiques = ['sel', 'poivre', 'huile', 'eau', 'beurre', 'sucre',
+                      'farine', 'ail', 'oignon', 'bouillon', 'vinaigrette',
+                      'mayonnaise', 'vanille', 'curry', 'vin', 'lait'];
+
+    let meilleur = null;
+    let meilleurScore = 0;
+
+    recettes.forEach(function(r) {
+        const motsRecette = motsSignificatifs(r.nom);
+        if (motsRecette.length === 0) return;
+
+        // Compter les mots de la recette presents dans le message
+        const communs = motsRecette.filter(function(mr) {
+            return motsMessage.some(function(mm) {
+                return mm === mr
+                    || (mr.length >= 5 && mm.indexOf(mr) === 0)
+                    || (mm.length >= 5 && mr.indexOf(mm) === 0);
+            });
+        });
+
+        // Il faut qu'une bonne partie du nom du plat soit citee
+        const score = communs.length / motsRecette.length;
+
+        if (score > meilleurScore && score >= 0.6 && communs.length >= 1) {
+            meilleurScore = score;
+            meilleur = r;
+        }
+    });
+
+    if (!meilleur) return null;
+
+    // Evaluer ce qui manque pour ce plat precis
+    const necessaires = meilleur.ingredients_cles.filter(function(i) {
+        return basiques.indexOf(i) === -1;
+    });
+
+    const presents = [];
+    const manquants = [];
+    necessaires.forEach(function(ing) {
+        if (matchIngredient(ing, contexte.nomsProduits)) presents.push(ing);
+        else manquants.push(ing);
+    });
+
+    console.log('🍽️ Plat nommé détecté :', meilleur.nom,
+                '| manque :', manquants.length ? manquants.join(', ') : 'rien');
+
+    return {
+        nom: meilleur.nom,
+        mode: meilleur.mode,
+        temps: meilleur.temps_minutes,
+        ingredients: necessaires,
+        presents: presents,
+        manquants: manquants,
+        realisable: manquants.length === 0
+    };
+}
+
 </script>
 </body>
 </html>
