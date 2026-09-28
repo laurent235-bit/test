@@ -4229,36 +4229,46 @@ async function preparerVerificationPacks(articles) {
     produitsAVerifier = [];
     produitsAInserer = [];
 
-    // Détecter les doublons
+    // Nettoyer les noms abreges avant tout
+    const statut = document.getElementById('statut-scan');
+    if (statut) statut.innerText = '🧹 Nettoyage des noms...';
+    articles = await nettoyerNomsProduits(articles);
+
     const groupes = detecterDoublons(articles);
 
-    Object.keys(groupes).forEach(cle => {
+    Object.keys(groupes).forEach(function(cle) {
         const groupe = groupes[cle];
 
         if (groupe.length > 1) {
-            // DOUBLON DÉTECTÉ → fusionner et vérifier
-            const qteTotale = groupe.reduce((s, a) => s + (parseInt(a.quantite) || 1), 0);
-            produitsAVerifier.push({
-                ...groupe[0],
+            // Doublon : fusionner
+            const qteTotale = groupe.reduce(function(s, a) {
+                return s + (parseInt(a.quantite) || 1);
+            }, 0);
+            produitsAVerifier.push(Object.assign({}, groupe[0], {
                 quantite: qteTotale,
                 raison: 'doublon',
                 nbLignes: groupe.length
-            });
+            }));
+
         } else if (estProduitPack(groupe[0].nom)) {
-            // PRODUIT PACK → vérifier
-            produitsAVerifier.push({
-                ...groupe[0],
+            // Produit souvent vendu en pack
+            produitsAVerifier.push(Object.assign({}, groupe[0], {
                 raison: 'pack'
-            });
+            }));
+
+        } else if (groupe[0].aEteNettoye) {
+            // Nom qui a ete corrige : a verifier
+            produitsAVerifier.push(Object.assign({}, groupe[0], {
+                raison: 'renomme'
+            }));
+
         } else {
-            // NORMAL → insérer directement
             produitsAInserer.push(groupe[0]);
         }
     });
 
-    // S'il n'y a rien à vérifier, on insère tout directement
     if (produitsAVerifier.length === 0) {
-        await insererTousLesProduits([...produitsAInserer]);
+        await insererTousLesProduits(produitsAInserer.slice());
         return;
     }
 
@@ -4275,16 +4285,25 @@ function afficherModaleVerifPacks() {
 
     let html = '';
 
-    produitsAVerifier.forEach((p, i) => {
+    produitsAVerifier.forEach(function(p, i) {
 
         // Badge selon la raison
-        let badgeRaison;
+        let badge;
         if (p.raison === 'doublon') {
-            badgeRaison = '<span style="background:#fed7d7; color:#c53030; font-size:10px; padding:3px 8px; border-radius:10px; font-weight:bold;">&#9888; '
-                + p.nbLignes + ' lignes fusionnees</span>';
+            badge = '<span style="background:#fed7d7; color:#c53030; font-size:10px; padding:3px 8px; border-radius:10px; font-weight:bold;">'
+                  + '&#9888; ' + p.nbLignes + ' lignes fusionnees</span>';
+        } else if (p.raison === 'renomme') {
+            badge = '<span style="background:#e9d8fd; color:#553c9a; font-size:10px; padding:3px 8px; border-radius:10px; font-weight:bold;">'
+                  + '&#9998; Nom corrigé</span>';
         } else {
-            badgeRaison = '<span style="background:#bee3f8; color:#2c5282; font-size:10px; padding:3px 8px; border-radius:10px; font-weight:bold;">&#128230; Souvent en pack</span>';
+            badge = '<span style="background:#bee3f8; color:#2c5282; font-size:10px; padding:3px 8px; border-radius:10px; font-weight:bold;">'
+                  + '&#128230; Souvent en pack</span>';
         }
+
+        // Nom original si le produit a ete renomme
+        const nomOriginal = p.nomOriginal
+            ? '<small style="display:block; font-size:10px; color:#a0aec0; margin-top:4px;">Ticket : ' + p.nomOriginal + '</small>'
+            : '';
 
         // Options emplacement
         const emplacements = [
@@ -4302,7 +4321,7 @@ function afficherModaleVerifPacks() {
             optionsHtml += '<option value="' + e[0] + '"' + selected + '>' + e[1] + '</option>';
         });
 
-        // Boutons packs rapides
+        // Boutons packs
         let boutonsPacks = '';
         packsDisponibles.forEach(function(n) {
             boutonsPacks += '<button onclick="setQteVerif(' + i + ', ' + n + ')" '
@@ -4310,13 +4329,18 @@ function afficherModaleVerifPacks() {
                 + '&times;' + n + '</button>';
         });
 
-        // Carte du produit
         html += '<div style="background:white; border-radius:14px; padding:14px; margin-bottom:12px; border:1px solid #e2e8f0;">'
 
-            + '<div style="margin-bottom:10px;">'
-            + '<b style="font-size:14px; color:#2d3748; display:block;">' + p.nom + '</b>'
-            + '<div style="margin-top:5px;">' + badgeRaison + '</div>'
-            + '</div>'
+            + '<div style="margin-bottom:10px;">' + badge + '</div>'
+
+            // ── CHAMP NOM EDITABLE ──
+            + '<label style="font-size:11px; color:#718096; font-weight:bold; display:block; margin-bottom:4px;">Nom du produit</label>'
+            + '<input type="text" id="nom-verif-' + i + '" value="' + (p.nom || '').replace(/"/g, '&quot;') + '" '
+            + 'onchange="modifierNomVerif(' + i + ', this.value)" '
+            + 'style="width:100%; padding:10px; border:2px solid #cbd5e0; border-radius:8px; font-size:14px; font-weight:bold; color:#2d3748; margin-bottom:2px; box-sizing:border-box;">'
+            + nomOriginal
+
+            + '<div style="height:10px;"></div>'
 
             + '<select onchange="modifierEmplacementVerif(' + i + ', this.value)" '
             + 'style="width:100%; padding:8px; border:1px solid #cbd5e0; border-radius:8px; font-size:12px; margin-bottom:10px; background:#f7fafc;">'
@@ -4348,6 +4372,7 @@ function afficherModaleVerifPacks() {
     liste.innerHTML = html;
     document.getElementById('modal-verif-packs').style.display = 'flex';
 }
+
 
 // ============================================================
 // SUPPRIMER UNE LIGNE — version corrigee
@@ -5820,7 +5845,111 @@ async function detecterPlatNomme(message, contexte) {
         realisable: manquants.length === 0
     };
 }
+function estNomAbrege(nom) {
+    if (!nom) return false;
 
+    const n = nom.trim();
+
+    // Points au milieu du nom : "MAX. BOUL. BOEUF"
+    if (/[A-Za-z]{2,}\.\s*[A-Za-z]/.test(n)) return true;
+
+    // Plus de 60% de majuscules sur un nom d'au moins 8 caracteres
+    const lettres = n.replace(/[^A-Za-z]/g, '');
+    if (lettres.length >= 8) {
+        const majuscules = n.replace(/[^A-Z]/g, '').length;
+        if (majuscules / lettres.length > 0.6) return true;
+    }
+
+    // Mots tres courts colles a des chiffres : "X30", "2X100G"
+    if (/\b\d+X\d*\b|\bX\d+\b/i.test(n)) return true;
+
+    // Mots de 3-4 lettres suivis d'un point ou en majuscules isolees
+    const mots = n.split(/\s+/);
+    const motsSuspects = mots.filter(function(m) {
+        return /^[A-Z]{3,5}\.?$/.test(m) && m.length <= 5;
+    });
+    if (motsSuspects.length >= 2) return true;
+
+    return false;
+}
+async function nettoyerNomsProduits(articles) {
+    // Ne traiter que les noms qui en ont besoin
+    const aNettoyer = articles.filter(function(a) {
+        return estNomAbrege(a.nom);
+    });
+
+    if (aNettoyer.length === 0) return articles;
+
+    console.log('🧹 Noms à nettoyer :', aNettoyer.length);
+
+    try {
+        const prompt = `Voici des noms de produits tels qu'ils apparaissent sur un ticket de caisse français.
+Ils contiennent des abréviations, des marques et des codes.
+
+Ta mission : réécrire chaque nom de façon claire et lisible.
+
+RÈGLES :
+- Développe les abréviations : "BOUL." devient "Boulettes", "FRO." devient "Fromage",
+  "TR.FLT" devient "Tranches de filet", "Q.SUPER" se supprime
+- Retire les marques : Charal, Président, Carrefour, Leclerc, Marque Repère...
+- Retire les poids, quantités et codes : X30, 900G, 2X100G, 500ML
+- Garde le type de produit et sa caractéristique principale
+- Première lettre en majuscule, le reste en minuscules
+- 2 à 4 mots maximum
+
+Exemples :
+"MAX. BOUL. BOEUF CHARAL X30 900G" devient "Boulettes de boeuf"
+"FRO.FOND.CROQ.MONS.17%" devient "Fromage à croque-monsieur"
+"TR.FLT Colin Alaska MSC" devient "Filets de colin"
+"SPAGHETTI Q.SUPER. 500G" devient "Spaghetti"
+"LARDONS FUMES 2X100G" devient "Lardons fumés"
+
+Réponds UNIQUEMENT en JSON valide, sans markdown ni backticks :
+{"NOM_ORIGINAL_EXACT": "Nom nettoyé", ...}
+
+Noms à traiter :
+${aNettoyer.map(function(a) { return '"' + a.nom + '"'; }).join('\n')}`;
+
+        const reponse = await appelGemini(prompt);
+
+        const propre = reponse
+            .replace(/```json\n?/g, '')
+            .replace(/```\n?/g, '')
+            .trim();
+
+        const correspondances = JSON.parse(propre);
+
+        // Appliquer les nouveaux noms
+        articles.forEach(function(a) {
+            const nouveau = correspondances[a.nom]
+                         || correspondances[a.nom.toUpperCase()];
+            if (nouveau && nouveau.trim()) {
+                a.nomOriginal = a.nom;
+                a.nom = nouveau.trim();
+                a.aEteNettoye = true;
+            }
+        });
+
+        console.log('✅ Noms nettoyés');
+
+    } catch (err) {
+        console.error('Erreur nettoyage noms :', err);
+    }
+
+    return articles;
+}
+
+function modifierNomVerif(index, valeur) {
+    if (valeur && valeur.trim()) {
+        produitsAVerifier[index].nom = valeur.trim();
+        // Regenerer le nom_alexa a partir du nouveau nom
+        produitsAVerifier[index].nom_alexa = valeur.trim()
+            .toLowerCase()
+            .split(' ')
+            .slice(0, 3)
+            .join(' ');
+    }
+}
 </script>
 </body>
 </html>
