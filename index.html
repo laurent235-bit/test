@@ -5950,6 +5950,42 @@ function modifierNomVerif(index, valeur) {
             .join(' ');
     }
 }
+async function ouvrirScannerDates() {
+    if (!utilisateurActuel) {
+        utilisateurActuel = localStorage.getItem('monFrigo_User');
+    }
+    if (!utilisateurActuel) {
+        afficherToast('❌ Connecte-toi d\'abord !');
+        return;
+    }
+
+    const modal = document.getElementById('modal-dates');
+    modal.style.display = 'flex';
+
+    document.getElementById('etape-emplacement')?.style && null;
+    document.getElementById('zone-codebarre').style.display = 'block';
+    document.getElementById('zone-date').style.display = 'none';
+
+    compteurDates = 0;
+    produitEnCours = null;
+    document.getElementById('compteur-dates').innerText = '0';
+    document.getElementById('historique-dates').innerHTML = '';
+
+    // Activer l'audio
+    if (!window.audioContext) {
+        window.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (window.audioContext.state === 'suspended') {
+        await window.audioContext.resume();
+    }
+
+    // Garder l'écran allumé
+    if (typeof activerWakeLock === 'function') {
+        await activerWakeLock();
+    }
+
+    await demarrerScanCodeBarre();
+}
 </script>
 </body>
 </html>
