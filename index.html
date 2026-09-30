@@ -5858,7 +5858,7 @@ async function construireContexteStock() {
         .from('inventaire2')
         .select('nom, quantite, emplacement, etat, date_peremption')
         .eq('proprietaire', utilisateurActuel)
-        .neq('etat', 'Vide');
+        .neq('etat', 'Vide')
         .gt('quantite', 0);
 
     if (!produits?.length) return null;
