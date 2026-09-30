@@ -3671,6 +3671,7 @@ async function desactiverWakeLock() {
         console.log('⚠️ Erreur:', err.message);
     }
 }
+let produitARetirer = null;  
 async function appliquerRetrait(qteARetirer) {
     if (!produitARetirer) return;
 
@@ -3682,31 +3683,17 @@ async function appliquerRetrait(qteARetirer) {
         const nouvelleQte = Math.max(0, qteActuelle - qteARetirer);
 
         if (nouvelleQte === 0) {
-            await monSupabase
-                .from('inventaire2')
-                .update({ quantite: 0, etat: 'Vide' })
-                .eq('id', produitARetirer.id)
-                .eq('proprietaire', utilisateurActuel);
-
-            await enregistrerHistorique(produitARetirer, 'vide', qteARetirer, 0);
-            await enregistrerEconomieSauvee(produitARetirer.id, produitARetirer.nom, qteARetirer);
-
-            const msg = `🛒 ${produitARetirer.nom} → liste de courses`;
-            statut.innerText = msg;
-            historique.innerHTML = `
-                <div style="background:#2d3748; color:#f6ad55; padding:8px 12px; border-radius:8px; margin-bottom:5px; font-size:12px; text-align:left;">
-                    ${msg}
-                </div>` + historique.innerHTML;
-
-        } else {
-            // Mettre la quantite a zero sans passer en Vide tout de suite
+            // Stock épuisé : quantité à zéro, décision courses ensuite
             await monSupabase
                 .from('inventaire2')
                 .update({ quantite: 0 })
                 .eq('id', produitARetirer.id)
                 .eq('proprietaire', utilisateurActuel);
 
-            // Verifier s'il existe un autre format du meme produit
+            await enregistrerHistorique(produitARetirer, 'vide', qteARetirer, 0);
+            await enregistrerEconomieSauvee(produitARetirer.id, produitARetirer.nom, qteARetirer);
+
+            // Y a-t-il un autre format du même produit ?
             const ajouterAuxCourses = await verifierAvantCourses(produitARetirer);
 
             if (ajouterAuxCourses) {
@@ -3715,7 +3702,22 @@ async function appliquerRetrait(qteARetirer) {
                     .update({ etat: 'Vide' })
                     .eq('id', produitARetirer.id)
                     .eq('proprietaire', utilisateurActuel);
+
+                const msg = `🛒 ${produitARetirer.nom} → liste de courses`;
+                statut.innerText = msg;
+                historique.innerHTML = `
+                    <div style="background:#2d3748; color:#f6ad55; padding:8px 12px; border-radius:8px; margin-bottom:5px; font-size:12px; text-align:left;">
+                        ${msg}
+                    </div>` + historique.innerHTML;
             }
+
+        } else {
+            // Il reste du stock : on décrémente simplement
+            await monSupabase
+                .from('inventaire2')
+                .update({ quantite: nouvelleQte })
+                .eq('id', produitARetirer.id)
+                .eq('proprietaire', utilisateurActuel);
 
             await enregistrerHistorique(produitARetirer, 'retire', qteARetirer, nouvelleQte);
             await enregistrerEconomieSauvee(produitARetirer.id, produitARetirer.nom, qteARetirer);
@@ -3741,7 +3743,6 @@ async function appliquerRetrait(qteARetirer) {
 
     produitARetirer = null;
 }
-let produitARetirer = null;
 
 // ============================================================
 // OUVRIR LA MODALE DE QUANTITÉ
