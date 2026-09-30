@@ -5999,7 +5999,6 @@ async function construireContexteStock() {
         return p.nom.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     });
 
-    // Produits a finir en priorite
     const urgents = produits.filter(function(p) {
         if (p.etat === 'Entamé') return true;
         if (!p.date_peremption) return false;
@@ -6007,28 +6006,39 @@ async function construireContexteStock() {
         return jours <= 3;
     });
 
-    // Regrouper par emplacement avec les quantites
-    const parLieu = function(lieu) {
-        return produits
-            .filter(function(p) { return p.emplacement === lieu; })
-            .map(function(p) {
-                const marque = p.etat === 'Entamé' ? ' (entamé)' : '';
-                return p.nom + marque;
-            })
-            .join(', ') || 'vide';
-    };
+    // Construire la liste numerotee, groupee par emplacement
+    let compteur = 1;
+    const lignes = [];
+    const ordreLieux = ['FRIGO', 'CONGELATEUR', 'PLACARD', 'AUTRES'];
+
+    ordreLieux.forEach(function(lieu) {
+        const duLieu = produits.filter(function(p) { return p.emplacement === lieu; });
+        if (duLieu.length === 0) return;
+
+        const nomLieu = lieu === 'CONGELATEUR' ? 'CONGÉLATEUR' : lieu;
+        lignes.push('\n' + nomLieu + ' :');
+
+        duLieu.forEach(function(p) {
+            const marques = [];
+            if (p.etat === 'Entamé') marques.push('entamé');
+            const estUrgent = urgents.indexOf(p) !== -1;
+            if (estUrgent && p.etat !== 'Entamé') marques.push('à finir vite');
+
+            const suffixe = marques.length ? ' — ' + marques.join(', ') : '';
+            lignes.push('  ' + compteur + '. ' + p.nom + suffixe);
+            p.numero = compteur;
+            compteur++;
+        });
+    });
 
     return {
         produits: produits,
         nomsProduits: nomsProduits,
         urgents: urgents,
-        texte: `FRIGO : ${parLieu('FRIGO')}
-CONGÉLATEUR : ${parLieu('CONGELATEUR')}
-PLACARD : ${parLieu('PLACARD')}
-
-À FINIR EN PRIORITÉ : ${urgents.map(function(p) { return p.nom; }).join(', ') || 'rien d urgent'}`
+        texte: lignes.join('\n')
     };
 }
+
 
 
 // ============================================================
@@ -6150,7 +6160,6 @@ async function envoyerMessageChef(modeForce) {
 // ============================================================
 function construirePromptLibre(message, contexte, mode, inspirations) {
 
-    // Historique de conversation
     let historique = '';
     let dejaCites = '';
     if (conversationChef.length > 0) {
@@ -6160,48 +6169,37 @@ function construirePromptLibre(message, contexte, mode, inspirations) {
               }).join('\n') + '\n';
 
         dejaCites = `
-Tu as déjà proposé des plats plus haut dans cette conversation.
-Si l'utilisateur demande autre chose, propose des plats VRAIMENT différents :
-change de viande, de féculent ou de mode de cuisson. Ne reformule pas.
-Si tu as fait le tour des possibilités raisonnables, dis-le honnêtement
-plutôt que de te répéter.
+Tu as déjà proposé des plats plus haut. Si l'utilisateur demande autre chose,
+change vraiment : autre viande, autre féculent, autre mode de cuisson.
+Si tu as fait le tour, dis-le honnêtement plutôt que de te répéter.
 `;
     }
 
-    // Inspirations issues de la base
     let bloc = '';
     if (inspirations.length > 0) {
-        bloc = '\nQUELQUES IDÉES DE LA BASE (simples pistes, tu n es pas obligé de les suivre) :\n'
+        bloc = '\nPISTES POSSIBLES (indicatif, tu n es pas obligé) :\n'
              + inspirations.map(function(r) {
-                 return '- ' + r.nom + ' (' + r.temps_minutes + ' min)';
+                 return '- ' + r.nom;
                }).join('\n') + '\n';
     }
 
     const contextesModes = {
-        quotidien: `C'est un soir de semaine. L'utilisateur veut quelque chose de simple
-et rapide, moins de 25 minutes. Dans la cuisine familiale française du quotidien,
-un repas c'est souvent une protéine, un féculent et un légume dans la même assiette :
-steak haché frites haricots verts, cordon bleu riz petits pois, poisson pané purée.
-Ou un plat unique classique : croque-monsieur, coquillettes au jambon, omelette,
-quiche, pâtes carbonara, hachis parmentier.`,
+        quotidien: `C'est un soir de semaine. Il faut du simple et rapide, moins de 25 minutes.
+Dans la cuisine familiale française, c'est souvent une protéine, un féculent et un
+légume dans la même assiette. Ou un plat unique classique : croque-monsieur,
+coquillettes au jambon, omelette, pâtes carbonara, hachis parmentier.`,
 
-        weekend: `C'est le week-end, l'utilisateur a du temps devant lui.
-Il peut faire un plat qui mijote, un rôti, un gratin, quelque chose de généreux.`,
+        weekend: `C'est le week-end, il y a du temps. Plat qui mijote, rôti, gratin, quelque chose de généreux.`,
 
-        cookeo: `L'utilisateur veut cuisiner au Cookeo, un multicuiseur sous pression.
-Propose des plats adaptés : mijotés express, riz et pâtes en cuisson unique,
-légumes vapeur, soupes.`,
+        cookeo: `Cuisine au Cookeo, multicuiseur sous pression : mijotés express, riz et pâtes en cuisson unique, légumes vapeur, soupes.`,
 
-        healthy: `L'utilisateur veut manger léger et équilibré.
-Privilégie les légumes, les protéines maigres, les cuissons douces.`,
+        healthy: `Repas léger et équilibré : légumes, protéines maigres, cuissons douces.`,
 
-        monde: `L'utilisateur veut changer du quotidien français.
-Propose des plats inspirés d'autres cuisines, mais réalisables avec ce qu'il a.`,
+        monde: `Changer du quotidien français : plats d'autres cuisines, réalisables avec ce qu'il y a.`,
 
-        dessert: `L'utilisateur veut un dessert.`,
+        dessert: `Un dessert.`,
 
-        antigaspi: `L'utilisateur veut utiliser en priorité ce qui doit être mangé
-rapidement. Construis les propositions autour des produits à finir.`
+        antigaspi: `Utiliser en priorité ce qui doit être mangé rapidement.`
     };
 
     return `Tu es le Chef, un cuisinier familier et débrouillard.
@@ -6209,51 +6207,78 @@ Tu connais la cuisine française du quotidien et tu sais improviser.
 
 ${contextesModes[mode] || contextesModes.quotidien}
 
-VOICI EXACTEMENT CE QUE L'UTILISATEUR A CHEZ LUI :
+INVENTAIRE COMPLET — voici TOUT ce que l'utilisateur possède, rien d'autre :
 ${contexte.texte}
 ${bloc}${historique}${dejaCites}
 DEMANDE DE L'UTILISATEUR : "${message}"
 
-TON RÔLE :
-Tu composes librement des repas à partir de ce stock. Tu n'es pas limité à une
-liste de recettes : si l'utilisateur a du jarret, des salsifis et du quinoa,
-tu sais quoi en faire. Utilise ton savoir de cuisinier.
 
-RÈGLE ABSOLUE — LES INGRÉDIENTS :
-Tu ne peux utiliser QUE les produits listés ci-dessus, plus les basiques que
-tout le monde a : sel, poivre, huile, beurre, eau, ail, oignon, farine, sucre.
-Si un plat demande un ingrédient absent de la liste, tu ne le proposes pas,
-OU tu le proposes en disant clairement ce qui manque.
-Ne prétends JAMAIS qu'un produit est disponible s'il n'est pas dans la liste.
+═══════════════════════════════════════
+RÈGLE N°1 — NE RIEN INVENTER
+═══════════════════════════════════════
 
-COMMENT RÉPONDRE :
+Chaque plat que tu proposes doit être composé UNIQUEMENT de produits
+présents dans l'inventaire numéroté ci-dessus.
 
-- Si l'utilisateur pose une QUESTION sur son stock, réponds factuellement.
-- S'il ANNONCE ce qu'il va faire, accompagne-le : confirme qu'il a ce qu'il faut,
-  ou dis ce qui manque, propose un accompagnement. Ne propose pas autre chose
-  à la place.
-- S'il DEMANDE DES IDÉES, propose 3 repas différents et termine par
-  "Lequel te tente ?"
+Les seuls ajouts autorisés sont : sel, poivre, huile, beurre, eau, ail,
+oignon, farine, sucre, épices.
 
-VARIÉTÉ :
-Les 3 propositions doivent être franchement différentes : pas la même viande,
-pas le même féculent, pas le même type de plat.
+INTERDICTIONS FORMELLES :
 
-NOMS DES PLATS :
-Le stock contient des noms bruts de tickets de caisse, laids et techniques.
-N'utilise jamais ces noms tels quels.
+Ne transforme pas un produit en une version différente.
+  Si l'inventaire dit "Cordon bleu", c'est un cordon bleu tout prêt à cuire.
+  Tu ne peux pas proposer "cordon bleu maison" ni "cordon bleu de poulet".
+  Si l'inventaire dit "Pâtes", ce sont des pâtes sèches.
+  Tu ne peux pas proposer "pâtes fraîches".
+
+N'invente pas de sauces ou de préparations qui demandent des ingrédients absents.
+  Pas de "sauce burger" si aucune sauce burger n'est listée.
+  Pas de "crème de cancoillotte" si la cancoillotte n'est pas dans la liste.
+
+Ne cite pas un produit pour faire joli s'il n'entre pas vraiment dans le plat.
+  Ne dis pas "on finit la fécule de maïs" si ça n'a pas de sens dans la recette.
+
+AVANT de proposer un plat, vérifie mentalement que chacun de ses
+ingrédients porte un numéro dans l'inventaire ci-dessus.
+Si un ingrédient n'y est pas, change de plat.
+
+
+═══════════════════════════════════════
+RÈGLE N°2 — PRODUITS À FINIR
+═══════════════════════════════════════
+
+Les produits marqués "entamé" ou "à finir vite" méritent d'être utilisés.
+Tu peux le signaler, mais seulement si le produit entre VRAIMENT dans le plat.
+Ne force jamais une mention de ce genre.
+
+
+═══════════════════════════════════════
+RÈGLE N°3 — NOMS DES PLATS
+═══════════════════════════════════════
+
+L'inventaire contient des noms bruts de tickets de caisse, laids et techniques.
+Ne les recopie jamais tels quels.
+
 Écris "des boulettes de boeuf", pas "MAX. BOUL. BOEUF CHARAL X30 900G".
 Écris "une crème au chocolat", pas "Danette Liégeois chocolat".
+Écris "du poisson pané", pas "Panes colin Alaska MSC".
 
-PRODUITS À FINIR :
-Si un plat permet d'utiliser un produit de la liste "à finir en priorité",
-mentionne-le brièvement. Sinon, n'en parle pas.
-Ne dis jamais qu'un plat finit un produit qui n'y entre pas vraiment.
+
+═══════════════════════════════════════
+COMMENT RÉPONDRE
+═══════════════════════════════════════
+
+- QUESTION sur le stock : réponds factuellement d'après l'inventaire.
+- ANNONCE d'une décision : accompagne-le, dis s'il a tout, propose un
+  accompagnement. Ne propose pas autre chose à la place.
+- DEMANDE D'IDÉES : propose 3 repas franchement différents — pas la même
+  viande, pas le même féculent. Termine par "Lequel te tente ?"
 
 STYLE :
-Trois phrases maximum. Ton naturel, direct, comme un pote qui cuisine bien.
-Pas de markdown, pas de gras, pas de listes à puces.`;
+Trois phrases maximum. Ton naturel et direct, comme un pote qui cuisine bien.
+Pas de markdown, pas de gras, pas de listes à puces, pas de sauts de ligne.`;
 }
+
 </script>
 </body>
 </html>
