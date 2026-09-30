@@ -1164,103 +1164,6 @@ function chefRaccourci(mode) {
     envoyerMessageChef(mode);
 }
 
-
-// ============================================================
-// ENVOYER UN MESSAGE AU CHEF
-// ============================================================
-async function envoyerMessageChef(modeForce) {
-    const input = document.getElementById('chef-message');
-    const message = input.value.trim();
-    if (!message) return;
-
-    if (!utilisateurActuel) {
-        utilisateurActuel = localStorage.getItem('monFrigo_User');
-    }
-    if (!utilisateurActuel) {
-        afficherToast('Connecte-toi d abord');
-        return;
-    }
-
-    const statut = document.getElementById('statut-chef');
-    const zone = document.getElementById('chef-conversation');
-
-    input.value = '';
-    zone.style.display = 'block';
-    ajouterBulleChef(message, 'moi');
-    statut.innerText = '👨‍🍳 Le Chef réfléchit...';
-
-    try {
-        contexteStock = await construireContexteStock();
-
-        if (!contexteStock) {
-            ajouterBulleChef("Ton stock est vide, je ne peux rien te proposer. Scanne un ticket de caisse pour commencer.", 'chef');
-            statut.innerText = '';
-            return;
-        }
-
-        const mode = modeForce || detecterModeMessage(message);
-
-        // Chercher si l'utilisateur nomme un plat precis
-        const platNomme = await detecterPlatNomme(message, contexteStock);
-
-        const idees = await construireIdees(mode, contexteStock, message);
-
-        const rienDuTout = !platNomme
-            && idees.realisables.length === 0
-            && idees.presque.length === 0
-            && idees.combinaisons.length === 0;
-
-        if (rienDuTout) {
-            ajouterBulleChef("Je ne trouve rien qui corresponde avec ce que tu as. Tu veux que je regarde autre chose ?", 'chef');
-            statut.innerText = '';
-            return;
-        }
-
-        const prompt = construirePromptAgent(message, idees, contexteStock, mode, platNomme);
-
-        let reponse = null;
-        let tentatives = 0;
-        while (!reponse && tentatives < 3) {
-            try {
-                reponse = await appelGemini({
-                    contents: [{ parts: [{ text: prompt }] }],
-                    generationConfig: { temperature: 0.85 }
-                });
-            } catch(e) {
-                tentatives++;
-                if (tentatives < 3) {
-                    statut.innerText = `⏳ Réessai ${tentatives}/3...`;
-                    await new Promise(r => setTimeout(r, 2500));
-                } else {
-                    throw e;
-                }
-            }
-        }
-
-        conversationChef.push({ role: 'moi', texte: message });
-        conversationChef.push({ role: 'chef', texte: reponse });
-        if (conversationChef.length > 12) {
-            conversationChef = conversationChef.slice(-12);
-        }
-
-        ajouterBulleChef(reponse, 'chef');
-
-        window.dernieresPropositions = reponse;
-        window.attenteChoixRecette = true;
-        window.modeChefActuel = mode;
-
-        statut.innerText = '';
-
-        if (!document.getElementById('mode-silencieux')?.checked) {
-            faireParlerIA(reponse);
-        }
-
-    } catch (err) {
-        console.error('Erreur Chef :', err);
-        ajouterBulleChef("Désolé, j'ai eu un problème. Réessaie dans quelques secondes.", 'chef');
-        statut.innerText = '';
-    }
-}
 // ============================================================
 // ANALYSER LES RECETTES
 // Realisables / presque realisables / impossibles
@@ -1477,42 +1380,6 @@ function ajouterBulleChef(texte, qui) {
 
     zone.scrollTop = zone.scrollHeight;
 }
-
-
-// ============================================================
-// CONSTRUIRE LE CONTEXTE STOCK
-// ============================================================
-async function construireContexteStock() {
-    const { data: produits } = await monSupabase
-        .from('inventaire2')
-        .select('nom, quantite, emplacement, etat, date_peremption')
-        .eq('proprietaire', utilisateurActuel)
-        .neq('etat', 'Vide');
-
-    if (!produits?.length) return null;
-
-    const nomsProduits = produits.map(p =>
-        p.nom.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    );
-
-    const urgents = produits.filter(p => {
-        if (p.etat === 'Entamé') return true;
-        if (!p.date_peremption) return false;
-        const jours = Math.ceil((new Date(p.date_peremption) - new Date()) / 86400000);
-        return jours <= 3;
-    });
-
-    return {
-        produits,
-        nomsProduits,
-        urgents,
-        texte: `FRIGO : ${produits.filter(p => p.emplacement === 'FRIGO').map(p => p.nom).join(', ') || 'vide'}
-CONGÉLATEUR : ${produits.filter(p => p.emplacement === 'CONGELATEUR').map(p => p.nom).join(', ') || 'vide'}
-PLACARD : ${produits.filter(p => p.emplacement === 'PLACARD').map(p => p.nom).join(', ') || 'vide'}
-À FINIR EN PRIORITÉ : ${urgents.map(p => p.nom).join(', ') || 'rien d urgent'}`
-    };
-}
-
 
 // ============================================================
 // DETECTER LE MODE DEPUIS LE MESSAGE
@@ -5992,6 +5859,7 @@ async function construireContexteStock() {
         .select('nom, quantite, emplacement, etat, date_peremption')
         .eq('proprietaire', utilisateurActuel)
         .neq('etat', 'Vide');
+        .gt('quantite', 0);
 
     if (!produits?.length) return null;
 
@@ -6038,6 +5906,7 @@ async function construireContexteStock() {
         texte: lignes.join('\n')
     };
 }
+
 
 
 
