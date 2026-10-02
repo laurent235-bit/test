@@ -670,7 +670,43 @@
                 ✕ ANNULER
             </button>
         </div>
+<div id="modal-association" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:10001; flex-direction:column; align-items:center; justify-content:flex-start; overflow-y:auto; padding:20px 0;">
+    <div style="width:94%; max-width:460px;">
 
+        <div style="background:white; border-radius:20px 20px 0 0; padding:20px; text-align:center;">
+            <div style="font-size:38px;">❓</div>
+            <b style="font-size:17px; color:#2d3748; display:block; margin-top:8px;">
+                Code-barres inconnu
+            </b>
+            <p style="font-size:12px; color:#718096; margin:8px 0 0 0;" id="association-info">
+                —
+            </p>
+
+            <input type="text" id="recherche-association"
+                   placeholder="🔍 Filtrer votre stock..."
+                   oninput="filtrerAssociation()"
+                   style="width:100%; padding:11px; border:2px solid #e2e8f0; border-radius:10px; font-size:14px; margin-top:14px; box-sizing:border-box;">
+        </div>
+
+        <div style="background:#f7fafc; padding:14px;">
+            <b style="font-size:12px; color:#4a5568; display:block; margin-bottom:10px;">
+                À quel produit de votre stock correspond-il ?
+            </b>
+            <div id="liste-association" style="max-height:45vh; overflow-y:auto;"></div>
+        </div>
+
+        <div style="background:white; border-radius:0 0 20px 20px; padding:18px;">
+            <button onclick="creerNouveauProduitAssociation()"
+                    style="width:100%; background:#3182ce; color:white; border:none; border-radius:12px; padding:13px; cursor:pointer; font-size:14px; font-weight:bold; margin-bottom:10px;">
+                ➕ Aucun — créer un nouveau produit
+            </button>
+            <button onclick="fermerAssociation()"
+                    style="width:100%; background:#718096; color:white; border:none; border-radius:12px; padding:12px; cursor:pointer; font-size:14px;">
+                ✕ Annuler
+            </button>
+        </div>
+    </div>
+</div>
         <!-- ÉTAPE 2 : Scan -->
         <div id="etape-scan-inventaire" style="display:none;">
             <p style="color:white; font-size:18px; font-weight:bold; margin-bottom:5px;">
