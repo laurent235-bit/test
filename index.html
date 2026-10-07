@@ -1393,36 +1393,67 @@ RÈGLES ABSOLUES :
 // ============================================================
 function ajouterBulleChef(texte, qui) {
     const zone = document.getElementById('chef-conversation');
-
+ 
     const estMoi = qui === 'moi';
     const bulle = document.createElement('div');
     bulle.style.cssText = 'margin-bottom:10px; display:flex; '
         + (estMoi ? 'justify-content:flex-end;' : 'justify-content:flex-start;');
-
+ 
     const contenu = document.createElement('div');
     contenu.style.cssText = 'max-width:85%; padding:10px 13px; border-radius:14px; font-size:13px; line-height:1.5; '
         + (estMoi
             ? 'background:#ff9800; color:white; border-bottom-right-radius:4px;'
             : 'background:#f1f5f9; color:#2d3748; border-bottom-left-radius:4px;');
     contenu.innerText = texte;
-
+ 
     bulle.appendChild(contenu);
     zone.appendChild(bulle);
-
-    // Boutons de choix seulement si plusieurs propositions
-    if (!estMoi && /lequel te tente/i.test(texte)) {
-        const boutons = document.createElement('div');
-        boutons.style.cssText = 'display:flex; gap:6px; margin:0 0 12px 0; flex-wrap:wrap;';
-        boutons.innerHTML =
-            '<button onclick="choisirEtRedigerRecette(window.modeChefActuel, \'premier plat\')" '
-            + 'style="flex:1; min-width:70px; background:#e3f2fd; color:#1a73e8; border:1px solid #1a73e8; border-radius:8px; padding:8px 4px; cursor:pointer; font-weight:bold; font-size:11px;">🍽️ 1</button>'
-            + '<button onclick="choisirEtRedigerRecette(window.modeChefActuel, \'deuxième plat\')" '
-            + 'style="flex:1; min-width:70px; background:#e8f5e9; color:#34a853; border:1px solid #34a853; border-radius:8px; padding:8px 4px; cursor:pointer; font-weight:bold; font-size:11px;">🍽️ 2</button>'
-            + '<button onclick="choisirEtRedigerRecette(window.modeChefActuel, \'troisième plat\')" '
-            + 'style="flex:1; min-width:70px; background:#fce4ec; color:#ea4335; border:1px solid #ea4335; border-radius:8px; padding:8px 4px; cursor:pointer; font-weight:bold; font-size:11px;">🍽️ 3</button>';
-        zone.appendChild(boutons);
+ 
+    // ── DETECTION ELARGIE DES PROPOSITIONS ──
+    // On affiche les boutons des que le Chef propose des plats,
+    // quelle que soit sa formule de fin
+    if (!estMoi) {
+        const t = texte.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+ 
+        const demandeChoix = /lequel te tente/.test(t)
+            || /ca te dit/.test(t)
+            || /ca te tente/.test(t)
+            || /ce qui te tente/.test(t)
+            || /qu est ce que tu en dis/.test(t)
+            || /que dirais tu/.test(t)
+            || /tu preferes/.test(t)
+            || /lequel/.test(t);
+ 
+        if (demandeChoix) {
+            // Compter les propositions pour n afficher que les boutons utiles
+            const nbPropositions = (t.match(/\bou\b|\bsinon\b|\bou alors\b/g) || []).length + 1;
+            const nbBoutons = Math.min(Math.max(nbPropositions, 1), 3);
+ 
+            const couleurs = [
+                ['#e3f2fd', '#1a73e8'],
+                ['#e8f5e9', '#34a853'],
+                ['#fce4ec', '#ea4335']
+            ];
+            const libelles = ['premier plat', 'deuxième plat', 'troisième plat'];
+ 
+            const boutons = document.createElement('div');
+            boutons.style.cssText = 'display:flex; gap:6px; margin:0 0 12px 0; flex-wrap:wrap;';
+ 
+            let html = '';
+            for (let i = 0; i < nbBoutons; i++) {
+                html += '<button onclick="choisirEtRedigerRecette(window.modeChefActuel, \''
+                      + libelles[i] + '\')" '
+                      + 'style="flex:1; min-width:70px; background:' + couleurs[i][0]
+                      + '; color:' + couleurs[i][1] + '; border:1px solid ' + couleurs[i][1]
+                      + '; border-radius:8px; padding:8px 4px; cursor:pointer; font-weight:bold; font-size:11px;">'
+                      + '🍽️ ' + (i + 1) + '</button>';
+            }
+ 
+            boutons.innerHTML = html;
+            zone.appendChild(boutons);
+        }
     }
-
+ 
     zone.scrollTop = zone.scrollHeight;
 }
 
@@ -1795,9 +1826,9 @@ function detecterFamille(ingredients) {
 async function choisirEtRedigerRecette(mode, choix) {
     const statut = document.getElementById('statut-chef');
     const zone = document.getElementById('chef-conversation');
-
+ 
     if (statut) statut.innerText = '✍️ Le Chef rédige la recette...';
-
+ 
     try {
         // Recuperer le stock pour identifier les ingredients a decrementer
         const { data: produits } = await monSupabase
@@ -1806,22 +1837,24 @@ async function choisirEtRedigerRecette(mode, choix) {
             .eq('proprietaire', utilisateurActuel)
             .neq('etat', 'Vide')
             .gt('quantite', 0);
-
+ 
         const listeStock = (produits || [])
-            .map(function(p) { return 'ID:' + p.id + ' | ' + p.nom + ' (qté ' + p.quantite + ')'; })
+            .map(function(p) {
+                return 'ID:' + p.id + ' | ' + p.nom + ' (qté ' + p.quantite + ')';
+            })
             .join('\n');
-
+ 
         const prompt = `L'utilisateur a choisi le "${choix}" parmi ces propositions :
 "${window.dernieresPropositions}"
-
+ 
 STOCK DISPONIBLE :
 ${listeStock}
-
+ 
 Ta mission :
 1. Écris la recette complète et détaillée pour 4 personnes
 2. Identifie les produits du STOCK réellement utilisés, avec leur ID
 3. Indique combien d'unités de chaque produit sont consommées
-
+ 
 RÉPONDS UNIQUEMENT EN JSON valide, sans markdown ni backticks :
 {
   "titre": "Nom du plat",
@@ -1830,25 +1863,44 @@ RÉPONDS UNIQUEMENT EN JSON valide, sans markdown ni backticks :
     {"id": 123, "nom": "Coquillettes", "quantite_utilisee": 1}
   ]
 }
-
+ 
 RÈGLES pour ingredients_stock :
+ 
+Le STOCK compte en UNITÉS D'ACHAT, pas en portions.
+Une ligne "Panés de colin (qté 2)" signifie 2 BOÎTES, pas 2 panés.
+Une ligne "Coquillettes (qté 1)" signifie 1 PAQUET, pas 1 portion.
+ 
+quantite_utilisee doit donc indiquer combien d'EMBALLAGES sont consommés,
+presque toujours 1.
+ 
+Mauvais : {"nom": "Panés de colin", "quantite_utilisee": 4}
+Correct : {"nom": "Panés de colin", "quantite_utilisee": 1}
+ 
+Utilise une valeur supérieure à 1 uniquement si la recette consomme
+vraiment plusieurs emballages entiers.
+ 
+Autres règles :
 - UNIQUEMENT des produits présents dans le STOCK, avec leur ID exact
-- quantite_utilisee : nombre d'unités consommées, généralement 1
 - Ne dépasse jamais la quantité disponible
-- N'inclus pas le sel, poivre, huile, eau`;
-
+- N'inclus pas le sel, poivre, huile, eau
+- N'inclus que les produits VRAIMENT utilisés dans la recette
+ 
+RÈGLE pour le titre et le contenu :
+N'utilise jamais les noms bruts du stock tels quels.
+Écris "des panés de colin", pas "Panes colin Alaska MSC".`;
+ 
         const resultatBrut = await appelGemini(prompt);
-
+ 
         const propre = resultatBrut
             .replace(/```json/g, '')
             .replace(/```/g, '')
             .trim();
         const jsonStr = propre.substring(propre.indexOf('{'), propre.lastIndexOf('}') + 1);
         const recette = JSON.parse(jsonStr);
-
+ 
         window.recetteEnCours = recette;
         recettesTemporaires = [recette];
-
+ 
         // ── AFFICHAGE DANS LA CONVERSATION ──
         const listeIngredients = (recette.ingredients_stock || [])
             .map(function(i) {
@@ -1856,59 +1908,59 @@ RÈGLES pour ingredients_stock :
                      + ' <b>×' + i.quantite_utilisee + '</b></li>';
             })
             .join('');
-
+ 
         const bloc = document.createElement('div');
         bloc.style.cssText = 'margin-bottom:12px; display:flex; justify-content:flex-start;';
-
+ 
         bloc.innerHTML =
             '<div style="max-width:95%; background:#f1f5f9; border-radius:14px; border-bottom-left-radius:4px; padding:14px;">'
-
+ 
             + '<b style="color:#ff9800; font-size:15px; display:block; margin-bottom:10px;">🍽️ '
             + recette.titre + '</b>'
-
+ 
             + '<p style="white-space:pre-wrap; font-size:13px; color:#2d3748; margin:0 0 12px 0; line-height:1.6;">'
             + recette.contenu + '</p>'
-
+ 
             + (listeIngredients
                 ? '<div style="background:#f0fff4; border:1px solid #c6f6d5; border-radius:10px; padding:10px; margin-bottom:12px;">'
                   + '<b style="font-size:11px; color:#2f855a;">📦 Sera retiré de votre stock :</b>'
                   + '<ul style="margin:6px 0 0 0; padding-left:18px;">' + listeIngredients + '</ul>'
                   + '</div>'
                 : '')
-
+ 
             + '<button onclick="validerPlatCuisine()" '
             + 'style="width:100%; background:#38a169; color:white; border:none; border-radius:10px; padding:12px; cursor:pointer; font-weight:bold; font-size:14px; margin-bottom:8px;">'
             + '✅ J\'AI CUISINÉ CE PLAT</button>'
-
+ 
             + '<button onclick="sauverRecetteDirect(0)" '
             + 'style="width:100%; background:#805ad5; color:white; border:none; border-radius:10px; padding:10px; cursor:pointer; font-weight:bold; font-size:13px;">'
             + '💾 Sauver dans le grimoire</button>'
-
+ 
             + '</div>';
-
+ 
         zone.appendChild(bloc);
         zone.scrollTop = zone.scrollHeight;
-
+ 
         // Memoriser dans la conversation
         conversationChef.push({
             role: 'chef',
             texte: 'Recette de ' + recette.titre + ' envoyée.'
         });
-
+ 
         window.attenteChoixRecette = false;
         if (statut) statut.innerText = '';
-
+ 
         if (!document.getElementById('mode-silencieux')?.checked) {
             faireParlerIA("C'est prêt ! Je t'ai affiché la recette.");
         }
-
+ 
     } catch (err) {
         console.error('Erreur recette :', err);
         ajouterBulleChef("Je n'ai pas réussi à rédiger la recette. Réessaie ?", 'chef');
         if (statut) statut.innerText = '';
     }
 }
-
+ 
 						
 async function demanderAuChefVocal(phrase) {
     const statut = document.getElementById('statut-vocal');
@@ -6265,6 +6317,27 @@ Ne les recopie jamais tels quels.
 Écris "des boulettes de boeuf", pas "MAX. BOUL. BOEUF CHARAL X30 900G".
 Écris "une crème au chocolat", pas "Danette Liégeois chocolat".
 Écris "du poisson pané", pas "Panes colin Alaska MSC".
+
+═══════════════════════════════════════
+NUMÉROS DE L'INVENTAIRE
+═══════════════════════════════════════
+ 
+Les numéros devant chaque produit de l'inventaire sont un repère interne.
+Ils servent uniquement à t'aider à vérifier que le produit existe.
+Ne les écris JAMAIS dans ta réponse.
+ 
+Mauvais : "tes coquillettes (95) et tes lardons (39)"
+Correct : "tes coquillettes et tes lardons"
+ 
+═══════════════════════════════════════
+FORMULE DE FIN
+═══════════════════════════════════════
+ 
+Quand tu proposes des plats parmi lesquels choisir, termine TOUJOURS
+ta réponse par exactement : "Lequel te tente ?"
+N'utilise pas d'autre formule comme "ça te dit ?" ou "ça te tente ?".
+C'est cette phrase qui déclenche l'affichage des boutons de choix.
+*/
 
 ═══════════════════════════════════════
 SUBSTITUTIONS
