@@ -1788,46 +1788,124 @@ function detecterFamille(ingredients) {
  
 
 // ============================================================
-// RÉDIGER LA RECETTE APRÈS CHOIX DU PLAT
+// REDIGER LA RECETTE — version conversationnelle
+// Affiche la recette dans une bulle du chat
+// Remplace ta fonction choisirEtRedigerRecette
 // ============================================================
 async function choisirEtRedigerRecette(mode, choix) {
     const statut = document.getElementById('statut-chef');
-    const resultats = document.getElementById('chef-resultats');
+    const zone = document.getElementById('chef-conversation');
 
-    if (statut) statut.innerText = "✍️ Le Chef rédige la recette...";
+    if (statut) statut.innerText = '✍️ Le Chef rédige la recette...';
 
     try {
-        const promptRecette = `L'utilisateur a choisi le "${choix}" parmi ces propositions : "${window.dernieresPropositions}".
-Écris la recette complète et détaillée.
-RÉPONDS UNIQUEMENT EN JSON :
-[{"titre":"Nom exact du plat","contenu":"Ingrédients:\\n- ingrédient 1\\n- ingrédient 2\\n\\nÉtapes:\\n1. Étape 1\\n2. Étape 2\\n3. Étape 3"}]`;
+        // Recuperer le stock pour identifier les ingredients a decrementer
+        const { data: produits } = await monSupabase
+            .from('inventaire2')
+            .select('id, nom, quantite, emplacement')
+            .eq('proprietaire', utilisateurActuel)
+            .neq('etat', 'Vide')
+            .gt('quantite', 0);
 
-        const resultatBrut = await appelGemini(promptRecette);
-        const jsonStr = resultatBrut.substring(resultatBrut.indexOf('['), resultatBrut.lastIndexOf(']') + 1);
-        recettesTemporaires = JSON.parse(jsonStr);
+        const listeStock = (produits || [])
+            .map(function(p) { return 'ID:' + p.id + ' | ' + p.nom + ' (qté ' + p.quantite + ')'; })
+            .join('\n');
 
-        if (resultats) {
-            resultats.innerHTML = recettesTemporaires.map((r, i) => `
-                <div style="background:white; padding:15px; border-radius:12px; border:1px solid #ddd; margin-top:10px;">
-                    <b style="color:var(--chef); font-size:15px; display:block; margin-bottom:10px;">🍽️ ${r.titre}</b>
-                    <p style="white-space:pre-wrap; font-size:13px; color:#555; margin:0 0 12px 0; line-height:1.6;">${r.contenu}</p>
-                    <div style="display:flex; gap:8px;">
-                        <button onclick="sauverRecetteDirect(${i})" class="btn btn-mur" style="margin:0;">💾 Sauver</button>
-                        <button onclick="lancerChefMode('${mode}')"
-                                style="flex:1; background:#718096; color:white; border:none; border-radius:8px; padding:10px; cursor:pointer; font-weight:bold;">
-                            🔄 Autres idées
-                        </button>
-                    </div>
-                </div>`).join('');
-        }
+        const prompt = `L'utilisateur a choisi le "${choix}" parmi ces propositions :
+"${window.dernieresPropositions}"
+
+STOCK DISPONIBLE :
+${listeStock}
+
+Ta mission :
+1. Écris la recette complète et détaillée pour 4 personnes
+2. Identifie les produits du STOCK réellement utilisés, avec leur ID
+3. Indique combien d'unités de chaque produit sont consommées
+
+RÉPONDS UNIQUEMENT EN JSON valide, sans markdown ni backticks :
+{
+  "titre": "Nom du plat",
+  "contenu": "Ingrédients:\\n- ingrédient 1\\n- ingrédient 2\\n\\nÉtapes:\\n1. Première étape\\n2. Deuxième étape",
+  "ingredients_stock": [
+    {"id": 123, "nom": "Coquillettes", "quantite_utilisee": 1}
+  ]
+}
+
+RÈGLES pour ingredients_stock :
+- UNIQUEMENT des produits présents dans le STOCK, avec leur ID exact
+- quantite_utilisee : nombre d'unités consommées, généralement 1
+- Ne dépasse jamais la quantité disponible
+- N'inclus pas le sel, poivre, huile, eau`;
+
+        const resultatBrut = await appelGemini(prompt);
+
+        const propre = resultatBrut
+            .replace(/```json/g, '')
+            .replace(/```/g, '')
+            .trim();
+        const jsonStr = propre.substring(propre.indexOf('{'), propre.lastIndexOf('}') + 1);
+        const recette = JSON.parse(jsonStr);
+
+        window.recetteEnCours = recette;
+        recettesTemporaires = [recette];
+
+        // ── AFFICHAGE DANS LA CONVERSATION ──
+        const listeIngredients = (recette.ingredients_stock || [])
+            .map(function(i) {
+                return '<li style="font-size:12px; color:#4a5568;">' + i.nom
+                     + ' <b>×' + i.quantite_utilisee + '</b></li>';
+            })
+            .join('');
+
+        const bloc = document.createElement('div');
+        bloc.style.cssText = 'margin-bottom:12px; display:flex; justify-content:flex-start;';
+
+        bloc.innerHTML =
+            '<div style="max-width:95%; background:#f1f5f9; border-radius:14px; border-bottom-left-radius:4px; padding:14px;">'
+
+            + '<b style="color:#ff9800; font-size:15px; display:block; margin-bottom:10px;">🍽️ '
+            + recette.titre + '</b>'
+
+            + '<p style="white-space:pre-wrap; font-size:13px; color:#2d3748; margin:0 0 12px 0; line-height:1.6;">'
+            + recette.contenu + '</p>'
+
+            + (listeIngredients
+                ? '<div style="background:#f0fff4; border:1px solid #c6f6d5; border-radius:10px; padding:10px; margin-bottom:12px;">'
+                  + '<b style="font-size:11px; color:#2f855a;">📦 Sera retiré de votre stock :</b>'
+                  + '<ul style="margin:6px 0 0 0; padding-left:18px;">' + listeIngredients + '</ul>'
+                  + '</div>'
+                : '')
+
+            + '<button onclick="validerPlatCuisine()" '
+            + 'style="width:100%; background:#38a169; color:white; border:none; border-radius:10px; padding:12px; cursor:pointer; font-weight:bold; font-size:14px; margin-bottom:8px;">'
+            + '✅ J\'AI CUISINÉ CE PLAT</button>'
+
+            + '<button onclick="sauverRecetteDirect(0)" '
+            + 'style="width:100%; background:#805ad5; color:white; border:none; border-radius:10px; padding:10px; cursor:pointer; font-weight:bold; font-size:13px;">'
+            + '💾 Sauver dans le grimoire</button>'
+
+            + '</div>';
+
+        zone.appendChild(bloc);
+        zone.scrollTop = zone.scrollHeight;
+
+        // Memoriser dans la conversation
+        conversationChef.push({
+            role: 'chef',
+            texte: 'Recette de ' + recette.titre + ' envoyée.'
+        });
 
         window.attenteChoixRecette = false;
-        if (statut) statut.innerText = "✅ Recette prête !";
-        faireParlerIA("C'est prêt ! Je t'ai affiché la recette.");
+        if (statut) statut.innerText = '';
+
+        if (!document.getElementById('mode-silencieux')?.checked) {
+            faireParlerIA("C'est prêt ! Je t'ai affiché la recette.");
+        }
 
     } catch (err) {
-        console.error("Erreur recette :", err);
-        if (statut) statut.innerText = "❌ Erreur. Réessaie.";
+        console.error('Erreur recette :', err);
+        ajouterBulleChef("Je n'ai pas réussi à rédiger la recette. Réessaie ?", 'chef');
+        if (statut) statut.innerText = '';
     }
 }
 
@@ -6188,6 +6266,18 @@ Ne les recopie jamais tels quels.
 Écris "une crème au chocolat", pas "Danette Liégeois chocolat".
 Écris "du poisson pané", pas "Panes colin Alaska MSC".
 
+═══════════════════════════════════════
+SUBSTITUTIONS
+═══════════════════════════════════════
+
+Tu peux remplacer un ingrédient absent par un équivalent présent dans
+l'inventaire. C'est même une bonne chose, un cuisinier fait ça tout le temps.
+
+MAIS tu dois l'annoncer dès ta proposition, jamais après coup.
+Ne nomme jamais un plat d'après un ingrédient que l'utilisateur n'a pas.
+
+Mauvais : "des coquillettes au jambon" alors qu'il n'a que des lardons
+Correct : "des coquillettes aux lardons fumés, ça remplace bien le jambon"
 
 ═══════════════════════════════════════
 COMMENT RÉPONDRE
