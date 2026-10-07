@@ -794,7 +794,7 @@
             ✕ TERMINER
         </button>
     </div>
-	<!-- 1. AJOUTE CETTE MODALE avant </body> -->
+	<!-- MODALE DE SAISIE MANUELLE — mode inventaire -->
 <div id="modal-saisie-manuelle" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:10000; flex-direction:column; align-items:center; justify-content:center;">
     <div style="width:92%; max-width:420px; background:white; border-radius:20px; padding:25px;">
 
@@ -807,23 +807,32 @@
                 EAN : —
             </p>
         </div>
-		<div id="modal-association" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:10001; flex-direction:column; align-items:center; justify-content:flex-start; overflow-y:auto; padding:20px 0;">
-    <div style="width:94%; max-width:460px;">
 
-        <div style="background:white; border-radius:20px 20px 0 0; padding:20px; text-align:center;">
-            <div style="font-size:38px;">❓</div>
-            <b style="font-size:17px; color:#2d3748; display:block; margin-top:8px;">
-                Code-barres inconnu
-            </b>
-            <p style="font-size:12px; color:#718096; margin:8px 0 0 0;" id="association-info">
-                —
-            </p>
+        <label style="font-size:13px; color:#4a5568; font-weight:bold; display:block; margin-bottom:6px;">
+            Quel est ce produit ?
+        </label>
+        <input type="text" id="input-nom-manuel"
+               placeholder="Ex: Papier toilette, Lessive..."
+               style="width:100%; padding:14px; border:2px solid #cbd5e0; border-radius:12px; font-size:15px; margin-bottom:15px; box-sizing:border-box;"
+               onkeypress="if(event.key==='Enter') validerSaisieManuelle()">
 
-            <input type="text" id="recherche-association"
-                   placeholder="🔍 Filtrer votre stock..."
-                   oninput="filtrerAssociation()"
-                   style="width:100%; padding:11px; border:2px solid #e2e8f0; border-radius:10px; font-size:14px; margin-top:14px;">
-        </div>
+        <label style="font-size:13px; color:#4a5568; font-weight:bold; display:block; margin-bottom:6px;">
+            Quantité
+        </label>
+        <input type="number" id="input-qte-manuel" value="1" min="1"
+               style="width:100%; padding:14px; border:2px solid #cbd5e0; border-radius:12px; font-size:15px; margin-bottom:20px; text-align:center; box-sizing:border-box;">
+
+        <button onclick="validerSaisieManuelle()"
+                style="width:100%; background:#38a169; color:white; border:none; border-radius:12px; padding:15px; cursor:pointer; font-size:15px; font-weight:bold; margin-bottom:10px;">
+            ✅ AJOUTER AU STOCK
+        </button>
+
+        <button onclick="annulerSaisieManuelle()"
+                style="width:100%; background:#718096; color:white; border:none; border-radius:12px; padding:13px; cursor:pointer; font-size:14px;">
+            ⏭️ Passer ce produit
+        </button>
+    </div>
+</div>
 
         <div style="background:#f7fafc; padding:14px;">
             <b style="font-size:12px; color:#4a5568; display:block; margin-bottom:10px;">
@@ -2212,6 +2221,10 @@ async function sauverRecetteDirect(i) {
 // 13. CHARGER TOUT L'INVENTAIRE
 // Avec distinction date scannée / date estimée
 // ============================================================
+// ============================================================
+// CHARGER TOUT L'INVENTAIRE
+// Avec filtrage des produits a quantite zero
+// ============================================================
 async function chargerTout() {
     if (!utilisateurActuel) return;
 
@@ -2219,6 +2232,7 @@ async function chargerTout() {
         .from('inventaire2')
         .select('*')
         .eq('proprietaire', utilisateurActuel)
+        .or('quantite.gt.0,etat.eq.Vide,etat.eq.Tup')
         .order('nom');
 
     if (error) { console.error("Erreur chargement :", error.message); return; }
@@ -2247,7 +2261,7 @@ async function chargerTout() {
 
     items.forEach(item => {
 
-        // CAS A : LISTE DE COURSES
+        // ── CAS A : LISTE DE COURSES ──
         if (item.etat === 'Vide') {
             if (sl) sl.innerHTML += `
                 <div class="item" style="background:#fff5f5; border:1px solid #fed7d7;">
@@ -2261,7 +2275,7 @@ async function chargerTout() {
                 </div>`;
         }
 
-        // CAS B : ANTI-GASPI
+        // ── CAS B : ANTI-GASPI ──
         else if (item.etat === 'Tup') {
             if (lt) {
                 const joursPasses = Math.floor((new Date() - new Date(item.emplacement)) / 86400000);
@@ -2283,34 +2297,38 @@ async function chargerTout() {
             }
         }
 
-        // CAS C : STOCK CLASSIQUE
+        // ── CAS C : STOCK CLASSIQUE ──
         else {
+            // Securite : ignorer les produits a quantite nulle
+            if ((parseInt(item.quantite) || 0) <= 0) return;
+
             const containerId = mapping[item.emplacement] || 'list-Placard';
             const container = document.getElementById(containerId);
             if (!container) return;
 
             const couleurEtat = item.etat === 'Entamé' ? '#ef6c00' : '#333';
-            let labelEtat = '📦 Plein';
-    if (item.etat === 'Entamé') {
-        if (item.date_entame) {
-            const jours = Math.floor((new Date() - new Date(item.date_entame)) / 86400000);
-            labelEtat = jours === 0
-                ? '⚠️ Entamé aujourd\'hui'
-                : jours === 1
-                    ? '⚠️ Entamé hier'
-                    : `⚠️ Entamé depuis ${jours}j`;
-        } else {
-            labelEtat = '⚠️ Entamé';
-        }
-    }
 
-            // ── AFFICHAGE DE LA DATE DE PÉREMPTION ──
+            // Label d'etat avec duree depuis l'ouverture
+            let labelEtat = '📦 Plein';
+            if (item.etat === 'Entamé') {
+                if (item.date_entame) {
+                    const jours = Math.floor((new Date() - new Date(item.date_entame)) / 86400000);
+                    labelEtat = jours === 0
+                        ? '⚠️ Entamé aujourd\'hui'
+                        : jours === 1
+                            ? '⚠️ Entamé hier'
+                            : `⚠️ Entamé depuis ${jours}j`;
+                } else {
+                    labelEtat = '⚠️ Entamé';
+                }
+            }
+
+            // Affichage de la date de peremption
             let alerteHtml = "";
             if (item.date_peremption && item.emplacement === 'FRIGO') {
                 const diff = Math.ceil((new Date(item.date_peremption) - new Date()) / 86400000);
                 const icone = diff <= 1 ? "🔴" : diff <= 3 ? "🟠" : "🟢";
 
-                // Distinction date scannée (fiable) vs estimée
                 const estScannee = item.date_scannee === true;
                 const prefixe = estScannee ? '' : '~';
                 const suffixe = estScannee ? '' : ' (est.)';
@@ -2374,8 +2392,9 @@ async function chargerTout() {
 
     remplirSuggestions();
     mettreAJourBoutonSupprimer();
-	verifierPeremptions();
+    verifierPeremptions();
 }
+
 // ============================================================
 // 14. AJOUT MANUEL
 // ============================================================
