@@ -6127,9 +6127,6 @@ async function chargerInspirations(mode, contexte) {
 }
 
 
-// ============================================================
-// 3. ENVOYER UN MESSAGE — version composition libre
-// ============================================================
 async function envoyerMessageChef(modeForce) {
     const input = document.getElementById('chef-message');
     const message = input.value.trim();
@@ -6160,16 +6157,19 @@ async function envoyerMessageChef(modeForce) {
             return;
         }
 
+        // ── INDEX : numéro de ligne → nom du produit ──
+        const index = construireIndexInventaire(contexteStock.texte);
+
         const mode = modeForce || detecterModeMessage(message);
         const inspirations = await chargerInspirations(mode, contexteStock);
 
         const prompt = construirePromptLibre(message, contexteStock, mode, inspirations);
 
-        let reponse = null;
+        let brut = null;
         let tentatives = 0;
-        while (!reponse && tentatives < 3) {
+        while (!brut && tentatives < 3) {
             try {
-                reponse = await appelGemini({
+                brut = await appelGemini({
                     contents: [{ parts: [{ text: prompt }] }],
                     generationConfig: { temperature: 0.9 }
                 });
@@ -6184,22 +6184,26 @@ async function envoyerMessageChef(modeForce) {
             }
         }
 
+        // ── LECTURE + VERIFICATION ──
+        const resultat = extraireReponseChef(brut, index);
+
         conversationChef.push({ role: 'moi', texte: message });
-        conversationChef.push({ role: 'chef', texte: reponse });
+        conversationChef.push({ role: 'chef', texte: resultat.message });
         if (conversationChef.length > 14) {
             conversationChef = conversationChef.slice(-14);
         }
 
-        ajouterBulleChef(reponse, 'chef');
+        ajouterBulleChef(resultat.message, 'chef');
 
-        window.dernieresPropositions = reponse;
-        window.attenteChoixRecette = true;
+        window.dernieresPropositions = resultat.message;
+        window.platsProposes = resultat.plats;
+        window.attenteChoixRecette = resultat.plats.length > 0;
         window.modeChefActuel = mode;
 
         statut.innerText = '';
 
         if (!document.getElementById('mode-silencieux')?.checked) {
-            faireParlerIA(reponse);
+            faireParlerIA(resultat.message);
         }
 
     } catch (err) {
@@ -6210,11 +6214,12 @@ async function envoyerMessageChef(modeForce) {
 }
 
 
+
 // ============================================================
 // 4. PROMPT DE COMPOSITION LIBRE
 // ============================================================
 function construirePromptLibre(message, contexte, mode, inspirations) {
-
+ 
     let historique = '';
     let dejaCites = '';
     if (conversationChef.length > 0) {
@@ -6222,14 +6227,14 @@ function construirePromptLibre(message, contexte, mode, inspirations) {
             + conversationChef.map(function(c) {
                 return (c.role === 'moi' ? 'Utilisateur : ' : 'Toi : ') + c.texte;
               }).join('\n') + '\n';
-
+ 
         dejaCites = `
 Tu as déjà proposé des plats plus haut. Si l'utilisateur demande autre chose,
 change vraiment : autre viande, autre féculent, autre mode de cuisson.
 Si tu as fait le tour, dis-le honnêtement plutôt que de te répéter.
 `;
     }
-
+ 
     let bloc = '';
     if (inspirations.length > 0) {
         bloc = '\nPISTES POSSIBLES (indicatif, tu n es pas obligé) :\n'
@@ -6237,134 +6242,266 @@ Si tu as fait le tour, dis-le honnêtement plutôt que de te répéter.
                  return '- ' + r.nom;
                }).join('\n') + '\n';
     }
-
+ 
     const contextesModes = {
         quotidien: `C'est un soir de semaine. Il faut du simple et rapide, moins de 25 minutes.
 Dans la cuisine familiale française, c'est souvent une protéine, un féculent et un
 légume dans la même assiette. Ou un plat unique classique : croque-monsieur,
 coquillettes au jambon, omelette, pâtes carbonara, hachis parmentier.`,
-
+ 
         weekend: `C'est le week-end, il y a du temps. Plat qui mijote, rôti, gratin, quelque chose de généreux.`,
-
-        cookeo: `Cuisine au Cookeo, multicuiseur sous pression : mijotés express, riz et pâtes en cuisson unique, légumes vapeur, soupes.`,
-
+ 
+        cookeo: `Cuisine au Cookeo, multicuiseur sous pression : mijotés express, riz et pâtes en cuisson unique, légumes vapeur, soupes.
+Tout se fait dans la cuve, en une seule cuisson. Pas de four, pas de plusieurs casseroles.`,
+ 
         healthy: `Repas léger et équilibré : légumes, protéines maigres, cuissons douces.`,
-
+ 
         monde: `Changer du quotidien français : plats d'autres cuisines, réalisables avec ce qu'il y a.`,
-
+ 
         dessert: `Un dessert.`,
-
+ 
         antigaspi: `Utiliser en priorité ce qui doit être mangé rapidement.`
     };
-
+ 
     return `Tu es le Chef, un cuisinier familier et débrouillard.
 Tu connais la cuisine française du quotidien et tu sais improviser.
-
+ 
 ${contextesModes[mode] || contextesModes.quotidien}
-
+ 
 INVENTAIRE COMPLET — voici TOUT ce que l'utilisateur possède, rien d'autre :
 ${contexte.texte}
 ${bloc}${historique}${dejaCites}
 DEMANDE DE L'UTILISATEUR : "${message}"
-
-
+ 
+ 
 ═══════════════════════════════════════
 RÈGLE N°1 — NE RIEN INVENTER
 ═══════════════════════════════════════
-
-Chaque plat que tu proposes doit être composé UNIQUEMENT de produits
-présents dans l'inventaire numéroté ci-dessus.
-
-Les seuls ajouts autorisés sont : sel, poivre, huile, beurre, eau, ail,
-oignon, farine, sucre, épices.
-
-INTERDICTIONS FORMELLES :
-
-Ne transforme pas un produit en une version différente.
-  Si l'inventaire dit "Cordon bleu", c'est un cordon bleu tout prêt à cuire.
-  Tu ne peux pas proposer "cordon bleu maison" ni "cordon bleu de poulet".
-  Si l'inventaire dit "Pâtes", ce sont des pâtes sèches.
-  Tu ne peux pas proposer "pâtes fraîches".
-
-N'invente pas de sauces ou de préparations qui demandent des ingrédients absents.
-  Pas de "sauce burger" si aucune sauce burger n'est listée.
-  Pas de "crème de cancoillotte" si la cancoillotte n'est pas dans la liste.
-
-Ne cite pas un produit pour faire joli s'il n'entre pas vraiment dans le plat.
-  Ne dis pas "on finit la fécule de maïs" si ça n'a pas de sens dans la recette.
-
-AVANT de proposer un plat, vérifie mentalement que chacun de ses
-ingrédients porte un numéro dans l'inventaire ci-dessus.
-Si un ingrédient n'y est pas, change de plat.
-
-
-═══════════════════════════════════════
-RÈGLE N°2 — PRODUITS À FINIR
-═══════════════════════════════════════
-
-Les produits marqués "entamé" ou "à finir vite" méritent d'être utilisés.
-Tu peux le signaler, mais seulement si le produit entre VRAIMENT dans le plat.
-Ne force jamais une mention de ce genre.
-
-
-═══════════════════════════════════════
-RÈGLE N°3 — NOMS DES PLATS
-═══════════════════════════════════════
-
-L'inventaire contient des noms bruts de tickets de caisse, laids et techniques.
-Ne les recopie jamais tels quels.
-
-Écris "des boulettes de boeuf", pas "MAX. BOUL. BOEUF CHARAL X30 900G".
-Écris "une crème au chocolat", pas "Danette Liégeois chocolat".
-Écris "du poisson pané", pas "Panes colin Alaska MSC".
-
-═══════════════════════════════════════
-NUMÉROS DE L'INVENTAIRE
-═══════════════════════════════════════
  
-Les numéros devant chaque produit de l'inventaire sont un repère interne.
-Ils servent uniquement à t'aider à vérifier que le produit existe.
-Ne les écris JAMAIS dans ta réponse.
+Tu ne proposes QUE des plats réalisables avec l'inventaire ci-dessus.
+Si un ingrédient n'y figure pas, il n'existe pas : tu ne peux pas l'utiliser.
  
-Mauvais : "tes coquillettes (95) et tes lardons (39)"
-Correct : "tes coquillettes et tes lardons"
+Seules exceptions, toujours disponibles sans être listées :
+sel, poivre, eau, huile, vinaigre, herbes et épices sèches.
+ 
+Tu peux adapter un plat classique à ce qu'il y a — remplacer un fromage par
+un autre, une viande par une autre, un féculent par un autre — mais tu dois
+le dire franchement plutôt que de faire comme si la recette était complète.
+ 
+Si l'inventaire ne permet vraiment rien de correct, dis-le simplement.
+Mieux vaut une réponse honnête qu'un plat impossible.
+ 
  
 ═══════════════════════════════════════
-FORMULE DE FIN
+VOCABULAIRE DES INGRÉDIENTS
 ═══════════════════════════════════════
  
-Quand tu proposes des plats parmi lesquels choisir, termine TOUJOURS
-ta réponse par exactement : "Lequel te tente ?"
-N'utilise pas d'autre formule comme "ça te dit ?" ou "ça te tente ?".
-C'est cette phrase qui déclenche l'affichage des boutons de choix.
-*/
-
+Nomme toujours les ingrédients comme ils apparaissent dans l'inventaire,
+jamais par un terme culinaire générique ou une découpe différente.
+ 
+Si l'inventaire dit "filet de poulet", écris "filet de poulet",
+pas "escalope de poulet" ni "blanc de poulet".
+Si l'inventaire dit "épaule", écris "épaule", pas "rôti de porc".
+Si l'inventaire dit "jarret", écris "jarret", pas "jambonneau".
+ 
+Tu peux expliquer une transformation si elle est nécessaire à la recette,
+mais en partant du produit réel :
+"tes filets de poulet taillés en fines tranches" plutôt que "des escalopes".
+ 
+ 
 ═══════════════════════════════════════
-SUBSTITUTIONS
+QUANTITÉS
 ═══════════════════════════════════════
-
-Tu peux remplacer un ingrédient absent par un équivalent présent dans
-l'inventaire. C'est même une bonne chose, un cuisinier fait ça tout le temps.
-
-MAIS tu dois l'annoncer dès ta proposition, jamais après coup.
-Ne nomme jamais un plat d'après un ingrédient que l'utilisateur n'a pas.
-
-Mauvais : "des coquillettes au jambon" alors qu'il n'a que des lardons
-Correct : "des coquillettes aux lardons fumés, ça remplace bien le jambon"
-
+ 
+L'inventaire compte des EMBALLAGES, pas des portions.
+"3 lardons fumés" veut dire trois barquettes, pas trois lardons.
+Ne dis jamais à l'utilisateur qu'il n'a pas assez d'un produit en te basant
+sur ce chiffre : une seule barquette suffit presque toujours pour un repas.
+ 
+ 
 ═══════════════════════════════════════
 COMMENT RÉPONDRE
 ═══════════════════════════════════════
-
+ 
 - QUESTION sur le stock : réponds factuellement d'après l'inventaire.
 - ANNONCE d'une décision : accompagne-le, dis s'il a tout, propose un
   accompagnement. Ne propose pas autre chose à la place.
 - DEMANDE D'IDÉES : propose 3 repas franchement différents — pas la même
   viande, pas le même féculent. Termine par "Lequel te tente ?"
+ 
+ 
+═══════════════════════════════════════
+FORMAT DE TA RÉPONSE
+═══════════════════════════════════════
+ 
+Réponds UNIQUEMENT en JSON valide, sans markdown ni backticks :
+ 
+{
+  "message": "ta réponse naturelle à l'utilisateur",
+  "plats": [
+    { "nom": "Nom court du plat", "produits": [3, 12, 18] },
+    { "nom": "Nom court du plat", "produits": [7, 21] },
+    { "nom": "Nom court du plat", "produits": [5, 9, 14] }
+  ]
+}
+ 
+RÈGLE ABSOLUE SUR "produits" :
+Tu dois lister les NUMÉROS exacts des lignes de l'inventaire ci-dessus
+que le plat utilise. Chaque ingrédient principal que tu cites dans ton
+message doit correspondre à un numéro présent dans cette liste.
+ 
+Tu n'as PAS le droit d'utiliser un ingrédient qui n'a pas de numéro.
+Si tu ne trouves pas le numéro d'un ingrédient dans l'inventaire,
+c'est qu'il n'existe pas : change de plat.
+ 
+Les seules exceptions, que tu ne listes jamais dans "produits" :
+sel, poivre, eau, huile, vinaigre, herbes et épices sèches.
+Tout le reste — viande, poisson, féculent, légume, fromage, crème,
+oeufs, conserve, sauce — doit avoir son numéro.
+ 
+Le champ "message" contient ta réponse telle que l'utilisateur la lira.
+Trois phrases maximum, ton naturel et direct, comme un pote qui cuisine bien.
+Pas de markdown, pas de gras, pas de listes à puces, pas de sauts de ligne.
+Ne cite JAMAIS les numéros dans le message : ils servent uniquement au contrôle.
+ 
+Le champ "nom" est court et clair, 2 à 6 mots, sans durée ni commentaire.
+ 
+Exemple, avec un inventaire où 4 = coquillettes, 11 = lardons,
+17 = cancoillotte, 2 = jarret, 23 = carottes :
+ 
+{
+  "message": "Ce soir je peux te faire des coquillettes aux lardons et à la cancoillotte, ou un jarret mijoté avec des carottes. Lequel te tente ?",
+  "plats": [
+    { "nom": "Coquillettes aux lardons et cancoillotte", "produits": [4, 11, 17] },
+    { "nom": "Jarret mijoté aux carottes", "produits": [2, 23] }
+  ]
+}
+ 
+Si tu ne proposes aucun plat — question sur le stock, réponse à une
+annonce — laisse le tableau vide :
+ 
+{ "message": "Oui, tu as bien du poulet au congélateur, deux filets.", "plats": [] }
+`;
+}
+ 
+function extraireReponseChef(brut, index) {
+    if (!brut) return { message: '', plats: [] };
 
-STYLE :
-Trois phrases maximum. Ton naturel et direct, comme un pote qui cuisine bien.
-Pas de markdown, pas de gras, pas de listes à puces, pas de sauts de ligne.`;
+    index = index || {};
+    let data = null;
+
+    try {
+        const propre = brut.replace(/```json/g, '').replace(/```/g, '').trim();
+        const debut = propre.indexOf('{');
+        const fin = propre.lastIndexOf('}');
+        if (debut !== -1 && fin > debut) {
+            data = JSON.parse(propre.substring(debut, fin + 1));
+        }
+    } catch (e) {
+        console.log('⚠️ Réponse non JSON, texte brut affiché');
+    }
+
+    // Repli : Gemini n'a pas respecté le format
+    if (!data || typeof data.message !== 'string') {
+        return { message: brut, plats: [] };
+    }
+
+    const platsBruts = Array.isArray(data.plats) ? data.plats : [];
+    const valides = [];
+    const rejetes = [];
+
+    platsBruts.forEach(function(plat) {
+        // Tolérance : ancien format en simple chaîne
+        if (typeof plat === 'string') {
+            valides.push({ nom: plat, produits: [], ingredients: [] });
+            return;
+        }
+        if (!plat || !plat.nom) return;
+
+        const numeros = Array.isArray(plat.produits) ? plat.produits : [];
+        const invalides = numeros.filter(function(n) { return !index[n]; });
+
+        if (invalides.length > 0) {
+            rejetes.push({ nom: plat.nom, numeros: invalides });
+            console.warn('🚫 Plat rejeté : "' + plat.nom + '" — numéros inconnus : ' + invalides.join(', '));
+            return;
+        }
+
+        valides.push({
+            nom: plat.nom,
+            produits: numeros,
+            ingredients: numeros.map(function(n) { return index[n]; })
+        });
+    });
+
+    let message = data.message;
+    if (rejetes.length > 0) {
+        message = nettoyerMessageChef(message, rejetes, valides);
+    }
+
+    return { message: message, plats: valides.slice(0, 3), rejetes: rejetes };
+}
+// ============================================================
+// 3. NETTOYER LE MESSAGE QUAND UN PLAT EST RETIRE
+// ============================================================
+function nettoyerMessageChef(message, rejetes, valides) {
+    if (valides.length === 0) {
+        return "Je me suis emmêlé les pinceaux avec ton stock. Redemande-moi, je regarde mieux.";
+    }
+
+    const normaliser = function(t) {
+        return (t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    };
+
+    const phrases = message.split(/(?<=[.!?])\s+/);
+
+    const gardees = phrases.filter(function(phrase) {
+        const p = normaliser(phrase);
+        return !rejetes.some(function(r) {
+            const mots = normaliser(r.nom).split(/\s+/).filter(function(m) { return m.length >= 4; });
+            if (mots.length === 0) return false;
+            const trouves = mots.filter(function(m) { return p.includes(m); });
+            return trouves.length >= Math.ceil(mots.length / 2);
+        });
+    });
+
+    const resultat = gardees.join(' ').trim();
+
+    if (resultat.length < 20) {
+        const noms = valides.map(function(v) { return v.nom.toLowerCase(); });
+        if (noms.length === 1) {
+            return "Avec ce que tu as, je te propose " + noms[0] + ". Ça te va ?";
+        }
+        return "Avec ce que tu as, je te propose "
+            + noms.slice(0, -1).join(', ')
+            + " ou " + noms[noms.length - 1] + ". Lequel te tente ?";
+    }
+
+    return resultat;
+}
+
+
+
+function normaliser(texte) {
+    return (texte || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[̀-ͯ]/g, '');
+}
+
+function construireIndexInventaire(texte) {
+    const index = {};
+    if (!texte) return index;
+
+    texte.split('\n').forEach(function(ligne) {
+        const m = ligne.match(/^\s*(\d+)\s*[.)\-–]\s*(.+)$/);
+        if (m) {
+            index[parseInt(m[1], 10)] = m[2].trim();
+        }
+    });
+
+    console.log('📋 Index inventaire : ' + Object.keys(index).length + ' produits');
+    return index;
 }
 
 </script>
