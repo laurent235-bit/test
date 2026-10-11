@@ -6085,7 +6085,6 @@ async function ouvrirScannerDates() {
     await demarrerScanCodeBarre();
 }
 
- 
 const ORDRE_ROLES = [
     { cle: 'proteine',       titre: 'PROTÉINES (viande, poisson, oeufs, légumineuses)' },
     { cle: 'feculent',       titre: 'FÉCULENTS' },
@@ -6097,8 +6096,7 @@ const ORDRE_ROLES = [
     { cle: 'petit_dejeuner', titre: 'PETIT-DÉJEUNER (ne se cuisinent pas dans un plat salé)' },
     { cle: 'grignotage',     titre: 'GRIGNOTAGE (ne se cuisinent pas dans un plat salé)' }
 ];
-
-
+ 
 async function construireContexteStock() {
     if (!utilisateurActuel) return null;
 
@@ -6231,7 +6229,7 @@ async function envoyerMessageChef(modeForce) {
     const input = document.getElementById('chef-message');
     const message = input.value.trim();
     if (!message) return;
- 
+
     if (!utilisateurActuel) {
         utilisateurActuel = localStorage.getItem('monFrigo_User');
     }
@@ -6239,47 +6237,43 @@ async function envoyerMessageChef(modeForce) {
         afficherToast('Connecte-toi d abord');
         return;
     }
- 
+
     const statut = document.getElementById('statut-chef');
     const zone = document.getElementById('chef-conversation');
- 
+
     input.value = '';
     zone.style.display = 'block';
     ajouterBulleChef(message, 'moi');
     statut.innerText = '👨‍🍳 Le Chef réfléchit...';
- 
+
     try {
         contexteStock = await construireContexteStock();
- 
+
         if (!contexteStock) {
             ajouterBulleChef("Ton stock est vide. Scanne un ticket de caisse pour commencer.", 'chef');
             statut.innerText = '';
             return;
         }
- 
+
         const index = construireIndexInventaire(contexteStock.texte);
         const mode = modeForce || detecterModeMessage(message);
         const inspirations = await chargerInspirations(mode, contexteStock);
- 
-        // ── PREMIER ESSAI ──
+
         let resultat = await demanderAuChef(message, contexteStock, mode, inspirations, index, statut);
-   resultat.plats = filtrerDoublons(resultat.plats);
- 
+        resultat.plats = filtrerDoublons(resultat.plats);
+
         let aRecommence = false;
         if (estRepetitionChef(resultat.message) || resultat.plats.length === 0) {
-        // ── SATURATION : la liste des bannis étouffe le Chef ──
-        let aRecommence = false;
-        if (estRepetitionChef(resultat.message)) {
-            console.log('♻️ Saturation détectée — liste des bannis remise à zéro');
+            console.log('♻️ Saturation détectée — remise à zéro');
             window.platsDejaProposes = [];
             window.produitsRecents = [];
-            window.combinaisonsSorties = [];  
+            window.combinaisonsSorties = [];
             aRecommence = true;
- 
+
             statut.innerText = '👨‍🍳 Le Chef repart de zéro...';
             resultat = await demanderAuChef(message, contexteStock, mode, inspirations, index, statut);
         }
- 
+
         if (aRecommence) {
             ajouterBulleChef(
                 "J'ai fait le tour de ce que je peux inventer de nouveau avec ton stock. "
@@ -6287,37 +6281,35 @@ async function envoyerMessageChef(modeForce) {
                 'chef'
             );
         }
- 
+
         memoriserPlats(resultat.plats);
- 
+
         conversationChef.push({ role: 'moi', texte: message });
         conversationChef.push({ role: 'chef', texte: resultat.message });
         if (conversationChef.length > 14) {
             conversationChef = conversationChef.slice(-14);
         }
- 
+
         ajouterBulleChef(resultat.message, 'chef');
         afficherBoutonsChoix(resultat.plats, mode);
- 
+
         window.dernieresPropositions = resultat.message;
         window.platsProposes = resultat.plats;
         window.attenteChoixRecette = resultat.plats.length > 0;
         window.modeChefActuel = mode;
- 
+
         statut.innerText = '';
- 
+
         if (!document.getElementById('mode-silencieux')?.checked) {
             faireParlerIA(resultat.message);
         }
- 
+
     } catch (err) {
         console.error('Erreur Chef :', err);
         ajouterBulleChef("Désolé, j'ai eu un problème. Réessaie dans quelques secondes.", 'chef');
         statut.innerText = '';
     }
 }
-
-
 
 // ============================================================
 // 4. PROMPT DE COMPOSITION LIBRE
@@ -6730,6 +6722,8 @@ const ROLES_VALIDES = [
     'condiment', 'petit_dejeuner', 'grignotage', 'dessert',
     'boisson', 'non_alimentaire'
 ];
+ 
+
  
 // ============================================================
 // CLASSER TOUT CE QUI N'A PAS DE ROLE
