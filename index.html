@@ -1979,6 +1979,65 @@ ${window.historiqueChef.length ? `\nÉVITE : ${window.historiqueChef.slice(-5).j
     }
 }
 
+async function demanderAuChef(message, contexte, mode, inspirations, index, statut) {
+    const prompt = construirePromptLibre(message, contexte, mode, inspirations);
+ 
+    let brut = null;
+    let tentatives = 0;
+    while (!brut && tentatives < 3) {
+        try {
+            brut = await appelGemini({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: { temperature: 0.9 }
+            });
+        } catch(e) {
+            tentatives++;
+            if (tentatives < 3) {
+                if (statut) statut.innerText = `⏳ Réessai ${tentatives}/3...`;
+                await new Promise(r => setTimeout(r, 2500));
+            } else {
+                throw e;
+            }
+        }
+    }
+ 
+    return extraireReponseChef(brut, index);
+}
+ 
+ 
+// ============================================================
+// DETECTER QUE LE CHEF SE REPETE MOT POUR MOT
+// ============================================================
+function estRepetitionChef(message) {
+    if (!message) return false;
+ 
+    const normaliser = function(t) {
+        return (t || '')
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[̀-ͯ]/g, '')
+            .replace(/[^a-z0-9 ]/g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+    };
+ 
+    const actuel = normaliser(message);
+    if (actuel.length < 30) return false;
+ 
+    // On compare aux deux dernieres reponses du Chef
+    const precedentes = conversationChef
+        .filter(function(c) { return c.role === 'chef'; })
+        .slice(-2)
+        .map(function(c) { return normaliser(c.texte); });
+ 
+    return precedentes.some(function(p) {
+        if (!p) return false;
+        // Identique, ou l'un contenu dans l'autre
+        return p === actuel || p.includes(actuel) || actuel.includes(p);
+    });
+}
+ 
+ 
 async function gererChoixRecette(phrase) {
     const statut = document.getElementById('statut-vocal');
 
@@ -6112,7 +6171,7 @@ async function envoyerMessageChef(modeForce) {
     const input = document.getElementById('chef-message');
     const message = input.value.trim();
     if (!message) return;
-
+ 
     if (!utilisateurActuel) {
         utilisateurActuel = localStorage.getItem('monFrigo_User');
     }
@@ -6120,75 +6179,73 @@ async function envoyerMessageChef(modeForce) {
         afficherToast('Connecte-toi d abord');
         return;
     }
-
+ 
     const statut = document.getElementById('statut-chef');
     const zone = document.getElementById('chef-conversation');
-
+ 
     input.value = '';
     zone.style.display = 'block';
     ajouterBulleChef(message, 'moi');
     statut.innerText = '👨‍🍳 Le Chef réfléchit...';
-
+ 
     try {
         contexteStock = await construireContexteStock();
-
+ 
         if (!contexteStock) {
             ajouterBulleChef("Ton stock est vide. Scanne un ticket de caisse pour commencer.", 'chef');
             statut.innerText = '';
             return;
         }
-
-        // ── INDEX : numéro de ligne → nom du produit ──
+ 
         const index = construireIndexInventaire(contexteStock.texte);
-
         const mode = modeForce || detecterModeMessage(message);
         const inspirations = await chargerInspirations(mode, contexteStock);
-
-        const prompt = construirePromptLibre(message, contexteStock, mode, inspirations);
-
-        let brut = null;
-        let tentatives = 0;
-        while (!brut && tentatives < 3) {
-            try {
-                brut = await appelGemini({
-                    contents: [{ parts: [{ text: prompt }] }],
-                    generationConfig: { temperature: 0.9 }
-                });
-            } catch(e) {
-                tentatives++;
-                if (tentatives < 3) {
-                    statut.innerText = `⏳ Réessai ${tentatives}/3...`;
-                    await new Promise(r => setTimeout(r, 2500));
-                } else {
-                    throw e;
-                }
-            }
+ 
+        // ── PREMIER ESSAI ──
+        let resultat = await demanderAuChef(message, contexteStock, mode, inspirations, index, statut);
+ 
+        // ── SATURATION : la liste des bannis étouffe le Chef ──
+        let aRecommence = false;
+        if (estRepetitionChef(resultat.message)) {
+            console.log('♻️ Saturation détectée — liste des bannis remise à zéro');
+            window.platsDejaProposes = [];
+            window.produitsRecents = [];
+            aRecommence = true;
+ 
+            statut.innerText = '👨‍🍳 Le Chef repart de zéro...';
+            resultat = await demanderAuChef(message, contexteStock, mode, inspirations, index, statut);
         }
-
-        // ── LECTURE + VERIFICATION ──
-        const resultat = extraireReponseChef(brut, index);
+ 
+        if (aRecommence) {
+            ajouterBulleChef(
+                "J'ai fait le tour de ce que je peux inventer de nouveau avec ton stock. "
+                + "Je repars sur les classiques.",
+                'chef'
+            );
+        }
+ 
         memoriserPlats(resultat.plats);
-
+ 
         conversationChef.push({ role: 'moi', texte: message });
         conversationChef.push({ role: 'chef', texte: resultat.message });
         if (conversationChef.length > 14) {
             conversationChef = conversationChef.slice(-14);
         }
-
+ 
         ajouterBulleChef(resultat.message, 'chef');
         afficherBoutonsChoix(resultat.plats, mode);
-
+ 
         window.dernieresPropositions = resultat.message;
         window.platsProposes = resultat.plats;
         window.attenteChoixRecette = resultat.plats.length > 0;
         window.modeChefActuel = mode;
-
+ 
         statut.innerText = '';
-
+ 
         if (!document.getElementById('mode-silencieux')?.checked) {
             faireParlerIA(resultat.message);
         }
-
+ 
     } catch (err) {
         console.error('Erreur Chef :', err);
         ajouterBulleChef("Désolé, j'ai eu un problème. Réessaie dans quelques secondes.", 'chef');
@@ -6523,16 +6580,14 @@ function nomDuPlatChoisi(choix) {
 
 function memoriserPlats(plats) {
     if (!plats || plats.length === 0) return;
-
+ 
     if (!window.platsDejaProposes) window.platsDejaProposes = [];
     if (!window.produitsRecents) window.produitsRecents = [];
-
+ 
     plats.forEach(function(p) {
         if (p.nom) window.platsDejaProposes.push(p.nom);
     });
-
-    // Les produits du dernier tour seulement — on ne veut pas
-    // bloquer tout le stock au bout de cinq échanges
+ 
     window.produitsRecents = [];
     plats.forEach(function(p) {
         (p.ingredients || []).forEach(function(nom) {
@@ -6541,14 +6596,16 @@ function memoriserPlats(plats) {
             }
         });
     });
-
-    // On garde les 12 derniers noms de plats
-    if (window.platsDejaProposes.length > 12) {
-        window.platsDejaProposes = window.platsDejaProposes.slice(-12);
+ 
+    // 8 au lieu de 12 : au-dela, le Chef n'a plus d'air
+    if (window.platsDejaProposes.length > 8) {
+        window.platsDejaProposes = window.platsDejaProposes.slice(-8);
     }
-
-    console.log('🚫 Plats bannis : ' + window.platsDejaProposes.join(' | '));
+ 
+    console.log('🚫 Plats bannis (' + window.platsDejaProposes.length + ') : '
+        + window.platsDejaProposes.join(' | '));
 }
+ 
 
 </script>
 </body>
