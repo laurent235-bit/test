@@ -1748,6 +1748,7 @@ function reinitialiserChef() {
     document.getElementById('statut-chef').innerText = '';
     window.platsDejaProposes = [];
     window.produitsRecents = [];
+    window.combinaisonsSorties = [];
 }
 // ============================================================
 // DETECTER LA FAMILLE D'UNE RECETTE
@@ -6078,63 +6079,128 @@ async function ouvrirScannerDates() {
     await demarrerScanCodeBarre();
 }
 
+const ORDRE_ROLES = [
+    { cle: 'proteine',       titre: 'PROTÉINES (viande, poisson, oeufs, légumineuses)' },
+    { cle: 'feculent',       titre: 'FÉCULENTS' },
+    { cle: 'legume',         titre: 'LÉGUMES' },
+    { cle: 'fromage',        titre: 'FROMAGES' },
+    { cle: 'sauce',          titre: 'SAUCES ET CRÈMES' },
+    { cle: 'condiment',      titre: 'CONDIMENTS ET BASES' },
+    { cle: 'dessert',        titre: 'DESSERTS (ne se cuisinent pas dans un plat salé)' },
+    { cle: 'petit_dejeuner', titre: 'PETIT-DÉJEUNER (ne se cuisinent pas dans un plat salé)' },
+    { cle: 'grignotage',     titre: 'GRIGNOTAGE (ne se cuisinent pas dans un plat salé)' }
+];
+ 
+ 
+const ORDRE_ROLES = [
+    { cle: 'proteine',       titre: 'PROTÉINES (viande, poisson, oeufs, légumineuses)' },
+    { cle: 'feculent',       titre: 'FÉCULENTS' },
+    { cle: 'legume',         titre: 'LÉGUMES' },
+    { cle: 'fromage',        titre: 'FROMAGES' },
+    { cle: 'sauce',          titre: 'SAUCES ET CRÈMES' },
+    { cle: 'condiment',      titre: 'CONDIMENTS ET BASES' },
+    { cle: 'dessert',        titre: 'DESSERTS (ne se cuisinent pas dans un plat salé)' },
+    { cle: 'petit_dejeuner', titre: 'PETIT-DÉJEUNER (ne se cuisinent pas dans un plat salé)' },
+    { cle: 'grignotage',     titre: 'GRIGNOTAGE (ne se cuisinent pas dans un plat salé)' }
+];
+
+
 async function construireContexteStock() {
-    const { data: produits } = await monSupabase
+    if (!utilisateurActuel) return null;
+
+    const { data: produits, error } = await monSupabase
         .from('inventaire2')
-        .select('nom, quantite, emplacement, etat, date_peremption')
+        .select('nom, quantite, emplacement, etat, date_peremption, role_culinaire')
         .eq('proprietaire', utilisateurActuel)
-        .neq('etat', 'Vide')
         .gt('quantite', 0)
-        .not('emplacement', 'in', '("ANIMAUX","SALLE_DE_BAIN","AUTRES")');
+        .not('emplacement', 'in', '("ANIMAUX","SALLE_DE_BAIN","AUTRES")')
+        .or('role_culinaire.is.null,role_culinaire.neq.non_alimentaire');
 
-    if (!produits?.length) return null;
+    if (error) {
+        console.error('Erreur stock :', error.message);
+        return null;
+    }
+    if (!produits || produits.length === 0) return null;
 
-    const nomsProduits = produits.map(function(p) {
-        return p.nom.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    // On ecarte les boissons : elles n'entrent pas dans un plat
+    const utiles = produits.filter(function(p) {
+        return p.role_culinaire !== 'boisson';
     });
 
-    const urgents = produits.filter(function(p) {
-        if (p.etat === 'Entamé') return true;
-        if (!p.date_peremption) return false;
-        const jours = Math.ceil((new Date(p.date_peremption) - new Date()) / 86400000);
-        return jours <= 3;
+    if (utiles.length === 0) return null;
+
+    // ── PRODUITS URGENTS : ce qui perime bientot ou est entame ──
+    const urgents = [];
+    utiles.forEach(function(p) {
+        if (p.etat === 'Entamé') {
+            urgents.push(p.nom + ' (entamé)');
+            return;
+        }
+        if (p.date_peremption) {
+            const jours = Math.ceil((new Date(p.date_peremption) - new Date()) / 86400000);
+            if (jours <= 3) {
+                urgents.push(p.nom + (jours <= 0 ? ' (à consommer tout de suite)' : ' (dans ' + jours + ' j)'));
+            }
+        }
     });
 
-    // Construire la liste numerotee, groupee par emplacement
-    let compteur = 1;
+    // ── GROUPEMENT PAR ROLE, numerotation continue ──
     const lignes = [];
-    const ordreLieux = ['FRIGO', 'CONGELATEUR', 'PLACARD', 'AUTRES'];
+    const nomsProduits = [];
+    let numero = 0;
 
-    ordreLieux.forEach(function(lieu) {
-        const duLieu = produits.filter(function(p) { return p.emplacement === lieu; });
-        if (duLieu.length === 0) return;
+    ORDRE_ROLES.forEach(function(groupe) {
+        const duGroupe = utiles.filter(function(p) {
+            return p.role_culinaire === groupe.cle;
+        });
+        if (duGroupe.length === 0) return;
 
-        const nomLieu = lieu === 'CONGELATEUR' ? 'CONGÉLATEUR' : lieu;
-        lignes.push('\n' + nomLieu + ' :');
+        lignes.push('');
+        lignes.push('── ' + groupe.titre + ' ──');
 
-        duLieu.forEach(function(p) {
-            const marques = [];
-            if (p.etat === 'Entamé') marques.push('entamé');
-            const estUrgent = urgents.indexOf(p) !== -1;
-            if (estUrgent && p.etat !== 'Entamé') marques.push('à finir vite');
-
-            const suffixe = marques.length ? ' — ' + marques.join(', ') : '';
-            lignes.push('  ' + compteur + '. ' + p.nom + suffixe);
-            p.numero = compteur;
-            compteur++;
+        duGroupe.forEach(function(p) {
+            numero++;
+            lignes.push(numero + '. ' + p.nom + ' (' + p.emplacement
+                + (p.etat === 'Entamé' ? ', entamé' : '') + ')');
+            nomsProduits.push(p.nom.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''));
         });
     });
 
+    // ── NON CLASSES : en fin de liste, sans etiquette ──
+    const orphelins = utiles.filter(function(p) {
+        return !p.role_culinaire
+            || ORDRE_ROLES.every(function(g) { return g.cle !== p.role_culinaire; });
+    });
+
+    if (orphelins.length > 0) {
+        lignes.push('');
+        lignes.push('── AUTRES PRODUITS ──');
+        orphelins.forEach(function(p) {
+            numero++;
+            lignes.push(numero + '. ' + p.nom + ' (' + p.emplacement
+                + (p.etat === 'Entamé' ? ', entamé' : '') + ')');
+            nomsProduits.push(p.nom.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''));
+        });
+        console.log('🏷️ ' + orphelins.length + ' produits sans rôle — lance le classement');
+    }
+
+    let texte = lignes.join('\n').trim();
+
+    if (urgents.length > 0) {
+        texte += '\n\n── À UTILISER EN PRIORITÉ ──\n' + urgents.join(', ');
+    }
+
+    console.log('📦 Stock pour le Chef : ' + numero + ' produits');
+
     return {
-        produits: produits,
+        texte: texte,
         nomsProduits: nomsProduits,
         urgents: urgents,
-        texte: lignes.join('\n')
+        nombre: numero
     };
 }
 
-
-
+ 
 
 // ============================================================
 // 2. RECETTES DE LA BASE — comme inspiration, pas comme contrainte
@@ -6203,13 +6269,17 @@ async function envoyerMessageChef(modeForce) {
  
         // ── PREMIER ESSAI ──
         let resultat = await demanderAuChef(message, contexteStock, mode, inspirations, index, statut);
+   resultat.plats = filtrerDoublons(resultat.plats);
  
+        let aRecommence = false;
+        if (estRepetitionChef(resultat.message) || resultat.plats.length === 0) {
         // ── SATURATION : la liste des bannis étouffe le Chef ──
         let aRecommence = false;
         if (estRepetitionChef(resultat.message)) {
             console.log('♻️ Saturation détectée — liste des bannis remise à zéro');
             window.platsDejaProposes = [];
             window.produitsRecents = [];
+            window.combinaisonsSorties = [];  
             aRecommence = true;
  
             statut.innerText = '👨‍🍳 Le Chef repart de zéro...';
@@ -6583,9 +6653,17 @@ function memoriserPlats(plats) {
  
     if (!window.platsDejaProposes) window.platsDejaProposes = [];
     if (!window.produitsRecents) window.produitsRecents = [];
+    if (!window.combinaisonsSorties) window.combinaisonsSorties = [];
  
     plats.forEach(function(p) {
         if (p.nom) window.platsDejaProposes.push(p.nom);
+ 
+        const nums = (p.produits || []).slice().sort(function(a, b) { return a - b; });
+        genererPaires(nums).forEach(function(paire) {
+            if (window.combinaisonsSorties.indexOf(paire) === -1) {
+                window.combinaisonsSorties.push(paire);
+            }
+        });
     });
  
     window.produitsRecents = [];
@@ -6597,13 +6675,244 @@ function memoriserPlats(plats) {
         });
     });
  
-    // 8 au lieu de 12 : au-dela, le Chef n'a plus d'air
     if (window.platsDejaProposes.length > 8) {
         window.platsDejaProposes = window.platsDejaProposes.slice(-8);
     }
  
-    console.log('🚫 Plats bannis (' + window.platsDejaProposes.length + ') : '
-        + window.platsDejaProposes.join(' | '));
+    // Les combinaisons s'oublient plus lentement que les noms,
+    // mais pas indefiniment : 60 paires, soit une vingtaine de plats
+    if (window.combinaisonsSorties.length > 60) {
+        window.combinaisonsSorties = window.combinaisonsSorties.slice(-60);
+    }
+ 
+    console.log('🚫 Plats bannis (' + window.platsDejaProposes.length + ') | '
+        + 'combinaisons mémorisées : ' + window.combinaisonsSorties.length);
+}
+ 
+function filtrerDoublons(plats) {
+    const connues = window.combinaisonsSorties || [];
+    const gardes = [];
+    const vues = [];   // combinaisons de CE tour, pour eviter les doublons internes
+ 
+    plats.forEach(function(p) {
+        const nums = (p.produits || []).slice().sort(function(a, b) { return a - b; });
+ 
+        if (nums.length < 2) {
+            gardes.push(p);
+            return;
+        }
+ 
+        const paires = genererPaires(nums);
+ 
+        // Deja sorti dans un tour precedent, ou deja dans ce tour ?
+        const deja = paires.some(function(paire) {
+            return connues.indexOf(paire) !== -1 || vues.indexOf(paire) !== -1;
+        });
+ 
+        if (deja) {
+            console.warn('♻️ Doublon de combinaison : "' + p.nom + '"');
+            return;
+        }
+ 
+        paires.forEach(function(paire) { vues.push(paire); });
+        gardes.push(p);
+    });
+ 
+    return gardes;
+}
+
+function genererPaires(nums) {
+    const paires = [];
+    for (let i = 0; i < nums.length; i++) {
+        for (let j = i + 1; j < nums.length; j++) {
+            paires.push(nums[i] + '-' + nums[j]);
+        }
+    }
+    return paires;
+}
+ 
+const ROLES_VALIDES = [
+    'proteine', 'feculent', 'legume', 'fromage', 'sauce',
+    'condiment', 'petit_dejeuner', 'grignotage', 'dessert',
+    'boisson', 'non_alimentaire'
+];
+ 
+ 
+// ============================================================
+// BOUTON — a mettre dans une card de reglages
+// ============================================================
+/*
+<button onclick="classerRolesManquants()"
+        style="background:#805ad5; color:white; border:none; border-radius:10px; padding:12px; cursor:pointer; font-size:13px; font-weight:bold; width:100%;">
+    🏷️ Classer les produits non catégorisés
+</button>
+<div id="statut-roles" style="text-align:center; margin-top:8px; font-size:12px; min-height:18px;"></div>
+*/
+ 
+ 
+// ============================================================
+// CLASSER TOUT CE QUI N'A PAS DE ROLE
+// ============================================================
+async function classerRolesManquants() {
+    if (!utilisateurActuel) {
+        utilisateurActuel = localStorage.getItem('monFrigo_User');
+    }
+    if (!utilisateurActuel) {
+        afficherToast('Connecte-toi d abord');
+        return;
+    }
+ 
+    const statut = document.getElementById('statut-roles');
+    const dire = function(t) { if (statut) statut.innerText = t; };
+ 
+    dire('🔍 Recherche des produits non classés...');
+ 
+    try {
+        const { data: produits, error } = await monSupabase
+            .from('inventaire2')
+            .select('id, nom, emplacement')
+            .eq('proprietaire', utilisateurActuel)
+            .is('role_culinaire', null)
+            .gt('quantite', 0);
+ 
+        if (error) throw error;
+ 
+        if (!produits || produits.length === 0) {
+            dire('✅ Tout est déjà classé');
+            afficherToast('Tous les produits ont un rôle');
+            return;
+        }
+ 
+        console.log(`🏷️ ${produits.length} produits à classer`);
+ 
+        // Par lots de 40 : assez gros pour etre economique,
+        // assez petit pour que Gemini ne derape pas
+        const lots = [];
+        for (let i = 0; i < produits.length; i += 40) {
+            lots.push(produits.slice(i, i + 40));
+        }
+ 
+        let classes = 0;
+        let echecs = 0;
+ 
+        for (let n = 0; n < lots.length; n++) {
+            dire(`🧠 Lot ${n + 1}/${lots.length}...`);
+ 
+            try {
+                const roles = await demanderRoles(lots[n]);
+ 
+                for (const p of lots[n]) {
+                    const role = roles[String(p.id)];
+                    if (role && ROLES_VALIDES.indexOf(role) !== -1) {
+                        await monSupabase
+                            .from('inventaire2')
+                            .update({ role_culinaire: role })
+                            .eq('id', p.id);
+                        classes++;
+                        console.log(`   ${p.nom} → ${role}`);
+                    } else {
+                        echecs++;
+                        console.warn(`   ⚠️ ${p.nom} : rôle non reconnu (${role})`);
+                    }
+                }
+            } catch (e) {
+                console.error(`Lot ${n + 1} en échec :`, e.message);
+                echecs += lots[n].length;
+            }
+ 
+            // Souffler entre les lots
+            if (n < lots.length - 1) {
+                await new Promise(r => setTimeout(r, 1500));
+            }
+        }
+ 
+        dire(`✅ ${classes} classés${echecs > 0 ? ` — ${echecs} en échec` : ''}`);
+        afficherToast(`${classes} produits classés`);
+ 
+    } catch (err) {
+        console.error('Erreur classement :', err);
+        dire('❌ Erreur : ' + err.message);
+    }
+}
+ 
+ 
+// ============================================================
+// UN LOT — UN APPEL GEMINI
+// ============================================================
+async function demanderRoles(produits) {
+    const liste = produits
+        .map(function(p) { return p.id + ' | ' + p.nom + ' | ' + (p.emplacement || ''); })
+        .join('\n');
+ 
+    const prompt = `Tu classes des produits alimentaires selon leur rôle en cuisine.
+ 
+RÔLES POSSIBLES, un seul par produit :
+ 
+- proteine : viande, volaille, poisson, charcuterie, oeufs, légumineuses
+- feculent : pâtes, riz, semoule, pommes de terre, frites, pain de mie, farine
+- legume : légumes frais, surgelés ou en conserve, salades, aromates frais
+- fromage : tous les fromages
+- sauce : sauces, crème, concentré de tomate, lait de coco, bouillon, soja
+- condiment : sel, poivre, huile, vinaigre, beurre, sucre, épices, levure, lait
+- petit_dejeuner : céréales, pâte à tartiner, confiture, miel, viennoiseries, biscottes
+- grignotage : chips, biscuits apéritif, cacahuètes, gressins
+- dessert : chocolat, flan, compote, fruits au sirop, entremets, glaces
+- boisson : eau, jus, sodas, café, thé, alcools
+- non_alimentaire : hygiène, entretien, nourriture pour animaux
+ 
+RÈGLE IMPORTANTE :
+Le rôle décrit comment le produit s'utilise VRAIMENT, pas sa matière première.
+Le riz soufflé est une céréale de petit-déjeuner, pas un féculent de repas.
+Les pâtes à tartiner sont du petit-déjeuner, pas une sauce.
+Un gâteau de semoule est un dessert, pas un féculent.
+Les cacahuètes sont du grignotage, pas une protéine.
+ 
+PRODUITS À CLASSER, au format  id | nom | emplacement  :
+${liste}
+ 
+Réponds UNIQUEMENT en JSON valide, sans markdown ni backticks,
+avec l'id en clé et le rôle en valeur :
+ 
+{"1234": "proteine", "1235": "feculent"}`;
+ 
+    const brut = await appelGemini({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.1 }
+    });
+ 
+    const propre = brut.replace(/```json/g, '').replace(/```/g, '').trim();
+    const debut = propre.indexOf('{');
+    const fin = propre.lastIndexOf('}');
+ 
+    if (debut === -1 || fin <= debut) {
+        throw new Error('Réponse illisible');
+    }
+ 
+    return JSON.parse(propre.substring(debut, fin + 1));
+}
+ 
+ 
+// ============================================================
+// CLASSER UN SEUL PRODUIT — au scan, a l'ajout manuel
+// A appeler apres l'insertion d'un nouveau produit
+// ============================================================
+async function classerUnProduit(id, nom, emplacement) {
+    try {
+        const roles = await demanderRoles([{ id: id, nom: nom, emplacement: emplacement }]);
+        const role = roles[String(id)];
+ 
+        if (role && ROLES_VALIDES.indexOf(role) !== -1) {
+            await monSupabase
+                .from('inventaire2')
+                .update({ role_culinaire: role })
+                .eq('id', id);
+            console.log(`🏷️ ${nom} → ${role}`);
+            return role;
+        }
+    } catch (e) {
+        console.log('Classement différé pour ' + nom + ' : ' + e.message);
+    }
+    return null;
 }
  
 
