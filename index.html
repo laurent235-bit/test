@@ -1758,7 +1758,7 @@ function reinitialiserChef() {
     document.getElementById('statut-chef').innerText = '';
     window.platsDejaProposes = [];
     window.produitsRecents = [];
-    window.combinaisonsSorties = [];
+    window.signaturesSorties = [];
 }
 // ============================================================
 // DETECTER LA FAMILLE D'UNE RECETTE
@@ -6101,9 +6101,10 @@ const ORDRE_ROLES = [
     { cle: 'grignotage',     titre: 'GRIGNOTAGE (ne se cuisinent pas dans un plat salé)' }
 ];
  
+ 
 async function construireContexteStock() {
     if (!utilisateurActuel) return null;
-
+ 
     const { data: produits, error } = await monSupabase
         .from('inventaire2')
         .select('nom, quantite, emplacement, etat, date_peremption, role_culinaire')
@@ -6111,21 +6112,20 @@ async function construireContexteStock() {
         .gt('quantite', 0)
         .not('emplacement', 'in', '("ANIMAUX","SALLE_DE_BAIN","AUTRES")')
         .or('role_culinaire.is.null,role_culinaire.neq.non_alimentaire');
-
+ 
     if (error) {
         console.error('Erreur stock :', error.message);
         return null;
     }
     if (!produits || produits.length === 0) return null;
-
-    // On ecarte les boissons : elles n'entrent pas dans un plat
+ 
     const utiles = produits.filter(function(p) {
         return p.role_culinaire !== 'boisson';
     });
-
+ 
     if (utiles.length === 0) return null;
-
-    // ── PRODUITS URGENTS : ce qui perime bientot ou est entame ──
+ 
+    // ── PRODUITS URGENTS ──
     const urgents = [];
     utiles.forEach(function(p) {
         if (p.etat === 'Entamé') {
@@ -6139,55 +6139,59 @@ async function construireContexteStock() {
             }
         }
     });
-
-    // ── GROUPEMENT PAR ROLE, numerotation continue ──
+ 
+    // ── GROUPEMENT PAR ROLE, NUMEROTATION CONTINUE ──
+    window.rolesParNumero = {};
+ 
     const lignes = [];
     const nomsProduits = [];
     let numero = 0;
-
+ 
     ORDRE_ROLES.forEach(function(groupe) {
         const duGroupe = utiles.filter(function(p) {
             return p.role_culinaire === groupe.cle;
         });
         if (duGroupe.length === 0) return;
-
+ 
         lignes.push('');
         lignes.push('── ' + groupe.titre + ' ──');
-
+ 
         duGroupe.forEach(function(p) {
             numero++;
+            window.rolesParNumero[numero] = groupe.cle;
             lignes.push(numero + '. ' + p.nom + ' (' + p.emplacement
                 + (p.etat === 'Entamé' ? ', entamé' : '') + ')');
             nomsProduits.push(p.nom.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''));
         });
     });
-
-    // ── NON CLASSES : en fin de liste, sans etiquette ──
+ 
+    // ── PRODUITS SANS ROLE, EN FIN DE LISTE ──
     const orphelins = utiles.filter(function(p) {
         return !p.role_culinaire
             || ORDRE_ROLES.every(function(g) { return g.cle !== p.role_culinaire; });
     });
-
+ 
     if (orphelins.length > 0) {
         lignes.push('');
         lignes.push('── AUTRES PRODUITS ──');
         orphelins.forEach(function(p) {
             numero++;
+            window.rolesParNumero[numero] = 'inconnu';
             lignes.push(numero + '. ' + p.nom + ' (' + p.emplacement
                 + (p.etat === 'Entamé' ? ', entamé' : '') + ')');
             nomsProduits.push(p.nom.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''));
         });
         console.log('🏷️ ' + orphelins.length + ' produits sans rôle — lance le classement');
     }
-
+ 
     let texte = lignes.join('\n').trim();
-
+ 
     if (urgents.length > 0) {
         texte += '\n\n── À UTILISER EN PRIORITÉ ──\n' + urgents.join(', ');
     }
-
+ 
     console.log('📦 Stock pour le Chef : ' + numero + ' produits');
-
+ 
     return {
         texte: texte,
         nomsProduits: nomsProduits,
@@ -6196,7 +6200,6 @@ async function construireContexteStock() {
     };
 }
 
- 
 
 // ============================================================
 // 2. RECETTES DE LA BASE — comme inspiration, pas comme contrainte
@@ -6271,7 +6274,7 @@ async function envoyerMessageChef(modeForce) {
             console.log('♻️ Saturation détectée — remise à zéro');
             window.platsDejaProposes = [];
             window.produitsRecents = [];
-            window.combinaisonsSorties = [];
+            window.signaturesSorties = [];
             aRecommence = true;
 
             statut.innerText = '👨‍🍳 Le Chef repart de zéro...';
@@ -6640,22 +6643,20 @@ function nomDuPlatChoisi(choix) {
 
 function memoriserPlats(plats) {
     if (!plats || plats.length === 0) return;
- 
+
     if (!window.platsDejaProposes) window.platsDejaProposes = [];
     if (!window.produitsRecents) window.produitsRecents = [];
-    if (!window.combinaisonsSorties) window.combinaisonsSorties = [];
- 
+    if (!window.signaturesSorties) window.signaturesSorties = [];
+
     plats.forEach(function(p) {
         if (p.nom) window.platsDejaProposes.push(p.nom);
- 
-        const nums = (p.produits || []).slice().sort(function(a, b) { return a - b; });
-        genererPaires(nums).forEach(function(paire) {
-            if (window.combinaisonsSorties.indexOf(paire) === -1) {
-                window.combinaisonsSorties.push(paire);
-            }
-        });
+
+        const sig = signaturePlat(p.produits);
+        if (sig && window.signaturesSorties.indexOf(sig) === -1) {
+            window.signaturesSorties.push(sig);
+        }
     });
- 
+
     window.produitsRecents = [];
     plats.forEach(function(p) {
         (p.ingredients || []).forEach(function(nom) {
@@ -6664,50 +6665,68 @@ function memoriserPlats(plats) {
             }
         });
     });
- 
+
     if (window.platsDejaProposes.length > 8) {
         window.platsDejaProposes = window.platsDejaProposes.slice(-8);
     }
- 
-    // Les combinaisons s'oublient plus lentement que les noms,
-    // mais pas indefiniment : 60 paires, soit une vingtaine de plats
-    if (window.combinaisonsSorties.length > 60) {
-        window.combinaisonsSorties = window.combinaisonsSorties.slice(-60);
+
+    // Une signature par plat, donc 15 signatures = 15 plats de memoire
+    if (window.signaturesSorties.length > 15) {
+        window.signaturesSorties = window.signaturesSorties.slice(-15);
     }
- 
-    console.log('🚫 Plats bannis (' + window.platsDejaProposes.length + ') | '
-        + 'combinaisons mémorisées : ' + window.combinaisonsSorties.length);
+
+    console.log('🚫 Bannis : ' + window.platsDejaProposes.length
+        + ' plats | ' + window.signaturesSorties.length + ' duos');
 }
  
+function signaturePlat(produits) {
+    const roles = window.rolesParNumero || {};
+
+    const proteines = [];
+    const feculents = [];
+
+    (produits || []).forEach(function(n) {
+        const role = roles[n];
+        if (role === 'proteine') proteines.push(n);
+        else if (role === 'feculent') feculents.push(n);
+    });
+
+    // Un plat sans protéine ni féculent identifiés n'a pas de
+    // signature exploitable : on le laisse passer
+    if (proteines.length === 0 && feculents.length === 0) return null;
+
+    proteines.sort(function(a, b) { return a - b; });
+    feculents.sort(function(a, b) { return a - b; });
+
+    return 'P:' + proteines.join(',') + '|F:' + feculents.join(',');
+}
+
+
+// ============================================================
+// 3. FILTRER LES PLATS QUI REPRENNENT LE MEME DUO
+// ============================================================
 function filtrerDoublons(plats) {
-    const connues = window.combinaisonsSorties || [];
+    const connues = window.signaturesSorties || [];
     const gardes = [];
-    const vues = [];   // combinaisons de CE tour, pour eviter les doublons internes
- 
-    plats.forEach(function(p) {
-        const nums = (p.produits || []).slice().sort(function(a, b) { return a - b; });
- 
-        if (nums.length < 2) {
+    const vues = [];
+
+    (plats || []).forEach(function(p) {
+        const sig = signaturePlat(p.produits);
+
+        if (!sig) {
             gardes.push(p);
             return;
         }
- 
-        const paires = genererPaires(nums);
- 
-        // Deja sorti dans un tour precedent, ou deja dans ce tour ?
-        const deja = paires.some(function(paire) {
-            return connues.indexOf(paire) !== -1 || vues.indexOf(paire) !== -1;
-        });
- 
-        if (deja) {
-            console.warn('♻️ Doublon de combinaison : "' + p.nom + '"');
+
+        if (connues.indexOf(sig) !== -1 || vues.indexOf(sig) !== -1) {
+            console.warn('♻️ Même duo protéine-féculent : "' + p.nom + '" (' + sig + ')');
             return;
         }
- 
-        paires.forEach(function(paire) { vues.push(paire); });
+
+        vues.push(sig);
         gardes.push(p);
     });
- 
+
     return gardes;
 }
 
@@ -6893,7 +6912,37 @@ async function classerUnProduit(id, nom, emplacement) {
     }
     return null;
 }
+function signaturePlat(produits) {
+    const roles = window.rolesParNumero || {};
+
+    const proteines = [];
+    const feculents = [];
+
+    (produits || []).forEach(function(n) {
+        const role = roles[n];
+        if (role === 'proteine') proteines.push(n);
+        else if (role === 'feculent') feculents.push(n);
+    });
+
+    // Un plat sans protéine ni féculent identifiés n'a pas de
+    // signature exploitable : on le laisse passer
+    if (proteines.length === 0 && feculents.length === 0) return null;
+
+    proteines.sort(function(a, b) { return a - b; });
+    feculents.sort(function(a, b) { return a - b; });
+
+    return 'P:' + proteines.join(',') + '|F:' + feculents.join(',');
+}
  
+function viderMemoireChef() {
+    window.platsDejaProposes = [];
+    window.produitsRecents = [];
+    window.signaturesSorties = [];
+    window.rolesParNumero = {};
+    conversationChef = [];
+    console.log('🧹 Mémoire du Chef vidée');
+}
+
 </script>
 </body>
 </html>
