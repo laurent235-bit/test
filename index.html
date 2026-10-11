@@ -6268,6 +6268,7 @@ async function envoyerMessageChef(modeForce) {
 
         let resultat = await demanderAuChef(message, contexteStock, mode, inspirations, index, statut);
         resultat.plats = filtrerDoublons(resultat.plats);
+        resultat.plats = filtrerIncoherences(resultat.plats, mode);
 
         let aRecommence = false;
         if (estRepetitionChef(resultat.message) || resultat.plats.length === 0) {
@@ -6415,6 +6416,12 @@ le dire franchement plutôt que de faire comme si la recette était complète.
 
 Si l'inventaire ne permet vraiment rien de correct, dis-le simplement.
 Mieux vaut une réponse honnête qu'un plat impossible.
+
+Les produits listés sous DESSERTS, PETIT-DÉJEUNER et GRIGNOTAGE
+ne peuvent JAMAIS entrer dans un plat salé. Pas de céréales du
+petit-déjeuner dans une poêlée, pas de compote ni de dessert aux
+fruits en accompagnement d'une viande, pas de biscuits apéritif
+dans une recette. Ils ne servent que pour un dessert ou un goûter.
 
 
 ═══════════════════════════════════════
@@ -6943,6 +6950,41 @@ function viderMemoireChef() {
     console.log('🧹 Mémoire du Chef vidée');
 }
 
+const ROLES_INCOMPATIBLES_SALE = ['dessert', 'petit_dejeuner', 'grignotage'];
+
+
+function filtrerIncoherences(plats, mode) {
+    // En mode dessert, tout est permis
+    if (mode === 'dessert') return plats;
+
+    const roles = window.rolesParNumero || {};
+    const gardes = [];
+
+    (plats || []).forEach(function(p) {
+        const nums = p.produits || [];
+
+        const sale = nums.some(function(n) {
+            return roles[n] === 'proteine' || roles[n] === 'feculent' || roles[n] === 'legume';
+        });
+
+        const sucre = nums.filter(function(n) {
+            return ROLES_INCOMPATIBLES_SALE.indexOf(roles[n]) !== -1;
+        });
+
+        if (sale && sucre.length > 0) {
+            const noms = sucre.map(function(n) {
+                return (p.ingredients && p.ingredients[nums.indexOf(n)]) || ('n°' + n);
+            });
+            console.warn('🚫 Plat incohérent : "' + p.nom + '" — mélange salé et '
+                + noms.join(', '));
+            return;
+        }
+
+        gardes.push(p);
+    });
+
+    return gardes;
+}
 </script>
 </body>
 </html>
