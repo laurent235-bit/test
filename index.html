@@ -301,6 +301,12 @@
                 Argent sauvé du gaspillage alimentaire
             </p>
         </div>
+<button onclick="classerRolesManquants()"
+        style="background:#805ad5; color:white; border:none; border-radius:10px; padding:12px; cursor:pointer; font-size:13px; font-weight:bold; width:100%;">
+    🏷️ Classer les produits non catégorisés
+</button>
+<div id="statut-roles" style="text-align:center; margin-top:8px; font-size:12px; min-height:18px;"></div>
+*/
 
         <div id="contenu-economies" style="background:#f7fafc; padding:18px;">
             <p style="text-align:center; color:#a0aec0; font-size:13px;">Chargement...</p>
@@ -6736,19 +6742,6 @@ const ROLES_VALIDES = [
     'condiment', 'petit_dejeuner', 'grignotage', 'dessert',
     'boisson', 'non_alimentaire'
 ];
- 
- 
-// ============================================================
-// BOUTON — a mettre dans une card de reglages
-// ============================================================
-/*
-<button onclick="classerRolesManquants()"
-        style="background:#805ad5; color:white; border:none; border-radius:10px; padding:12px; cursor:pointer; font-size:13px; font-weight:bold; width:100%;">
-    🏷️ Classer les produits non catégorisés
-</button>
-<div id="statut-roles" style="text-align:center; margin-top:8px; font-size:12px; min-height:18px;"></div>
-*/
- 
  
 // ============================================================
 // CLASSER TOUT CE QUI N'A PAS DE ROLE
