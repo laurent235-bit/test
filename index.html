@@ -1393,70 +1393,48 @@ RÈGLES ABSOLUES :
 // ============================================================
 function ajouterBulleChef(texte, qui) {
     const zone = document.getElementById('chef-conversation');
- 
+
     const estMoi = qui === 'moi';
     const bulle = document.createElement('div');
     bulle.style.cssText = 'margin-bottom:10px; display:flex; '
         + (estMoi ? 'justify-content:flex-end;' : 'justify-content:flex-start;');
- 
+
     const contenu = document.createElement('div');
-    contenu.style.cssText = 'max-width:85%; padding:10px 13px; border-radius:14px; font-size:13px; line-height:1.5; '
-        + (estMoi
-            ? 'background:#ff9800; color:white; border-bottom-right-radius:4px;'
-            : 'background:#f1f5f9; color:#2d3748; border-bottom-left-radius:4px;');
+        contenu.style.cssText = 'max-width:85%; padding:10px 13px; border-radius:14px; font-size:13px; line-height:1.5; white-space:pre-wrap; '
     contenu.innerText = texte;
- 
+
     bulle.appendChild(contenu);
     zone.appendChild(bulle);
- 
-    // ── DETECTION ELARGIE DES PROPOSITIONS ──
-    // On affiche les boutons des que le Chef propose des plats,
-    // quelle que soit sa formule de fin
-    if (!estMoi) {
-        const t = texte.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
- 
-        const demandeChoix = /lequel te tente/.test(t)
-            || /ca te dit/.test(t)
-            || /ca te tente/.test(t)
-            || /ce qui te tente/.test(t)
-            || /qu est ce que tu en dis/.test(t)
-            || /que dirais tu/.test(t)
-            || /tu preferes/.test(t)
-            || /lequel/.test(t);
- 
-        if (demandeChoix) {
-            // Compter les propositions pour n afficher que les boutons utiles
-            const nbPropositions = (t.match(/\bou\b|\bsinon\b|\bou alors\b/g) || []).length + 1;
-            const nbBoutons = Math.min(Math.max(nbPropositions, 1), 3);
- 
-            const couleurs = [
-                ['#e3f2fd', '#1a73e8'],
-                ['#e8f5e9', '#34a853'],
-                ['#fce4ec', '#ea4335']
-            ];
-            const libelles = ['premier plat', 'deuxième plat', 'troisième plat'];
- 
-            const boutons = document.createElement('div');
-            boutons.style.cssText = 'display:flex; gap:6px; margin:0 0 12px 0; flex-wrap:wrap;';
- 
-            let html = '';
-            for (let i = 0; i < nbBoutons; i++) {
-                html += '<button onclick="choisirEtRedigerRecette(window.modeChefActuel, \''
-                      + libelles[i] + '\')" '
-                      + 'style="flex:1; min-width:70px; background:' + couleurs[i][0]
-                      + '; color:' + couleurs[i][1] + '; border:1px solid ' + couleurs[i][1]
-                      + '; border-radius:8px; padding:8px 4px; cursor:pointer; font-weight:bold; font-size:11px;">'
-                      + '🍽️ ' + (i + 1) + '</button>';
-            }
- 
-            boutons.innerHTML = html;
-            zone.appendChild(boutons);
-        }
-    }
- 
     zone.scrollTop = zone.scrollHeight;
 }
 
+function afficherBoutonsChoix(plats, mode) {
+    if (!plats || plats.length === 0) return;
+
+    const zone = document.getElementById('chef-conversation');
+    const couleurs = ['#1a73e8', '#34a853', '#ea4335'];
+    const rangs = ['premier plat', 'deuxième plat', 'troisième plat'];
+
+    const conteneur = document.createElement('div');
+    conteneur.style.cssText = 'display:flex; flex-direction:column; gap:6px; margin:0 0 14px 0;';
+
+    let html = '';
+    plats.forEach(function(plat, i) {
+        const couleur = couleurs[i] || '#718096';
+        const nom = (plat.nom || '').replace(/'/g, "\\'");
+
+        html += '<button onclick="choisirEtRedigerRecette(\'' + mode + '\', \'' + rangs[i] + '\')" '
+             + 'style="width:100%; text-align:left; background:white; color:' + couleur + '; '
+             + 'border:2px solid ' + couleur + '; border-radius:10px; padding:11px 13px; '
+             + 'cursor:pointer; font-weight:bold; font-size:13px; line-height:1.3;">'
+             + '🍽️ ' + plat.nom
+             + '</button>';
+    });
+
+    conteneur.innerHTML = html;
+    zone.appendChild(conteneur);
+    zone.scrollTop = zone.scrollHeight;
+}
 // ============================================================
 // DETECTER LE MODE DEPUIS LE MESSAGE
 // ============================================================
@@ -6045,7 +6023,8 @@ async function construireContexteStock() {
         .select('nom, quantite, emplacement, etat, date_peremption')
         .eq('proprietaire', utilisateurActuel)
         .neq('etat', 'Vide')
-        .gt('quantite', 0);
+        .gt('quantite', 0)
+        .not('emplacement', 'in', '("ANIMAUX","SALLE_DE_BAIN","AUTRES")');
 
     if (!produits?.length) return null;
 
@@ -6194,6 +6173,7 @@ async function envoyerMessageChef(modeForce) {
         }
 
         ajouterBulleChef(resultat.message, 'chef');
+        afficherBoutonsChoix(resultat.plats, mode);
 
         window.dernieresPropositions = resultat.message;
         window.platsProposes = resultat.plats;
@@ -6502,6 +6482,17 @@ function construireIndexInventaire(texte) {
 
     console.log('📋 Index inventaire : ' + Object.keys(index).length + ' produits');
     return index;
+}
+
+function nomDuPlatChoisi(choix) {
+    const plats = window.platsProposes || [];
+    if (!plats.length) return null;
+
+    let i = 0;
+    if (/deuxi/.test(choix)) i = 1;
+    else if (/troisi/.test(choix)) i = 2;
+
+    return plats[i] || null;
 }
 
 </script>
