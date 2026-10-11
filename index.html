@@ -109,7 +109,7 @@
         }
         .qte-btn:active { background: #eee; }
 
-        /* LOADING SPINNER */
+        
         .loading {
             text-align: center;
             padding: 20px;
@@ -117,7 +117,7 @@
             font-size: 13px;
         }
 
-        /* TOAST NOTIFICATION */
+    
         #toast {
             position: fixed;
             bottom: 20px;
@@ -134,7 +134,6 @@
         }
         #toast.show { transform: translateX(-50%) translateY(0); }
 
-        /* MODAL PLANNING */
         #modal-planning {
             display: none;
             position: fixed;
@@ -306,8 +305,6 @@
     🏷️ Classer les produits non catégorisés
 </button>
 <div id="statut-roles" style="text-align:center; margin-top:8px; font-size:12px; min-height:18px;"></div>
-*/
-
         <div id="contenu-economies" style="background:#f7fafc; padding:18px;">
             <p style="text-align:center; color:#a0aec0; font-size:13px;">Chargement...</p>
         </div>
@@ -353,7 +350,7 @@
             📸 SCANNER UN TICKET
         </button>
     </div>
-    <input type="file" id="input-photo" accept=".pdf,image/*,application/pdf" style="display:none" onchange="scannerTicket(this)">
+    <input type="file" id="input-photo" accept=".pdf,image,application/pdf" style="display:none" onchange="scannerTicket(this)">
     <div id="statut-scan" style="margin-top:10px; font-size:13px; font-weight:bold; text-align:center;"></div>
 </div>
 
@@ -1086,7 +1083,7 @@ document.getElementById('btn-chef')?.addEventListener('click', () => {
 
 function demarrerMicro() {
     if (!recognition) return;
-    try { recognition.start(); } catch(e) { /* déjà actif */ }
+    try { recognition.start(); } catch(e) {}
 }
 
 // ============================================================
