@@ -1746,6 +1746,8 @@ function reinitialiserChef() {
     document.getElementById('chef-conversation').style.display = 'none';
     document.getElementById('chef-message').value = '';
     document.getElementById('statut-chef').innerText = '';
+    window.platsDejaProposes = [];
+    window.produitsRecents = [];
 }
 // ============================================================
 // DETECTER LA FAMILLE D'UNE RECETTE
@@ -6165,6 +6167,7 @@ async function envoyerMessageChef(modeForce) {
 
         // ── LECTURE + VERIFICATION ──
         const resultat = extraireReponseChef(brut, index);
+        memoriserPlats(resultat.plats);
 
         conversationChef.push({ role: 'moi', texte: message });
         conversationChef.push({ role: 'chef', texte: resultat.message });
@@ -6199,22 +6202,15 @@ async function envoyerMessageChef(modeForce) {
 // 4. PROMPT DE COMPOSITION LIBRE
 // ============================================================
 function construirePromptLibre(message, contexte, mode, inspirations) {
- 
+
     let historique = '';
-    let dejaCites = '';
     if (conversationChef.length > 0) {
         historique = '\nCONVERSATION EN COURS :\n'
             + conversationChef.map(function(c) {
                 return (c.role === 'moi' ? 'Utilisateur : ' : 'Toi : ') + c.texte;
               }).join('\n') + '\n';
- 
-        dejaCites = `
-Tu as déjà proposé des plats plus haut. Si l'utilisateur demande autre chose,
-change vraiment : autre viande, autre féculent, autre mode de cuisson.
-Si tu as fait le tour, dis-le honnêtement plutôt que de te répéter.
-`;
     }
- 
+
     let bloc = '';
     if (inspirations.length > 0) {
         bloc = '\nPISTES POSSIBLES (indicatif, tu n es pas obligé) :\n'
@@ -6222,100 +6218,129 @@ Si tu as fait le tour, dis-le honnêtement plutôt que de te répéter.
                  return '- ' + r.nom;
                }).join('\n') + '\n';
     }
- 
+
+    // ── ANTI-REPETITION ──
+    let interdits = '';
+    const bannis = window.platsDejaProposes || [];
+    const recents = window.produitsRecents || [];
+
+    if (bannis.length > 0) {
+        interdits = `
+═══════════════════════════════════════
+PLATS DÉJÀ PROPOSÉS — INTERDITS
+═══════════════════════════════════════
+
+Ces plats sont déjà sortis dans cette conversation. Tu ne peux pas les
+reproposer, ni sous un autre nom, ni avec une variante mineure :
+${bannis.map(function(n) { return '- ' + n; }).join('\n')}
+`;
+
+        if (recents.length > 0) {
+            interdits += `
+Au dernier tour tu as utilisé : ${recents.join(', ')}.
+Change de base : autre protéine, autre féculent, autre mode de cuisson.
+Un plat qui réutilise la même protéine ET le même féculent qu'au dernier
+tour compte comme une répétition.
+
+Si tu as vraiment fait le tour de ce que permet le stock, dis-le
+franchement plutôt que de recycler. C'est une réponse acceptable.
+`;
+        }
+    }
+
     const contextesModes = {
         quotidien: `C'est un soir de semaine. Il faut du simple et rapide, moins de 25 minutes.
 Dans la cuisine familiale française, c'est souvent une protéine, un féculent et un
 légume dans la même assiette. Ou un plat unique classique : croque-monsieur,
 coquillettes au jambon, omelette, pâtes carbonara, hachis parmentier.`,
- 
+
         weekend: `C'est le week-end, il y a du temps. Plat qui mijote, rôti, gratin, quelque chose de généreux.`,
- 
+
         cookeo: `Cuisine au Cookeo, multicuiseur sous pression : mijotés express, riz et pâtes en cuisson unique, légumes vapeur, soupes.
 Tout se fait dans la cuve, en une seule cuisson. Pas de four, pas de plusieurs casseroles.`,
- 
+
         healthy: `Repas léger et équilibré : légumes, protéines maigres, cuissons douces.`,
- 
+
         monde: `Changer du quotidien français : plats d'autres cuisines, réalisables avec ce qu'il y a.`,
- 
+
         dessert: `Un dessert.`,
- 
+
         antigaspi: `Utiliser en priorité ce qui doit être mangé rapidement.`
     };
- 
+
     return `Tu es le Chef, un cuisinier familier et débrouillard.
 Tu connais la cuisine française du quotidien et tu sais improviser.
- 
+
 ${contextesModes[mode] || contextesModes.quotidien}
- 
+
 INVENTAIRE COMPLET — voici TOUT ce que l'utilisateur possède, rien d'autre :
 ${contexte.texte}
-${bloc}${historique}${dejaCites}
+${bloc}${historique}
 DEMANDE DE L'UTILISATEUR : "${message}"
- 
- 
+${interdits}
+
 ═══════════════════════════════════════
 RÈGLE N°1 — NE RIEN INVENTER
 ═══════════════════════════════════════
- 
+
 Tu ne proposes QUE des plats réalisables avec l'inventaire ci-dessus.
 Si un ingrédient n'y figure pas, il n'existe pas : tu ne peux pas l'utiliser.
- 
+
 Seules exceptions, toujours disponibles sans être listées :
 sel, poivre, eau, huile, vinaigre, herbes et épices sèches.
- 
+
 Tu peux adapter un plat classique à ce qu'il y a — remplacer un fromage par
 un autre, une viande par une autre, un féculent par un autre — mais tu dois
 le dire franchement plutôt que de faire comme si la recette était complète.
- 
+
 Si l'inventaire ne permet vraiment rien de correct, dis-le simplement.
 Mieux vaut une réponse honnête qu'un plat impossible.
- 
- 
+
+
 ═══════════════════════════════════════
 VOCABULAIRE DES INGRÉDIENTS
 ═══════════════════════════════════════
- 
+
 Nomme toujours les ingrédients comme ils apparaissent dans l'inventaire,
 jamais par un terme culinaire générique ou une découpe différente.
- 
+
 Si l'inventaire dit "filet de poulet", écris "filet de poulet",
 pas "escalope de poulet" ni "blanc de poulet".
 Si l'inventaire dit "épaule", écris "épaule", pas "rôti de porc".
 Si l'inventaire dit "jarret", écris "jarret", pas "jambonneau".
- 
+
 Tu peux expliquer une transformation si elle est nécessaire à la recette,
 mais en partant du produit réel :
 "tes filets de poulet taillés en fines tranches" plutôt que "des escalopes".
- 
- 
+
+
 ═══════════════════════════════════════
 QUANTITÉS
 ═══════════════════════════════════════
- 
+
 L'inventaire compte des EMBALLAGES, pas des portions.
 "3 lardons fumés" veut dire trois barquettes, pas trois lardons.
 Ne dis jamais à l'utilisateur qu'il n'a pas assez d'un produit en te basant
 sur ce chiffre : une seule barquette suffit presque toujours pour un repas.
- 
- 
+
+
 ═══════════════════════════════════════
 COMMENT RÉPONDRE
 ═══════════════════════════════════════
- 
+
 - QUESTION sur le stock : réponds factuellement d'après l'inventaire.
 - ANNONCE d'une décision : accompagne-le, dis s'il a tout, propose un
   accompagnement. Ne propose pas autre chose à la place.
 - DEMANDE D'IDÉES : propose 3 repas franchement différents — pas la même
   viande, pas le même féculent. Termine par "Lequel te tente ?"
- 
- 
+
+
 ═══════════════════════════════════════
 FORMAT DE TA RÉPONSE
 ═══════════════════════════════════════
- 
+
 Réponds UNIQUEMENT en JSON valide, sans markdown ni backticks :
- 
+
 {
   "message": "ta réponse naturelle à l'utilisateur",
   "plats": [
@@ -6324,31 +6349,31 @@ Réponds UNIQUEMENT en JSON valide, sans markdown ni backticks :
     { "nom": "Nom court du plat", "produits": [5, 9, 14] }
   ]
 }
- 
+
 RÈGLE ABSOLUE SUR "produits" :
 Tu dois lister les NUMÉROS exacts des lignes de l'inventaire ci-dessus
 que le plat utilise. Chaque ingrédient principal que tu cites dans ton
 message doit correspondre à un numéro présent dans cette liste.
- 
+
 Tu n'as PAS le droit d'utiliser un ingrédient qui n'a pas de numéro.
 Si tu ne trouves pas le numéro d'un ingrédient dans l'inventaire,
 c'est qu'il n'existe pas : change de plat.
- 
+
 Les seules exceptions, que tu ne listes jamais dans "produits" :
 sel, poivre, eau, huile, vinaigre, herbes et épices sèches.
 Tout le reste — viande, poisson, féculent, légume, fromage, crème,
 oeufs, conserve, sauce — doit avoir son numéro.
- 
+
 Le champ "message" contient ta réponse telle que l'utilisateur la lira.
 Trois phrases maximum, ton naturel et direct, comme un pote qui cuisine bien.
 Pas de markdown, pas de gras, pas de listes à puces, pas de sauts de ligne.
 Ne cite JAMAIS les numéros dans le message : ils servent uniquement au contrôle.
- 
+
 Le champ "nom" est court et clair, 2 à 6 mots, sans durée ni commentaire.
- 
+
 Exemple, avec un inventaire où 4 = coquillettes, 11 = lardons,
 17 = cancoillotte, 2 = jarret, 23 = carottes :
- 
+
 {
   "message": "Ce soir je peux te faire des coquillettes aux lardons et à la cancoillotte, ou un jarret mijoté avec des carottes. Lequel te tente ?",
   "plats": [
@@ -6356,13 +6381,14 @@ Exemple, avec un inventaire où 4 = coquillettes, 11 = lardons,
     { "nom": "Jarret mijoté aux carottes", "produits": [2, 23] }
   ]
 }
- 
+
 Si tu ne proposes aucun plat — question sur le stock, réponse à une
 annonce — laisse le tableau vide :
- 
+
 { "message": "Oui, tu as bien du poulet au congélateur, deux filets.", "plats": [] }
 `;
 }
+
  
 function extraireReponseChef(brut, index) {
     if (!brut) return { message: '', plats: [] };
@@ -6493,6 +6519,35 @@ function nomDuPlatChoisi(choix) {
     else if (/troisi/.test(choix)) i = 2;
 
     return plats[i] || null;
+}
+
+function memoriserPlats(plats) {
+    if (!plats || plats.length === 0) return;
+
+    if (!window.platsDejaProposes) window.platsDejaProposes = [];
+    if (!window.produitsRecents) window.produitsRecents = [];
+
+    plats.forEach(function(p) {
+        if (p.nom) window.platsDejaProposes.push(p.nom);
+    });
+
+    // Les produits du dernier tour seulement — on ne veut pas
+    // bloquer tout le stock au bout de cinq échanges
+    window.produitsRecents = [];
+    plats.forEach(function(p) {
+        (p.ingredients || []).forEach(function(nom) {
+            if (window.produitsRecents.indexOf(nom) === -1) {
+                window.produitsRecents.push(nom);
+            }
+        });
+    });
+
+    // On garde les 12 derniers noms de plats
+    if (window.platsDejaProposes.length > 12) {
+        window.platsDejaProposes = window.platsDejaProposes.slice(-12);
+    }
+
+    console.log('🚫 Plats bannis : ' + window.platsDejaProposes.join(' | '));
 }
 
 </script>
