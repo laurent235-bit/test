@@ -6251,51 +6251,62 @@ async function envoyerMessageChef(modeForce) {
     input.value = '';
     zone.style.display = 'block';
     ajouterBulleChef(message, 'moi');
-    statut.innerText = '👨‍🍳 Le Chef réfléchit...';
+    statut.innerText = '👨‍🍳 Le Chef regarde ton stock...';
 
     try {
-        contexteStock = await construireContexteStock();
+        const mode = modeForce || detecterModeMessage(message);
 
-        if (!contexteStock) {
-            ajouterBulleChef("Ton stock est vide. Scanne un ticket de caisse pour commencer.", 'chef');
+        // ── LE CODE COMPOSE ──
+        const vivier = await preparerVivier();
+
+        if (!vivier || vivier.length === 0) {
+            ajouterBulleChef(
+                "Je n'arrive plus à composer d'assiette complète avec ce qui reste. "
+                + "Il te manque soit une protéine, soit un féculent, soit un légume.",
+                'chef'
+            );
             statut.innerText = '';
             return;
         }
 
-        const index = construireIndexInventaire(contexteStock.texte);
-        const mode = modeForce || detecterModeMessage(message);
-        const inspirations = await chargerInspirations(mode, contexteStock);
+        statut.innerText = '👨‍🍳 Le Chef choisit...';
 
-        let resultat = await demanderAuChef(message, contexteStock, mode, inspirations, index, statut);
-        resultat.plats = filtrerDoublons(resultat.plats);
-        resultat.plats = filtrerIncoherences(resultat.plats, mode);
+        // ── LE MODELE CHOISIT ET REDIGE ──
+        const prompt = construirePromptChef(message, mode, vivier);
 
-        let aRecommence = false;
-        if (estRepetitionChef(resultat.message) || resultat.plats.length === 0) {
-            console.log('♻️ Saturation détectée — remise à zéro');
-            window.platsDejaProposes = [];
-            window.produitsRecents = [];
-            window.signaturesSorties = [];
-            aRecommence = true;
-
-            statut.innerText = '👨‍🍳 Le Chef repart de zéro...';
-            resultat = await demanderAuChef(message, contexteStock, mode, inspirations, index, statut);
+        let brut = null;
+        let tentatives = 0;
+        while (!brut && tentatives < 3) {
+            try {
+                brut = await appelGemini({
+                    contents: [{ parts: [{ text: prompt }] }],
+                    generationConfig: { temperature: 0.8 }
+                });
+            } catch(e) {
+                tentatives++;
+                if (tentatives < 3) {
+                    statut.innerText = `⏳ Réessai ${tentatives}/3...`;
+                    await new Promise(r => setTimeout(r, 2500));
+                } else {
+                    throw e;
+                }
+            }
         }
 
-        if (aRecommence) {
-            ajouterBulleChef(
-                "J'ai fait le tour de ce que je peux inventer de nouveau avec ton stock. "
-                + "Je repars sur les classiques.",
-                'chef'
-            );
-        }
+        const resultat = lireReponseChef(brut, vivier);
 
-        memoriserPlats(resultat.plats);
+        // Marquer comme servies : elles ne reviendront plus
+        if (!window.assiettesServies) window.assiettesServies = [];
+        resultat.plats.forEach(function(p) {
+            if (p.signature && window.assiettesServies.indexOf(p.signature) === -1) {
+                window.assiettesServies.push(p.signature);
+            }
+        });
 
         conversationChef.push({ role: 'moi', texte: message });
         conversationChef.push({ role: 'chef', texte: resultat.message });
-        if (conversationChef.length > 14) {
-            conversationChef = conversationChef.slice(-14);
+        if (conversationChef.length > 10) {
+            conversationChef = conversationChef.slice(-10);
         }
 
         ajouterBulleChef(resultat.message, 'chef');
@@ -6306,6 +6317,7 @@ async function envoyerMessageChef(modeForce) {
         window.attenteChoixRecette = resultat.plats.length > 0;
         window.modeChefActuel = mode;
 
+        console.log('✅ ' + window.assiettesServies.length + ' assiettes déjà servies');
         statut.innerText = '';
 
         if (!document.getElementById('mode-silencieux')?.checked) {
@@ -6942,13 +6954,12 @@ function signaturePlat(produits) {
 }
  
 function viderMemoireChef() {
-    window.platsDejaProposes = [];
-    window.produitsRecents = [];
-    window.signaturesSorties = [];
-    window.rolesParNumero = {};
+    window.assiettesServies = [];
+    window.rolesParId = {};
     conversationChef = [];
     console.log('🧹 Mémoire du Chef vidée');
 }
+
 
 const ROLES_INCOMPATIBLES_SALE = ['dessert', 'petit_dejeuner', 'grignotage'];
 
@@ -6985,6 +6996,361 @@ function filtrerIncoherences(plats, mode) {
 
     return gardes;
 }
+
+function construirePromptChef(message, mode, vivier) {
+
+    const contextesModes = {
+        quotidien: "C'est un soir de semaine : simple et rapide, moins de 25 minutes.",
+        weekend:   "C'est le week-end, il y a du temps : cuisson lente, gratin, mijoté.",
+        cookeo:    "Au Cookeo : tout dans la cuve, une seule cuisson, pas de four.",
+        healthy:   "Repas léger : cuissons douces, peu de matière grasse.",
+        monde:     "Inspiration d'une autre cuisine : asiatique, italienne, mexicaine, orientale.",
+        antigaspi: "Priorité absolue aux produits marqués ⚠️, ils doivent être mangés vite.",
+        dessert:   "Un dessert ou un goûter."
+    };
+
+    let historique = '';
+    if (conversationChef.length > 0) {
+        historique = '\nÉCHANGES PRÉCÉDENTS :\n'
+            + conversationChef.map(function(c) {
+                return (c.role === 'moi' ? 'Lui : ' : 'Toi : ') + c.texte;
+              }).join('\n') + '\n';
+    }
+
+    return `Tu es le Chef, un cuisinier familier et chaleureux.
+
+${contextesModes[mode] || contextesModes.quotidien}
+
+DEMANDE : "${message}"
+${historique}
+═══════════════════════════════════════
+ASSIETTES DISPONIBLES
+═══════════════════════════════════════
+
+Voici les assiettes réalisables avec le stock. Elles ont été
+composées à partir des produits réellement présents.
+Le symbole ⚠️ marque un produit à consommer rapidement.
+
+${vivierEnTexte(vivier)}
+
+═══════════════════════════════════════
+TA MISSION
+═══════════════════════════════════════
+
+Choisis les 3 assiettes de cette liste qui répondent le mieux à la
+demande, et présente-les comme un cuisinier le ferait.
+
+RÈGLES ABSOLUES :
+1. Tu choisis UNIQUEMENT dans la liste ci-dessus, par leur numéro.
+   Tu n'ajoutes aucun ingrédient qui n'y figure pas.
+   Sel, poivre, huile, vinaigre et épices sèches sont sous-entendus.
+2. Les 3 assiettes doivent être franchement différentes.
+3. Si la demande est précise (une viande blanche, un féculent,
+   quelque chose de léger), choisis celles qui y répondent vraiment.
+   Si aucune ne convient, dis-le et propose ce qui s'en rapproche.
+4. Tu nommes les produits EXACTEMENT comme dans la liste.
+   Tu peux décrire une transformation — "tes filets taillés en
+   lamelles" — mais pas renommer le produit.
+5. Donne à chaque assiette un nom de plat appétissant, 2 à 6 mots.
+   "Jarret mijoté aux carottes", pas "Assiette numéro 4".
+
+Si un produit ⚠️ apparaît dans l'une des assiettes, mentionne
+qu'il faut le manger rapidement.
+
+═══════════════════════════════════════
+FORMAT
+═══════════════════════════════════════
+
+Réponds UNIQUEMENT en JSON valide, sans markdown ni backticks :
+
+{
+  "message": "ta réponse naturelle, 3 phrases maximum",
+  "choix": [
+    { "numero": 4, "nom": "Nom appétissant du plat" },
+    { "numero": 11, "nom": "Nom appétissant du plat" },
+    { "numero": 2, "nom": "Nom appétissant du plat" }
+  ]
+}
+
+Dans "message", ne cite jamais les numéros : ils servent au contrôle.
+Pas de markdown, pas de liste à puces, pas de saut de ligne.
+
+Si la demande n'est pas une demande d'idées — une question sur le
+stock, une remarque — réponds dans "message" et laisse "choix" vide.`;
+}
+
+function lireReponseChef(brut, vivier) {
+    if (!brut) return { message: '', plats: [] };
+
+    let data = null;
+    try {
+        const propre = brut.replace(/```json/g, '').replace(/```/g, '').trim();
+        const debut = propre.indexOf('{');
+        const fin = propre.lastIndexOf('}');
+        if (debut !== -1 && fin > debut) {
+            data = JSON.parse(propre.substring(debut, fin + 1));
+        }
+    } catch (e) {
+        console.log('⚠️ Réponse non JSON');
+    }
+
+    if (!data || typeof data.message !== 'string') {
+        return { message: brut, plats: [] };
+    }
+
+    const choix = Array.isArray(data.choix) ? data.choix : [];
+    const plats = [];
+
+    choix.forEach(function(c) {
+        const assiette = vivier[(c.numero || 0) - 1];
+        if (!assiette) {
+            console.warn('🚫 Assiette inexistante : n°' + c.numero);
+            return;
+        }
+        plats.push({
+            nom: c.nom || assiette.produits.map(function(p) { return p.nom; }).join(' + '),
+            signature: assiette.signature,
+            produits: assiette.produits.map(function(p) { return p.id; }),
+            ingredients: assiette.produits.map(function(p) { return p.nom; })
+        });
+    });
+
+    return { message: data.message, plats: plats.slice(0, 3) };
+}
+
+
+async function chargerStockParRole() {
+    const { data, error } = await monSupabase
+        .from('inventaire2')
+        .select('id, nom, quantite, emplacement, etat, date_peremption, role_culinaire')
+        .eq('proprietaire', utilisateurActuel)
+        .gt('quantite', 0)
+        .not('emplacement', 'in', '("ANIMAUX","SALLE_DE_BAIN","AUTRES")');
+
+    if (error) {
+        console.error('Erreur stock :', error.message);
+        return null;
+    }
+    if (!data || data.length === 0) return null;
+
+    const horsCuisine = ['non_alimentaire', 'boisson', 'petit_dejeuner', 'grignotage'];
+
+    const parRole = {
+        proteine: [], feculent: [], legume: [],
+        fromage: [], sauce: [], dessert: [], inconnu: []
+    };
+
+    data.forEach(function(p) {
+        if (horsCuisine.indexOf(p.role_culinaire) !== -1) return;
+
+        // Jours restants avant peremption, pour la priorite
+        let jours = 999;
+        if (p.date_peremption) {
+            jours = Math.ceil((new Date(p.date_peremption) - new Date()) / 86400000);
+        }
+
+        const produit = {
+            id: p.id,
+            nom: p.nom,
+            emplacement: p.emplacement,
+            entame: p.etat === 'Entamé',
+            jours: jours,
+            urgent: p.etat === 'Entamé' || jours <= 3
+        };
+
+        const role = p.role_culinaire || 'inconnu';
+        if (parRole[role]) parRole[role].push(produit);
+        else parRole.inconnu.push(produit);
+    });
+
+    console.log('📦 Par rôle — protéines : ' + parRole.proteine.length
+        + ', féculents : ' + parRole.feculent.length
+        + ', légumes : ' + parRole.legume.length);
+
+    return parRole;
+}
+
+
+// ============================================================
+// 2. COMPOSER LES ASSIETTES
+// Trois formes : complete, sans feculent, plat unique
+// ============================================================
+function composerAssiettes(parRole) {
+    const assiettes = [];
+
+    const proteines = parRole.proteine;
+    const feculents = parRole.feculent;
+    const legumes   = parRole.legume;
+    const fromages  = parRole.fromage;
+
+    // ── FORME 1 : protéine + féculent + légume ──
+    proteines.forEach(function(prot) {
+        feculents.forEach(function(fec) {
+            legumes.forEach(function(leg) {
+                assiettes.push({
+                    produits: [prot, fec, leg],
+                    forme: 'complete',
+                    score: noterAssiette([prot, fec, leg])
+                });
+            });
+        });
+    });
+
+    // ── FORME 2 : protéine + légume, sans féculent ──
+    proteines.forEach(function(prot) {
+        legumes.forEach(function(leg) {
+            assiettes.push({
+                produits: [prot, leg],
+                forme: 'leger',
+                score: noterAssiette([prot, leg]) - 1
+            });
+        });
+    });
+
+    // ── FORME 3 : féculent + fromage, le plat réconfort ──
+    feculents.forEach(function(fec) {
+        fromages.forEach(function(fro) {
+            assiettes.push({
+                produits: [fec, fro],
+                forme: 'simple',
+                score: noterAssiette([fec, fro]) - 2
+            });
+        });
+    });
+
+    // ── FORME 4 : protéine + féculent, sans légume ──
+    proteines.forEach(function(prot) {
+        feculents.forEach(function(fec) {
+            assiettes.push({
+                produits: [prot, fec],
+                forme: 'classique',
+                score: noterAssiette([prot, fec]) - 1
+            });
+        });
+    });
+
+    console.log('🍽️ ' + assiettes.length + ' assiettes composées');
+    return assiettes;
+}
+
+
+// ============================================================
+// 3. NOTER UNE ASSIETTE
+// L'urgence pese lourd, le frigo avant le placard,
+// et un peu de hasard pour ne pas figer le classement
+// ============================================================
+function noterAssiette(produits) {
+    let score = 0;
+
+    produits.forEach(function(p) {
+        if (p.entame) score += 6;
+        else if (p.jours <= 1) score += 8;
+        else if (p.jours <= 3) score += 5;
+        else if (p.jours <= 7) score += 2;
+
+        if (p.emplacement === 'FRIGO') score += 2;
+        else if (p.emplacement === 'CONGELATEUR') score += 1;
+    });
+
+    score += Math.random() * 4;
+    return score;
+}
+
+
+// ============================================================
+// 4. CHOISIR UN VIVIER VARIE
+// Pas deux fois la meme proteine, pas deux fois le meme feculent
+// ============================================================
+function choisirVivier(assiettes, taille) {
+    assiettes.sort(function(a, b) { return b.score - a.score; });
+
+    const dejaVus = window.assiettesServies || [];
+    const vivier = [];
+    const protUtilisees = {};
+    const fecUtilises = {};
+
+    for (let i = 0; i < assiettes.length && vivier.length < taille; i++) {
+        const a = assiettes[i];
+        const sig = signatureAssiette(a);
+
+        if (dejaVus.indexOf(sig) !== -1) continue;
+
+        // Variete : au maximum deux assiettes par proteine,
+        // deux par feculent
+        const prot = a.produits.find(function(p) { return estRole(p, 'proteine'); });
+        const fec  = a.produits.find(function(p) { return estRole(p, 'feculent'); });
+
+        const cleP = prot ? prot.id : 'sans';
+        const cleF = fec ? fec.id : 'sans';
+
+        if ((protUtilisees[cleP] || 0) >= 2) continue;
+        if ((fecUtilises[cleF] || 0) >= 2) continue;
+
+        protUtilisees[cleP] = (protUtilisees[cleP] || 0) + 1;
+        fecUtilises[cleF] = (fecUtilises[cleF] || 0) + 1;
+
+        a.signature = sig;
+        vivier.push(a);
+    }
+
+    return vivier;
+}
+
+
+// Un produit a-t-il ce role ? On se sert de la table remplie au chargement
+function estRole(produit, role) {
+    return window.rolesParId && window.rolesParId[produit.id] === role;
+}
+
+
+function signatureAssiette(assiette) {
+    return assiette.produits
+        .map(function(p) { return p.id; })
+        .sort(function(a, b) { return a - b; })
+        .join('-');
+}
+
+
+// ============================================================
+// 5. LE VIVIER COMPLET, PRET A SERVIR
+// ============================================================
+async function preparerVivier() {
+    const parRole = await chargerStockParRole();
+    if (!parRole) return null;
+
+    // Table id -> role, utile pour la variete
+    window.rolesParId = {};
+    Object.keys(parRole).forEach(function(role) {
+        parRole[role].forEach(function(p) {
+            window.rolesParId[p.id] = role;
+        });
+    });
+
+    if (parRole.proteine.length === 0 && parRole.feculent.length === 0) {
+        return null;
+    }
+
+    const toutes = composerAssiettes(parRole);
+    const vivier = choisirVivier(toutes, 18);
+
+    console.log('🎯 Vivier : ' + vivier.length + ' assiettes retenues');
+    return vivier;
+}
+
+
+// ============================================================
+// 6. LE TEXTE DU VIVIER POUR LE PROMPT
+// Dix-huit lignes au lieu de cent soixante-cinq
+// ============================================================
+function vivierEnTexte(vivier) {
+    return vivier.map(function(a, i) {
+        const noms = a.produits.map(function(p) {
+            return p.nom + (p.urgent ? ' ⚠️' : '');
+        }).join(' + ');
+        return (i + 1) + '. ' + noms;
+    }).join('\n');
+}
+
 </script>
 </body>
 </html>
