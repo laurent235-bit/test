@@ -6257,7 +6257,7 @@ async function envoyerMessageChef(modeForce) {
         const mode = modeForce || detecterModeMessage(message);
 
         // ── LE CODE COMPOSE ──
-        const vivier = await preparerVivier();
+       const vivier = await preparerVivier(mode);
 
         if (!vivier || vivier.length === 0) {
             ajouterBulleChef(
@@ -7031,7 +7031,7 @@ Voici les assiettes réalisables avec le stock. Elles ont été
 composées à partir des produits réellement présents.
 Le symbole ⚠️ marque un produit à consommer rapidement.
 
-${vivierEnTexte(vivier)}
+${vivierEnTexte(vivier, mode)}
 
 ═══════════════════════════════════════
 TA MISSION
@@ -7175,7 +7175,7 @@ async function chargerStockParRole() {
 // 2. COMPOSER LES ASSIETTES
 // Trois formes : complete, sans feculent, plat unique
 // ============================================================
-function composerAssiettes(parRole) {
+function composerAssiettes(parRole, mode) {
     const assiettes = [];
 
     const proteines = parRole.proteine;
@@ -7183,48 +7183,48 @@ function composerAssiettes(parRole) {
     const legumes   = parRole.legume;
     const fromages  = parRole.fromage;
 
-    // ── FORME 1 : protéine + féculent + légume ──
+    // Protéine + féculent + légume
     proteines.forEach(function(prot) {
         feculents.forEach(function(fec) {
             legumes.forEach(function(leg) {
                 assiettes.push({
                     produits: [prot, fec, leg],
                     forme: 'complete',
-                    score: noterAssiette([prot, fec, leg])
+                    score: noterAssiette([prot, fec, leg], mode)
                 });
             });
         });
     });
 
-    // ── FORME 2 : protéine + légume, sans féculent ──
+    // Protéine + légume
     proteines.forEach(function(prot) {
         legumes.forEach(function(leg) {
             assiettes.push({
                 produits: [prot, leg],
                 forme: 'leger',
-                score: noterAssiette([prot, leg]) - 1
+                score: noterAssiette([prot, leg], mode) - 1
             });
         });
     });
 
-    // ── FORME 3 : féculent + fromage, le plat réconfort ──
+    // Féculent + fromage
     feculents.forEach(function(fec) {
         fromages.forEach(function(fro) {
             assiettes.push({
                 produits: [fec, fro],
                 forme: 'simple',
-                score: noterAssiette([fec, fro]) - 2
+                score: noterAssiette([fec, fro], mode) - 2
             });
         });
     });
 
-    // ── FORME 4 : protéine + féculent, sans légume ──
+    // Protéine + féculent
     proteines.forEach(function(prot) {
         feculents.forEach(function(fec) {
             assiettes.push({
                 produits: [prot, fec],
                 forme: 'classique',
-                score: noterAssiette([prot, fec]) - 1
+                score: noterAssiette([prot, fec], mode) - 1
             });
         });
     });
@@ -7233,29 +7233,35 @@ function composerAssiettes(parRole) {
     return assiettes;
 }
 
-
 // ============================================================
 // 3. NOTER UNE ASSIETTE
 // L'urgence pese lourd, le frigo avant le placard,
 // et un peu de hasard pour ne pas figer le classement
 // ============================================================
-function noterAssiette(produits) {
+function noterAssiette(produits, mode) {
     let score = 0;
 
-    produits.forEach(function(p) {
-        if (p.entame) score += 6;
-        else if (p.jours <= 1) score += 8;
-        else if (p.jours <= 3) score += 5;
-        else if (p.jours <= 7) score += 2;
+    if (mode === 'antigaspi') {
+        produits.forEach(function(p) {
+            if (p.entame) score += 6;
+            else if (p.jours <= 1) score += 8;
+            else if (p.jours <= 3) score += 5;
+            else if (p.jours <= 7) score += 2;
+        });
+    }
 
-        if (p.emplacement === 'FRIGO') score += 2;
-        else if (p.emplacement === 'CONGELATEUR') score += 1;
+    // Un leger penchant pour le frais, qui tourne plus vite
+    // que le placard, mais sans dominer quoi que ce soit
+    produits.forEach(function(p) {
+        if (p.emplacement === 'FRIGO') score += 1;
     });
 
-    score += Math.random() * 4;
+    // L'essentiel du classement : du hasard.
+    // C'est ce qui donne la variete d'un soir a l'autre.
+    score += Math.random() * 10;
+
     return score;
 }
-
 
 // ============================================================
 // 4. CHOISIR UN VIVIER VARIE
@@ -7314,11 +7320,10 @@ function signatureAssiette(assiette) {
 // ============================================================
 // 5. LE VIVIER COMPLET, PRET A SERVIR
 // ============================================================
-async function preparerVivier() {
+async function preparerVivier(mode) {
     const parRole = await chargerStockParRole();
     if (!parRole) return null;
 
-    // Table id -> role, utile pour la variete
     window.rolesParId = {};
     Object.keys(parRole).forEach(function(role) {
         parRole[role].forEach(function(p) {
@@ -7330,11 +7335,23 @@ async function preparerVivier() {
         return null;
     }
 
-    const toutes = composerAssiettes(parRole);
+    const toutes = composerAssiettes(parRole, mode);
     const vivier = choisirVivier(toutes, 18);
 
-    console.log('🎯 Vivier : ' + vivier.length + ' assiettes retenues');
+    console.log('🎯 Vivier : ' + vivier.length + ' assiettes retenues'
+        + (mode === 'antigaspi' ? ' (priorité aux produits à finir)' : ''));
     return vivier;
+}
+
+function vivierEnTexte(vivier, mode) {
+    const marquer = (mode === 'antigaspi');
+
+    return vivier.map(function(a, i) {
+        const noms = a.produits.map(function(p) {
+            return p.nom + (marquer && p.urgent ? ' ⚠️' : '');
+        }).join(' + ');
+        return (i + 1) + '. ' + noms;
+    }).join('\n');
 }
 
 
