@@ -7276,7 +7276,7 @@ function choisirVivier(assiettes, taille) {
         const familles = {};
         a.produits.forEach(function(p) {
             const role = roles[p.id] || 'inconnu';
-            familles[role] = familleIngredient(p.nom);
+            familles[role] = familleIngredient(p.nom, role);   // ← le role en 2e argument
         });
 
         a.signature = sig;
@@ -7437,90 +7437,140 @@ const MOTS_VIDES = [
     'les','des','aux','une','und','pour','par'
 ];
 
-// Du plus specifique au plus general : le premier qui matche gagne
-const FAMILLES_CONNUES = [
-    // Legumes composes d'abord, sinon "pois" ou "carotte" les attrapent
-    ['petits pois carottes', /pois.*(carotte|extra fin)|macedoine|macédoine/],
-    ['haricot vert',    /haricot.*vert/],
-    ['haricot rouge',   /haricot.*rouge/],
-    ['petit pois',      /petit.*pois|pois.*extra/],
-    ['pomme de terre',  /pomme de terre|rosti|rösti|puree de pomme de terre/],
-    ['chou-fleur',      /chou.?fleur/],
-    ['poelee legumes',  /poelee|poêlée/],
 
-    // Legumes simples
-    ['carotte',         /carotte/],
-    ['brocolis',        /brocoli/],
-    ['champignon',      /champignon|champ\./],
-    ['poivron',         /poivron/],
-    ['tomate',          /tomate/],
-    ['salade',          /salade|batavia|laitue/],
-    ['mais',            /mais|maïs/],
-    ['ratatouille',     /ratatouille/],
-    ['salsifi',         /salsifi/],
-    ['courgette',       /courgette/],
-    ['epinard',         /epinard|épinard/],
-    ['chou',            /chou/],
-    ['concombre',       /concombre/],
-    ['poireau',         /poireau/],
+const FAMILLES_PAR_ROLE = {
+     legume: [
+        // Composes d'abord
+        ['petits pois carottes', /pois.*(carotte|extra fin)/],
+        ['macedoine',       /macedoine|macédoine/],
+        ['haricot vert',    /haricot.*vert/],
+        ['petit pois',      /petit.*pois|pois.*extra/],
+        ['chou-fleur',      /chou.?fleur/],
+        ['poelee legumes',  /poelee|poêlée/],
+        // Simples
+        ['carotte',         /carotte/],
+        ['brocolis',        /brocoli/],
+        ['champignon',      /champignon|champ\./],
+        ['poivron',         /poivron/],
+        ['tomate',          /tomate/],
+        ['salade',          /salade|batavia|laitue|roquette|mache|mâche/],
+        ['mais',            /mais|maïs/],
+        ['ratatouille',     /ratatouille/],
+        ['salsifi',         /salsifi/],
+        ['courgette',       /courgette/],
+        ['epinard',         /epinard|épinard/],
+        ['chou',            /chou/],
+        ['concombre',       /concombre/],
+        ['poireau',         /poireau/],
+        ['aubergine',       /aubergine/],
+        ['betterave',       /betterave/],
+        ['endive',          /endive/],
+        ['asperge',         /asperge/],
+        ['potiron',         /potiron|courge|butternut/],
+        ['flageolet',       /flageolet/]
+    ],
 
-    // Feculents
-    ['pate',            /pate|pâte|spaghetti|coquillette|coude|farfalle|fusilli|tagliatelle|vermicelle|macaroni|lasagne|penne/],
-    ['riz',             /riz|risotto/],
-    ['semoule',         /semoule|couscous|tendres perles|tendre perle/],
-    ['frite',           /frite/],
-    ['quinoa',          /quinoa/],
-    ['pain',            /pain|baguette|mie/],
-    ['gnocchi',         /gnocchi/],
+    feculent: [
+        ['pate',            /pate|pâte|spaghetti|coquillette|coude|farfalle|fusilli|tagliatelle|vermicelle|macaroni|lasagne|penne|nouille/],
+        ['riz',             /riz|risotto/],
+        ['semoule',         /semoule|couscous|boulgour|tendre.*perle/],
+        ['frite',           /frite/],
+        ['pomme de terre',  /pomme de terre|rosti|rösti|dauphine|gratin dauphinois/],
+        ['puree',           /puree|purée/],
+        ['quinoa',          /quinoa/],
+        ['pain',            /pain|baguette|mie|wrap|tortilla|pita/],
+        ['gnocchi',         /gnocchi/],
+        ['polenta',         /polenta/]
+    ],
 
-    // Proteines
-    ['boeuf',           /boeuf|bœuf|steak|hache|haché|jarret/],
-    ['poulet',          /poulet|cordon bleu|escalope/],
-    ['dinde',           /dinde/],
-    ['porc',            /porc|epaule|épaule|allumette|lardon|bacon|jambon|charcuterie/],
-    ['saucisse',        /saucisse|knack|merguez|chipolata/],
-    ['colin',           /colin/],
-    ['saumon',          /saumon/],
-    ['thon',            /thon/],
-    ['maquereau',       /maquereau/],
-    ['crevette',        /crevette/],
-    ['oeuf',            /oeuf|œuf/],
-    ['lentille',        /lentille/],
-    ['pois chiche',     /pois chiche/],
-    ['pois casse',      /pois casse|pois cassé/],
+    proteine: [
+        // Poissons avant les legumes homonymes : "thon a la tomate"
+        ['thon',            /thon/],
+        ['colin',           /colin|cabillaud|lieu/],
+        ['saumon',          /saumon/],
+        ['maquereau',       /maquereau/],
+        ['sardine',         /sardine/],
+        ['crevette',        /crevette|gambas/],
+        ['poisson',         /poisson/],
+        // Viandes
+        ['boeuf',           /boeuf|bœuf|steak|hache|haché|jarret|bourguignon/],
+        ['poulet',          /poulet|cordon bleu|escalope|nugget|volaille/],
+        ['dinde',           /dinde/],
+        ['porc',            /porc|epaule|épaule|allumette|lardon|bacon|jambon|charcuterie|rillette|pate de campagne/],
+        ['saucisse',        /saucisse|knack|merguez|chipolata|boudin/],
+        ['agneau',          /agneau|mouton/],
+        ['veau',            /veau/],
+        // Autres
+        ['oeuf',            /oeuf|œuf/],
+        ['lentille',        /lentille/],
+        ['pois chiche',     /pois chiche/],
+        ['pois casse',      /pois casse|pois cassé/],
+        ['haricot rouge',   /haricot.*rouge/],
+        ['tofu',            /tofu/]
+    ],
 
-    // Fromages
-    ['cancoillotte',    /cancoillotte/],
-    ['mozzarella',      /mozzarella/],
-    ['cheddar',         /cheddar/],
-    ['emmental',        /emmental|rape|râpé|gruyere|gruyère/],
-    ['yaourt',          /yaourt|skyr/],
-    ['mascarpone',      /mascarpone/],
-    ['fromage',         /fromage/]
-];
+    fromage: [
+        ['cancoillotte',    /cancoillotte/],
+        ['mozzarella',      /mozzarella/],
+        ['cheddar',         /cheddar/],
+        ['rape',            /rape|râpé|emmental|gruyere|gruyère/],
+        ['comte',           /comte|comté/],
+        ['camembert',       /camembert|brie|coulommiers/],
+        ['chevre',          /chevre|chèvre/],
+        ['yaourt',          /yaourt|skyr/],
+        ['mascarpone',      /mascarpone|ricotta/],
+        ['fromage frais',   /fromage blanc|vache qui rit|kiri|boursin|saint moret|philadelphia/],
+        ['bleu',            /roquefort|bleu|gorgonzola/],
+        ['parmesan',        /parmesan|pecorino/],
+        ['raclette',        /raclette|reblochon|morbier/],
+        ['fromage',         /fromage/]
+    ],
+
+    sauce: [
+        ['tomate',          /tomate|coulis|arrabiata|napolitaine/],
+        ['creme',           /creme|crème/],
+        ['soja',            /soja|nuoc mam|teriyaki/],
+        ['mayonnaise',      /mayonnaise|aioli/],
+        ['moutarde',        /moutarde/],
+        ['pesto',           /pesto/],
+        ['bechamel',        /bechamel|béchamel/],
+        ['coco',            /coco/],
+        ['bouillon',        /bouillon|fond de/]
+    ]
+};
 
 
-function familleIngredient(nom) {
+function familleIngredient(nom, role) {
     const n = (nom || '')
         .toLowerCase()
         .normalize('NFD').replace(/[̀-ͯ]/g, '')
         .replace(/[^a-z0-9\s\/.-]/g, ' ');
 
-    for (let i = 0; i < FAMILLES_CONNUES.length; i++) {
-        if (FAMILLES_CONNUES[i][1].test(n)) {
-            return FAMILLES_CONNUES[i][0];
+    // 1. Les familles du role du produit, en priorite
+    const duRole = FAMILLES_PAR_ROLE[role] || [];
+    for (let i = 0; i < duRole.length; i++) {
+        if (duRole[i][1].test(n)) return duRole[i][0];
+    }
+
+    // 2. A defaut, toutes les autres
+    const autresRoles = Object.keys(FAMILLES_PAR_ROLE);
+    for (let r = 0; r < autresRoles.length; r++) {
+        if (autresRoles[r] === role) continue;
+        const liste = FAMILLES_PAR_ROLE[autresRoles[r]];
+        for (let i = 0; i < liste.length; i++) {
+            if (liste[i][1].test(n)) return liste[i][0];
         }
     }
 
-    // Inconnu : on retombe sur le premier mot significatif
+    // 3. Rien de connu : premier mot significatif
     const mots = n.split(/[\s\/.-]+/).filter(function(m) {
         return m.length >= 4 && !/^\d/.test(m);
     });
-
     let base = mots[0] || n.trim() || 'inconnu';
     if (base.length > 4 && /[sx]$/.test(base)) base = base.slice(0, -1);
     return base;
 }
+
 
 async function diagnostiquerStock() {
     if (!utilisateurActuel) {
@@ -7565,13 +7615,13 @@ async function testerFamilles() {
     const parRole = await chargerStockParRole();
     if (!parRole) { console.log('❌ Aucun stock'); return; }
 
-    ['legume', 'feculent', 'proteine', 'fromage'].forEach(function(role) {
+    ['legume', 'feculent', 'proteine', 'fromage', 'sauce'].forEach(function(role) {
         const produits = parRole[role] || [];
         if (produits.length === 0) return;
 
         const familles = {};
         produits.forEach(function(p) {
-            const f = familleIngredient(p.nom);
+            const f = familleIngredient(p.nom, role);
             if (!familles[f]) familles[f] = [];
             familles[f].push(p.nom);
         });
@@ -7585,6 +7635,7 @@ async function testerFamilles() {
         });
     });
 }
+
 
 </script>
 </body>
