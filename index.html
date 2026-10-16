@@ -1808,79 +1808,7 @@ function detecterFamille(ingredients) {
     return 'AUTRE';
 }
  
-
-// ============================================================
-// REDIGER LA RECETTE — version conversationnelle
-// Affiche la recette dans une bulle du chat
-// Remplace ta fonction choisirEtRedigerRecette
-// ============================================================
 async function choisirEtRedigerRecette(mode, choix) {
-    const statut = document.getElementById('statut-chef');
-    const zone = document.getElementById('chef-conversation');
- 
-    if (statut) statut.innerText = '✍️ Le Chef rédige la recette...';
- 
-    try {
-        // Recuperer le stock pour identifier les ingredients a decrementer
-        const { data: produits } = await monSupabase
-            .from('inventaire2')
-            .select('id, nom, quantite, emplacement')
-            .eq('proprietaire', utilisateurActuel)
-            .neq('etat', 'Vide')
-            .gt('quantite', 0);
- 
-        const listeStock = (produits || [])
-            .map(function(p) {
-                return 'ID:' + p.id + ' | ' + p.nom + ' (qté ' + p.quantite + ')';
-            })
-            .join('\n');
- 
-        const prompt = `L'utilisateur a choisi le "${choix}" parmi ces propositions :
-"${window.dernieresPropositions}"
- 
-STOCK DISPONIBLE :
-${listeStock}
- 
-Ta mission :
-1. Écris la recette complète et détaillée pour 4 personnes
-2. Identifie les produits du STOCK réellement utilisés, avec leur ID
-3. Indique combien d'unités de chaque produit sont consommées
- 
-RÉPONDS UNIQUEMENT EN JSON valide, sans markdown ni backticks :
-{
-  "titre": "Nom du plat",
-  "contenu": "Ingrédients:\\n- ingrédient 1\\n- ingrédient 2\\n\\nÉtapes:\\n1. Première étape\\n2. Deuxième étape",
-  "ingredients_stock": [
-    {"id": 123, "nom": "Coquillettes", "quantite_utilisee": 1}
-  ]
-}
- 
-RÈGLES pour ingredients_stock :
- 
-Le STOCK compte en UNITÉS D'ACHAT, pas en portions.
-Une ligne "Panés de colin (qté 2)" signifie 2 BOÎTES, pas 2 panés.
-Une ligne "Coquillettes (qté 1)" signifie 1 PAQUET, pas 1 portion.
- 
-quantite_utilisee doit donc indiquer combien d'EMBALLAGES sont consommés,
-presque toujours 1.
- 
-Mauvais : {"nom": "Panés de colin", "quantite_utilisee": 4}
-Correct : {"nom": "Panés de colin", "quantite_utilisee": 1}
- 
-Utilise une valeur supérieure à 1 uniquement si la recette consomme
-vraiment plusieurs emballages entiers.
- 
-Autres règles :
-- UNIQUEMENT des produits présents dans le STOCK, avec leur ID exact
-- Ne dépasse jamais la quantité disponible
-- N'inclus pas le sel, poivre, huile, eau
-- N'inclus que les produits VRAIMENT utilisés dans la recette
- 
-RÈGLE pour le titre et le contenu :
-N'utilise jamais les noms bruts du stock tels quels.
-Écris "des panés de colin", pas "Panes colin Alaska MSC".`;
- 
-        async function choisirEtRedigerRecette(mode, choix) {
     const statut = document.getElementById('statut-chef');
     const zone = document.getElementById('chef-conversation');
 
@@ -7725,7 +7653,6 @@ async function testerFamilles() {
         });
     });
 }
-
 
 </script>
 </body>
