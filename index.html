@@ -1880,79 +1880,185 @@ RÈGLE pour le titre et le contenu :
 N'utilise jamais les noms bruts du stock tels quels.
 Écris "des panés de colin", pas "Panes colin Alaska MSC".`;
  
-        const resultatBrut = await appelGemini(prompt);
- 
-        const propre = resultatBrut
-            .replace(/```json/g, '')
-            .replace(/```/g, '')
-            .trim();
+        async function choisirEtRedigerRecette(mode, choix) {
+    const statut = document.getElementById('statut-chef');
+    const zone = document.getElementById('chef-conversation');
+
+    // ── QUELLE ASSIETTE ? ──
+    const plats = window.platsProposes || [];
+    let rang = 0;
+    if (/deuxi/.test(choix)) rang = 1;
+    else if (/troisi/.test(choix)) rang = 2;
+
+    const plat = plats[rang];
+
+    if (!plat || !plat.ingredients || plat.ingredients.length === 0) {
+        ajouterBulleChef(
+            "Je ne retrouve pas cette assiette. Redemande-moi des idées.",
+            'chef'
+        );
+        return;
+    }
+
+    if (statut) statut.innerText = '✍️ Le Chef rédige la recette...';
+
+    try {
+        // ── LES PRODUITS REELS DE L'ASSIETTE ──
+        const { data: produits } = await monSupabase
+            .from('inventaire2')
+            .select('id, nom, quantite')
+            .in('id', plat.produits);
+
+        if (!produits || produits.length === 0) {
+            throw new Error('Produits introuvables');
+        }
+
+        const listeProduits = produits
+            .map(function(p) {
+                return '- ' + p.nom + '  (tu en as ' + p.quantite + ')';
+            })
+            .join('\n');
+
+        const contextesModes = {
+            quotidien: 'Rapide, moins de 25 minutes, un soir de semaine.',
+            weekend:   'Tu as le temps : cuisson lente, gratin, mijoté.',
+            cookeo:    'Au Cookeo : tout dans la cuve, une seule cuisson.',
+            healthy:   'Cuisson douce, peu de matière grasse.',
+            monde:     'Donne-lui une tournure d\'une autre cuisine.',
+            antigaspi: 'On finit ce qui doit être mangé.',
+            dessert:   'Un dessert.'
+        };
+
+        const prompt = `Tu écris une recette pour 4 personnes.
+
+PLAT : ${plat.nom}
+${contextesModes[mode] || contextesModes.quotidien}
+
+PRODUITS À UTILISER — ce sont les seuls dont il dispose :
+${listeProduits}
+
+RÈGLES :
+
+1. La recette utilise CES produits, et uniquement eux.
+   Tu peux ajouter librement : sel, poivre, eau, huile, vinaigre,
+   beurre, épices et herbes sèches. RIEN D'AUTRE.
+   Pas d'échalote, pas de crème, pas de persil frais, pas de
+   bouillon cube s'ils ne sont pas dans la liste ci-dessus.
+
+2. Si un produit de la liste ne va vraiment pas dans ce plat,
+   tu peux l'omettre. Mais tu n'en ajoutes jamais.
+
+3. Dans le texte, nomme les ingrédients en français courant.
+   "des panés de colin", pas "PANES COLIN ALASKA MSC U 8X50G".
+   "du thon à la tomate", pas "Miettes thon à la tomate pêché ligne".
+
+4. Étapes numérotées, concrètes, avec les temps de cuisson.
+   Quelqu'un qui ne sait pas cuisiner doit pouvoir suivre.
+
+RÉPONDS UNIQUEMENT EN JSON valide, sans markdown ni backticks :
+
+{
+  "titre": "Nom du plat",
+  "contenu": "Ingrédients:\\n- …\\n- …\\n\\nÉtapes:\\n1. …\\n2. …",
+  "quantites": [
+    { "nom": "nom exact du produit tel qu'écrit dans la liste", "unites": 1 }
+  ]
+}
+
+Pour "quantites", une ligne par produit utilisé.
+"unites" compte des EMBALLAGES, pas des portions :
+un paquet de pâtes entamé pour 4 personnes, c'est 1, pas 4.
+Mais si le stock compte des pièces — des oeufs, par exemple —
+indique le nombre de pièces réellement utilisées.
+Dans le doute, mets 1.`;
+
+        const brut = await appelGemini(prompt);
+        const propre = brut.replace(/```json/g, '').replace(/```/g, '').trim();
         const jsonStr = propre.substring(propre.indexOf('{'), propre.lastIndexOf('}') + 1);
         const recette = JSON.parse(jsonStr);
- 
+
+        // ── LA DEDUCTION EST CONSTRUITE PAR LE CODE ──
+        // Gemini propose un nombre, le code verifie et borne.
+        const quantitesGemini = {};
+        (recette.quantites || []).forEach(function(q) {
+            if (q && q.nom) quantitesGemini[q.nom.toLowerCase().trim()] = parseInt(q.unites) || 1;
+        });
+
+        const ingredientsStock = produits.map(function(p) {
+            let n = quantitesGemini[p.nom.toLowerCase().trim()];
+            if (!n || n < 1) n = 1;
+            if (n > p.quantite) n = p.quantite;   // jamais plus que le stock
+            return { id: p.id, nom: p.nom, quantite_utilisee: n };
+        });
+
+        recette.ingredients_stock = ingredientsStock;
+
         window.recetteEnCours = recette;
         recettesTemporaires = [recette];
- 
-        // ── AFFICHAGE DANS LA CONVERSATION ──
-        const listeIngredients = (recette.ingredients_stock || [])
+
+        // ── AFFICHAGE ──
+        const listeIngredients = ingredientsStock
             .map(function(i) {
                 return '<li style="font-size:12px; color:#4a5568;">' + i.nom
                      + ' <b>×' + i.quantite_utilisee + '</b></li>';
             })
             .join('');
- 
+
         const bloc = document.createElement('div');
         bloc.style.cssText = 'margin-bottom:12px; display:flex; justify-content:flex-start;';
- 
+
         bloc.innerHTML =
             '<div style="max-width:95%; background:#f1f5f9; border-radius:14px; border-bottom-left-radius:4px; padding:14px;">'
- 
+
             + '<b style="color:#ff9800; font-size:15px; display:block; margin-bottom:10px;">🍽️ '
-            + recette.titre + '</b>'
- 
+            + (recette.titre || plat.nom) + '</b>'
+
             + '<p style="white-space:pre-wrap; font-size:13px; color:#2d3748; margin:0 0 12px 0; line-height:1.6;">'
             + recette.contenu + '</p>'
- 
+
             + (listeIngredients
                 ? '<div style="background:#f0fff4; border:1px solid #c6f6d5; border-radius:10px; padding:10px; margin-bottom:12px;">'
                   + '<b style="font-size:11px; color:#2f855a;">📦 Sera retiré de votre stock :</b>'
                   + '<ul style="margin:6px 0 0 0; padding-left:18px;">' + listeIngredients + '</ul>'
                   + '</div>'
                 : '')
- 
+
             + '<button onclick="validerPlatCuisine()" '
             + 'style="width:100%; background:#38a169; color:white; border:none; border-radius:10px; padding:12px; cursor:pointer; font-weight:bold; font-size:14px; margin-bottom:8px;">'
             + '✅ J\'AI CUISINÉ CE PLAT</button>'
- 
+
             + '<button onclick="sauverRecetteDirect(0)" '
             + 'style="width:100%; background:#805ad5; color:white; border:none; border-radius:10px; padding:10px; cursor:pointer; font-weight:bold; font-size:13px;">'
             + '💾 Sauver dans le grimoire</button>'
- 
+
             + '</div>';
- 
+
         zone.appendChild(bloc);
         zone.scrollTop = zone.scrollHeight;
- 
-        // Memoriser dans la conversation
+
         conversationChef.push({
             role: 'chef',
-            texte: 'Recette de ' + recette.titre + ' envoyée.'
+            texte: 'Recette de ' + (recette.titre || plat.nom) + ' envoyée.'
         });
- 
+
+        console.log('📝 Recette : ' + ingredientsStock.map(function(i) {
+            return i.nom + '×' + i.quantite_utilisee;
+        }).join(', '));
+
         window.attenteChoixRecette = false;
         if (statut) statut.innerText = '';
- 
+
         if (!document.getElementById('mode-silencieux')?.checked) {
-            faireParlerIA("C'est prêt ! Je t'ai affiché la recette.");
+            faireParlerIA("C'est prêt, la recette est affichée.");
         }
- 
+
     } catch (err) {
         console.error('Erreur recette :', err);
         ajouterBulleChef("Je n'ai pas réussi à rédiger la recette. Réessaie ?", 'chef');
         if (statut) statut.innerText = '';
     }
 }
- 
-						
+ 						
 async function demanderAuChefVocal(phrase) {
     const statut = document.getElementById('statut-vocal');
     if (statut) statut.innerText = "👨‍🍳 Le Chef réfléchit...";
@@ -7005,7 +7111,7 @@ function construirePromptChef(message, mode, vivier) {
         cookeo:    "Au Cookeo : tout dans la cuve, une seule cuisson, pas de four.",
         healthy:   "Repas léger : cuissons douces, peu de matière grasse.",
         monde:     "Inspiration d'une autre cuisine : asiatique, italienne, mexicaine, orientale.",
-        antigaspi: "Priorité absolue aux produits marqués ⚠️, ils doivent être mangés vite.",
+        antigaspi: "Priorité absolue aux produits à finir, ils doivent être mangés vite.",
         dessert:   "Un dessert ou un goûter."
     };
 
@@ -7017,7 +7123,16 @@ function construirePromptChef(message, mode, vivier) {
               }).join('\n') + '\n';
     }
 
-    return `Tu es le Chef, un cuisinier familier et chaleureux.
+    const noteUrgence = (mode === 'antigaspi')
+        ? ' Le symbole ⚠️ marque un produit qui doit être mangé vite :\nce sont ceux-là qu\'il faut écouler en priorité.'
+        : '';
+
+    const regleUrgence = (mode === 'antigaspi')
+        ? '6. Si un produit est marqué ⚠️, dis-le avec le nom du produit :\n   "tes carottes sont à finir". Jamais "les produits marqués\n   d\'un drapeau" — cette notation ne doit pas apparaître.'
+        : '';
+
+    return `Tu es le Chef. Tu cuisines pour une famille, tu les connais,
+tu leur parles comme un pote qui sait cuisiner.
 
 ${contextesModes[mode] || contextesModes.quotidien}
 
@@ -7027,9 +7142,8 @@ ${historique}
 ASSIETTES DISPONIBLES
 ═══════════════════════════════════════
 
-Voici les assiettes réalisables avec le stock. Elles ont été
-composées à partir des produits réellement présents.
-Le symbole ⚠️ marque un produit à consommer rapidement.
+Voici les assiettes réalisables avec le stock, composées à partir
+des produits réellement présents.${noteUrgence}
 
 ${vivierEnTexte(vivier, mode)}
 
@@ -7037,25 +7151,39 @@ ${vivierEnTexte(vivier, mode)}
 TA MISSION
 ═══════════════════════════════════════
 
-Choisis les 3 assiettes de cette liste qui répondent le mieux à la
-demande, et présente-les comme un cuisinier le ferait.
+Choisis les 3 assiettes qui répondent le mieux à la demande,
+et présente-les.
 
-RÈGLES ABSOLUES :
-1. Tu choisis UNIQUEMENT dans la liste ci-dessus, par leur numéro.
-   Tu n'ajoutes aucun ingrédient qui n'y figure pas.
-   Sel, poivre, huile, vinaigre et épices sèches sont sous-entendus.
-2. Les 3 assiettes doivent être franchement différentes.
-3. Si la demande est précise (une viande blanche, un féculent,
-   quelque chose de léger), choisis celles qui y répondent vraiment.
-   Si aucune ne convient, dis-le et propose ce qui s'en rapproche.
-4. Tu nommes les produits EXACTEMENT comme dans la liste.
-   Tu peux décrire une transformation — "tes filets taillés en
-   lamelles" — mais pas renommer le produit.
-5. Donne à chaque assiette un nom de plat appétissant, 2 à 6 mots.
-   "Jarret mijoté aux carottes", pas "Assiette numéro 4".
+CE QUE TU DOIS FAIRE :
 
-Si un produit ⚠️ apparaît dans l'une des assiettes, mentionne
-qu'il faut le manger rapidement.
+1. Choisir UNIQUEMENT dans la liste, par leur numéro. Tu n'ajoutes
+   aucun ingrédient absent. Sel, poivre, huile, vinaigre et épices
+   sèches sont sous-entendus.
+2. NOMMER LES TROIS PLATS DANS TON MESSAGE. Celui qui lit ta phrase
+   sans rien d'autre doit savoir ce que tu proposes.
+3. Nommer les produits exactement comme dans la liste. Tu peux
+   décrire une découpe — "tes filets en lamelles" — pas renommer.
+4. Donner à chaque assiette un nom de plat appétissant, 2 à 6 mots.
+5. Si la demande est précise — une viande blanche, quelque chose de
+   léger — choisir celles qui y répondent vraiment. Si aucune ne
+   convient, le dire et proposer ce qui s'en rapproche.
+${regleUrgence}
+
+COMMENT TU PARLES :
+
+Tu dis TU, jamais vous. C'est une famille, pas un restaurant.
+Tu ne l'appelles jamais "Chef" : c'est toi, le Chef.
+Trois phrases maximum. Direct et chaleureux, sans en faire trop.
+
+Interdits : "pépites", "papilles", "régaler", "concocté", "déniché",
+"merveilles", "perle rare", "gourmand", "savoureux", "express",
+"qui vont vous transporter", "sans attendre", "en un clin d'oeil".
+Pas de superlatifs, pas de langage de publicité. Tu annonces un repas
+à quelqu'un qui a faim, tu ne vends rien.
+
+Mauvais : "J'ai déniché trois pépites qui vont régaler tes papilles !"
+Bon : "Ce soir, knacks du Jura avec du riz, spaghettis au bacon, ou
+gnocchis jambon-fromage. Lequel te tente ?"
 
 ═══════════════════════════════════════
 FORMAT
@@ -7064,15 +7192,15 @@ FORMAT
 Réponds UNIQUEMENT en JSON valide, sans markdown ni backticks :
 
 {
-  "message": "ta réponse naturelle, 3 phrases maximum",
+  "message": "ta réponse, 3 phrases maximum, les 3 plats nommés",
   "choix": [
-    { "numero": 4, "nom": "Nom appétissant du plat" },
-    { "numero": 11, "nom": "Nom appétissant du plat" },
-    { "numero": 2, "nom": "Nom appétissant du plat" }
+    { "numero": 4, "nom": "Nom du plat" },
+    { "numero": 11, "nom": "Nom du plat" },
+    { "numero": 2, "nom": "Nom du plat" }
   ]
 }
 
-Dans "message", ne cite jamais les numéros : ils servent au contrôle.
+Dans "message", ne cite jamais les numéros ni le symbole ⚠️.
 Pas de markdown, pas de liste à puces, pas de saut de ligne.
 
 Si la demande n'est pas une demande d'idées — une question sur le
