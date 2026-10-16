@@ -7263,41 +7263,100 @@ function noterAssiette(produits, mode) {
     return score;
 }
 
-// ============================================================
-// 4. CHOISIR UN VIVIER VARIE
-// Pas deux fois la meme proteine, pas deux fois le meme feculent
-// ============================================================
 function choisirVivier(assiettes, taille) {
-    assiettes.sort(function(a, b) { return b.score - a.score; });
-
     const dejaVus = window.assiettesServies || [];
-    const vivier = [];
-    const protUtilisees = {};
-    const fecUtilises = {};
+    const roles = window.rolesParId || {};
 
-    for (let i = 0; i < assiettes.length && vivier.length < taille; i++) {
-        const a = assiettes[i];
+    // Famille de chaque role, pour chaque assiette
+    const candidates = [];
+    assiettes.forEach(function(a) {
         const sig = signatureAssiette(a);
+        if (dejaVus.indexOf(sig) !== -1) return;
 
-        if (dejaVus.indexOf(sig) !== -1) continue;
-
-        // Variete : au maximum deux assiettes par proteine,
-        // deux par feculent
-        const prot = a.produits.find(function(p) { return estRole(p, 'proteine'); });
-        const fec  = a.produits.find(function(p) { return estRole(p, 'feculent'); });
-
-        const cleP = prot ? prot.id : 'sans';
-        const cleF = fec ? fec.id : 'sans';
-
-        if ((protUtilisees[cleP] || 0) >= 2) continue;
-        if ((fecUtilises[cleF] || 0) >= 2) continue;
-
-        protUtilisees[cleP] = (protUtilisees[cleP] || 0) + 1;
-        fecUtilises[cleF] = (fecUtilises[cleF] || 0) + 1;
+        const familles = {};
+        a.produits.forEach(function(p) {
+            const role = roles[p.id] || 'inconnu';
+            familles[role] = familleIngredient(p.nom);
+        });
 
         a.signature = sig;
-        vivier.push(a);
+        a.familles = familles;
+        candidates.push(a);
+    });
+
+    if (candidates.length === 0) return [];
+
+    // Regrouper par famille de legume ; les assiettes sans legume
+    // forment leur propre groupe
+    const groupes = {};
+    candidates.forEach(function(a) {
+        const cle = a.familles.legume || '(sans légume)';
+        if (!groupes[cle]) groupes[cle] = [];
+        groupes[cle].push(a);
+    });
+
+    // Dans chaque groupe, les meilleures d'abord
+    Object.keys(groupes).forEach(function(cle) {
+        groupes[cle].sort(function(x, y) { return y.score - x.score; });
+    });
+
+    // Les familles rares passent en premier : sinon elles n'ont
+    // jamais leur tour quand le vivier se remplit
+    const ordreFamilles = Object.keys(groupes).sort(function(a, b) {
+        return groupes[a].length - groupes[b].length;
+    });
+
+    // ── ROTATION ──
+    const vivier = [];
+    const compteurs = { proteine: {}, feculent: {} };
+    const indexGroupe = {};
+    ordreFamilles.forEach(function(cle) { indexGroupe[cle] = 0; });
+
+    let tour = 0;
+    while (vivier.length < taille && tour < 6) {
+        let aAvance = false;
+
+        for (let i = 0; i < ordreFamilles.length && vivier.length < taille; i++) {
+            const cle = ordreFamilles[i];
+            const groupe = groupes[cle];
+
+            // Une assiette par famille de légume et par tour,
+            // et pas plus de 4 assiettes sans légume en tout
+            if (cle === '(sans légume)' && tour >= 4) continue;
+
+            while (indexGroupe[cle] < groupe.length) {
+                const a = groupe[indexGroupe[cle]];
+                indexGroupe[cle]++;
+
+                const fp = a.familles.proteine || 'sans';
+                const ff = a.familles.feculent || 'sans';
+
+                // Deux assiettes au maximum par protéine et par féculent
+                if ((compteurs.proteine[fp] || 0) >= 2) continue;
+                if ((compteurs.feculent[ff] || 0) >= 2) continue;
+
+                compteurs.proteine[fp] = (compteurs.proteine[fp] || 0) + 1;
+                compteurs.feculent[ff] = (compteurs.feculent[ff] || 0) + 1;
+
+                vivier.push(a);
+                aAvance = true;
+                break;
+            }
+        }
+
+        if (!aAvance) break;
+        tour++;
     }
+
+    const legumesRetenus = {};
+    vivier.forEach(function(a) {
+        const l = a.familles.legume || '(sans)';
+        legumesRetenus[l] = (legumesRetenus[l] || 0) + 1;
+    });
+    console.log('🥬 Légumes dans le vivier : '
+        + Object.keys(legumesRetenus).map(function(k) {
+            return k + '×' + legumesRetenus[k];
+          }).join(', '));
 
     return vivier;
 }
@@ -7366,6 +7425,165 @@ function vivierEnTexte(vivier) {
         }).join(' + ');
         return (i + 1) + '. ' + noms;
     }).join('\n');
+}
+
+const MOTS_VIDES = [
+    'avec','sans','bio','frais','fraiche','fraiches','surgele','surgeles',
+    'surgelee','surgelees','conserve','boite','bocal','sachet','paquet',
+    'etui','extra','fin','fins','fine','fines','grand','grande','gros',
+    'grosse','petit','petite','petits','petites','qualite','superieure',
+    'nature','entier','entiere','demi','tranche','tranches','morceau',
+    'morceaux','filet','filets','sous','vide','pur','pure','special',
+    'les','des','aux','une','und','pour','par'
+];
+
+// Du plus specifique au plus general : le premier qui matche gagne
+const FAMILLES_CONNUES = [
+    // Legumes composes d'abord, sinon "pois" ou "carotte" les attrapent
+    ['petits pois carottes', /pois.*(carotte|extra fin)|macedoine|macédoine/],
+    ['haricot vert',    /haricot.*vert/],
+    ['haricot rouge',   /haricot.*rouge/],
+    ['petit pois',      /petit.*pois|pois.*extra/],
+    ['pomme de terre',  /pomme de terre|rosti|rösti|puree de pomme de terre/],
+    ['chou-fleur',      /chou.?fleur/],
+    ['poelee legumes',  /poelee|poêlée/],
+
+    // Legumes simples
+    ['carotte',         /carotte/],
+    ['brocolis',        /brocoli/],
+    ['champignon',      /champignon|champ\./],
+    ['poivron',         /poivron/],
+    ['tomate',          /tomate/],
+    ['salade',          /salade|batavia|laitue/],
+    ['mais',            /mais|maïs/],
+    ['ratatouille',     /ratatouille/],
+    ['salsifi',         /salsifi/],
+    ['courgette',       /courgette/],
+    ['epinard',         /epinard|épinard/],
+    ['chou',            /chou/],
+    ['concombre',       /concombre/],
+    ['poireau',         /poireau/],
+
+    // Feculents
+    ['pate',            /pate|pâte|spaghetti|coquillette|coude|farfalle|fusilli|tagliatelle|vermicelle|macaroni|lasagne|penne/],
+    ['riz',             /riz|risotto/],
+    ['semoule',         /semoule|couscous|tendres perles|tendre perle/],
+    ['frite',           /frite/],
+    ['quinoa',          /quinoa/],
+    ['pain',            /pain|baguette|mie/],
+    ['gnocchi',         /gnocchi/],
+
+    // Proteines
+    ['boeuf',           /boeuf|bœuf|steak|hache|haché|jarret/],
+    ['poulet',          /poulet|cordon bleu|escalope/],
+    ['dinde',           /dinde/],
+    ['porc',            /porc|epaule|épaule|allumette|lardon|bacon|jambon|charcuterie/],
+    ['saucisse',        /saucisse|knack|merguez|chipolata/],
+    ['colin',           /colin/],
+    ['saumon',          /saumon/],
+    ['thon',            /thon/],
+    ['maquereau',       /maquereau/],
+    ['crevette',        /crevette/],
+    ['oeuf',            /oeuf|œuf/],
+    ['lentille',        /lentille/],
+    ['pois chiche',     /pois chiche/],
+    ['pois casse',      /pois casse|pois cassé/],
+
+    // Fromages
+    ['cancoillotte',    /cancoillotte/],
+    ['mozzarella',      /mozzarella/],
+    ['cheddar',         /cheddar/],
+    ['emmental',        /emmental|rape|râpé|gruyere|gruyère/],
+    ['yaourt',          /yaourt|skyr/],
+    ['mascarpone',      /mascarpone/],
+    ['fromage',         /fromage/]
+];
+
+
+function familleIngredient(nom) {
+    const n = (nom || '')
+        .toLowerCase()
+        .normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .replace(/[^a-z0-9\s\/.-]/g, ' ');
+
+    for (let i = 0; i < FAMILLES_CONNUES.length; i++) {
+        if (FAMILLES_CONNUES[i][1].test(n)) {
+            return FAMILLES_CONNUES[i][0];
+        }
+    }
+
+    // Inconnu : on retombe sur le premier mot significatif
+    const mots = n.split(/[\s\/.-]+/).filter(function(m) {
+        return m.length >= 4 && !/^\d/.test(m);
+    });
+
+    let base = mots[0] || n.trim() || 'inconnu';
+    if (base.length > 4 && /[sx]$/.test(base)) base = base.slice(0, -1);
+    return base;
+}
+
+async function diagnostiquerStock() {
+    if (!utilisateurActuel) {
+        utilisateurActuel = localStorage.getItem('monFrigo_User');
+    }
+
+    const parRole = await chargerStockParRole();
+    if (!parRole) {
+        console.log('❌ Aucun stock');
+        return;
+    }
+
+    ['proteine', 'feculent', 'legume', 'fromage', 'sauce', 'inconnu'].forEach(function(role) {
+        const produits = parRole[role] || [];
+        if (produits.length === 0) {
+            console.log('— ' + role.toUpperCase() + ' : aucun');
+            return;
+        }
+
+        // Regrouper par famille
+        const familles = {};
+        produits.forEach(function(p) {
+            const f = familleIngredient(p.nom);
+            if (!familles[f]) familles[f] = [];
+            familles[f].push(p.nom);
+        });
+
+        console.log('── ' + role.toUpperCase() + ' : '
+            + produits.length + ' produits, '
+            + Object.keys(familles).length + ' familles');
+
+        Object.keys(familles).sort().forEach(function(f) {
+            const lignes = familles[f];
+            console.log('   ' + f
+                + (lignes.length > 1 ? ' (' + lignes.length + ' lignes)' : '')
+                + ' → ' + lignes.join(' | '));
+        });
+    });
+}
+
+async function testerFamilles() {
+    const parRole = await chargerStockParRole();
+    if (!parRole) { console.log('❌ Aucun stock'); return; }
+
+    ['legume', 'feculent', 'proteine', 'fromage'].forEach(function(role) {
+        const produits = parRole[role] || [];
+        if (produits.length === 0) return;
+
+        const familles = {};
+        produits.forEach(function(p) {
+            const f = familleIngredient(p.nom);
+            if (!familles[f]) familles[f] = [];
+            familles[f].push(p.nom);
+        });
+
+        console.log('── ' + role.toUpperCase() + ' : '
+            + Object.keys(familles).length + ' familles pour '
+            + produits.length + ' produits');
+
+        Object.keys(familles).sort().forEach(function(f) {
+            console.log('   ' + f + ' ← ' + familles[f].join(' | '));
+        });
+    });
 }
 
 </script>
