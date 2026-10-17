@@ -7083,46 +7083,6 @@ Si la demande n'est pas une demande d'idées — une question sur le
 stock, une remarque — réponds dans "message" et laisse "choix" vide.`;
 }
 
-function lireReponseChef(brut, vivier) {
-    if (!brut) return { message: '', plats: [] };
-
-    let data = null;
-    try {
-        const propre = brut.replace(/```json/g, '').replace(/```/g, '').trim();
-        const debut = propre.indexOf('{');
-        const fin = propre.lastIndexOf('}');
-        if (debut !== -1 && fin > debut) {
-            data = JSON.parse(propre.substring(debut, fin + 1));
-        }
-    } catch (e) {
-        console.log('⚠️ Réponse non JSON');
-    }
-
-    if (!data || typeof data.message !== 'string') {
-        return { message: brut, plats: [] };
-    }
-
-    const choix = Array.isArray(data.choix) ? data.choix : [];
-    const plats = [];
-
-    choix.forEach(function(c) {
-        const assiette = vivier[(c.numero || 0) - 1];
-        if (!assiette) {
-            console.warn('🚫 Assiette inexistante : n°' + c.numero);
-            return;
-        }
-        plats.push({
-            nom: c.nom || assiette.produits.map(function(p) { return p.nom; }).join(' + '),
-            signature: assiette.signature,
-            produits: assiette.produits.map(function(p) { return p.id; }),
-            ingredients: assiette.produits.map(function(p) { return p.nom; })
-        });
-    });
-
-    return { message: data.message, plats: plats.slice(0, 3) };
-}
-
-
 async function chargerStockParRole() {
     const { data, error } = await monSupabase
         .from('inventaire2')
@@ -7381,168 +7341,6 @@ function signatureAssiette(assiette) {
 
 
 // ============================================================
-// 5. LE VIVIER COMPLET, PRET A SERVIR
-// ============================================================
-async function preparerVivier(mode) {
-    const parRole = await chargerStockParRole();
-    if (!parRole) return null;
-
-    window.rolesParId = {};
-    Object.keys(parRole).forEach(function(role) {
-        parRole[role].forEach(function(p) {
-            window.rolesParId[p.id] = role;
-        });
-    });
-
-    if (parRole.proteine.length === 0 && parRole.feculent.length === 0) {
-        return null;
-    }
-
-    const toutes = composerAssiettes(parRole, mode);
-    const vivier = choisirVivier(toutes, 18);
-
-    console.log('🎯 Vivier : ' + vivier.length + ' assiettes retenues'
-        + (mode === 'antigaspi' ? ' (priorité aux produits à finir)' : ''));
-    return vivier;
-}
-
-function vivierEnTexte(vivier, mode) {
-    const marquer = (mode === 'antigaspi');
-
-    return vivier.map(function(a, i) {
-        const noms = a.produits.map(function(p) {
-            return p.nom + (marquer && p.urgent ? ' ⚠️' : '');
-        }).join(' + ');
-        return (i + 1) + '. ' + noms;
-    }).join('\n');
-}
-
-
-// ============================================================
-// 6. LE TEXTE DU VIVIER POUR LE PROMPT
-// Dix-huit lignes au lieu de cent soixante-cinq
-// ============================================================
-function vivierEnTexte(vivier, mode) {
-    const marquer = (mode === 'antigaspi');
-
-    return vivier.map(function(r, i) {
-        const produits = r.produits.map(function(p) {
-            return p.nom + (marquer && p.urgent ? ' ⚠️' : '');
-        }).join(', ');
-
-        if (r.nom) {
-            return (i + 1) + '. ' + r.nom
-                 + (r.temps ? ' (' + r.temps + ' min)' : '')
-                 + '\n     avec : ' + produits;
-        }
-        // Combinaison sans nom
-        return (i + 1) + '. [à nommer] ' + produits;
-    }).join('\n');
-}
-
-
-
-const FAMILLES_PAR_ROLE = {
-     legume: [
-        // Composes d'abord
-        ['petits pois carottes', /pois.*(carotte|extra fin)/],
-        ['macedoine',       /macedoine|macédoine/],
-        ['haricot vert',    /haricot.*vert/],
-        ['petit pois',      /petit.*pois|pois.*extra/],
-        ['chou-fleur',      /chou.?fleur/],
-        ['poelee legumes',  /poelee|poêlée/],
-        // Simples
-        ['carotte',         /carotte/],
-        ['brocolis',        /brocoli/],
-        ['champignon',      /champignon|champ\./],
-        ['poivron',         /poivron/],
-        ['tomate',          /tomate/],
-        ['salade',          /salade|batavia|laitue|roquette|mache|mâche/],
-        ['mais',            /mais|maïs/],
-        ['ratatouille',     /ratatouille/],
-        ['salsifi',         /salsifi/],
-        ['courgette',       /courgette/],
-        ['epinard',         /epinard|épinard/],
-        ['chou',            /chou/],
-        ['concombre',       /concombre/],
-        ['poireau',         /poireau/],
-        ['aubergine',       /aubergine/],
-        ['betterave',       /betterave/],
-        ['endive',          /endive/],
-        ['asperge',         /asperge/],
-        ['potiron',         /potiron|courge|butternut/],
-        ['flageolet',       /flageolet/]
-    ],
-
-    feculent: [
-        ['pate',            /pate|pâte|spaghetti|coquillette|coude|farfalle|fusilli|tagliatelle|vermicelle|macaroni|lasagne|penne|nouille/],
-        ['riz',             /riz|risotto/],
-        ['semoule',         /semoule|couscous|boulgour|tendre.*perle/],
-        ['frite',           /frite/],
-        ['pomme de terre',  /pomme de terre|rosti|rösti|dauphine|gratin dauphinois/],
-        ['puree',           /puree|purée/],
-        ['quinoa',          /quinoa/],
-        ['pain',            /pain|baguette|mie|wrap|tortilla|pita/],
-        ['gnocchi',         /gnocchi/],
-        ['polenta',         /polenta/]
-    ],
-
-    proteine: [
-        // Poissons avant les legumes homonymes : "thon a la tomate"
-        ['thon',            /thon/],
-        ['colin',           /colin|cabillaud|lieu/],
-        ['saumon',          /saumon/],
-        ['maquereau',       /maquereau/],
-        ['sardine',         /sardine/],
-        ['crevette',        /crevette|gambas/],
-        ['poisson',         /poisson/],
-        // Viandes
-        ['boeuf',           /boeuf|bœuf|steak|hache|haché|jarret|bourguignon/],
-        ['poulet',          /poulet|cordon bleu|escalope|nugget|volaille/],
-        ['dinde',           /dinde/],
-        ['porc',            /porc|epaule|épaule|allumette|lardon|bacon|jambon|charcuterie|rillette|pate de campagne/],
-        ['saucisse',        /saucisse|knack|merguez|chipolata|boudin/],
-        ['agneau',          /agneau|mouton/],
-        ['veau',            /veau/],
-        // Autres
-        ['oeuf',            /oeuf|œuf/],
-        ['lentille',        /lentille/],
-        ['pois chiche',     /pois chiche/],
-        ['pois casse',      /pois casse|pois cassé/],
-        ['haricot rouge',   /haricot.*rouge/],
-        ['tofu',            /tofu/]
-    ],
-
-    fromage: [
-        ['cancoillotte',    /cancoillotte/],
-        ['mozzarella',      /mozzarella/],
-        ['cheddar',         /cheddar/],
-        ['rape',            /rape|râpé|emmental|gruyere|gruyère/],
-        ['comte',           /comte|comté/],
-        ['camembert',       /camembert|brie|coulommiers/],
-        ['chevre',          /chevre|chèvre/],
-        ['yaourt',          /yaourt|skyr/],
-        ['mascarpone',      /mascarpone|ricotta/],
-        ['fromage frais',   /fromage blanc|vache qui rit|kiri|boursin|saint moret|philadelphia/],
-        ['bleu',            /roquefort|bleu|gorgonzola/],
-        ['parmesan',        /parmesan|pecorino/],
-        ['raclette',        /raclette|reblochon|morbier/],
-        ['fromage',         /fromage/]
-    ],
-
-    sauce: [
-        ['tomate',          /tomate|coulis|arrabiata|napolitaine/],
-        ['creme',           /creme|crème/],
-        ['soja',            /soja|nuoc mam|teriyaki/],
-        ['mayonnaise',      /mayonnaise|aioli/],
-        ['moutarde',        /moutarde/],
-        ['pesto',           /pesto/],
-        ['bechamel',        /bechamel|béchamel/],
-        ['coco',            /coco/],
-        ['bouillon',        /bouillon|fond de/]
-    ]
-};
-
 
 function familleIngredient(nom, role) {
     const n = (nom || '')
@@ -7640,7 +7438,6 @@ async function testerFamilles() {
     });
 }
 function indexerFamilles(parRole) {
-    // famille -> liste de produits de cette famille
     const index = {};
 
     Object.keys(parRole).forEach(function(role) {
@@ -7653,6 +7450,8 @@ function indexerFamilles(parRole) {
 
     return index;
 }
+
+
 async function chargerRecettesFaisables(mode, famillesDispo) {
     const { data: recettes, error } = await monSupabase
         .from('recettes_chef')
@@ -7660,9 +7459,12 @@ async function chargerRecettesFaisables(mode, famillesDispo) {
         .eq('actif', true);
 
     if (error || !recettes) {
+        
         console.error('Erreur recettes :', error ? error.message : 'aucune');
         return [];
     }
+
+    console.log('📖 ' + recettes.length + ' recettes dans la base');
 
     const faisables = [];
 
@@ -7670,19 +7472,18 @@ async function chargerRecettesFaisables(mode, famillesDispo) {
         const obligatoires = r.familles_obligatoires || [];
         if (obligatoires.length === 0) return;
 
-        // Toutes les familles obligatoires doivent etre en stock
+        // Toutes les familles obligatoires doivent être en stock
         const manque = obligatoires.filter(function(f) {
             return !famillesDispo[f] || famillesDispo[f].length === 0;
         });
         if (manque.length > 0) return;
 
-        // Resoudre chaque famille en un produit reel
+        // Résoudre chaque famille en un produit réel
         const produits = [];
         const vus = {};
 
         obligatoires.forEach(function(f) {
             const candidats = famillesDispo[f];
-            // On prend celui du frigo en priorite, sinon le premier
             const choisi = candidats.find(function(p) { return p.emplacement === 'FRIGO'; })
                         || candidats[0];
             if (choisi && !vus[choisi.id]) {
@@ -7691,7 +7492,7 @@ async function chargerRecettesFaisables(mode, famillesDispo) {
             }
         });
 
-        // Les optionnelles presentes enrichissent le plat
+        // Les optionnelles présentes enrichissent le plat
         const optionnelles = r.familles_optionnelles || [];
         let bonus = 0;
         optionnelles.forEach(function(f) {
@@ -7710,7 +7511,7 @@ async function chargerRecettesFaisables(mode, famillesDispo) {
 
         // ── SCORE ──
         let score = 10;
-        if (r.mode === mode) score += 8;                  // le bon registre
+        if (r.mode === mode) score += 8;
         else if (mode === 'quotidien' && r.temps_minutes <= 30) score += 3;
         if (mode === 'antigaspi') {
             const urgents = produits.filter(function(p) { return p.urgent; }).length;
@@ -7718,7 +7519,7 @@ async function chargerRecettesFaisables(mode, famillesDispo) {
         }
         if (mode === 'quotidien' && r.temps_minutes > 45) score -= 6;
         if (mode === 'weekend' && r.temps_minutes < 30) score -= 3;
-        score += bonus;                                    // plat plus complet
+        score += bonus;
         score += Math.random() * 8;
 
         faisables.push({
@@ -7735,6 +7536,7 @@ async function chargerRecettesFaisables(mode, famillesDispo) {
     return faisables;
 }
 
+
 function choisirVivierRecettes(faisables, taille) {
     const servies = window.assiettesServies || [];
 
@@ -7744,7 +7546,6 @@ function choisirVivierRecettes(faisables, taille) {
 
     if (candidates.length === 0) return [];
 
-    // Regrouper par premiere famille obligatoire : c'est le coeur du plat
     const groupes = {};
     candidates.forEach(function(r) {
         const cle = r.familles[0] || 'autre';
@@ -7793,7 +7594,65 @@ function choisirVivierRecettes(faisables, taille) {
     return vivier;
 }
 
+async function preparerVivier(mode) {
+    const parRole = await chargerStockParRole();
+    if (!parRole) return null;
 
+    window.rolesParId = {};
+    Object.keys(parRole).forEach(function(role) {
+        parRole[role].forEach(function(p) {
+            window.rolesParId[p.id] = role;
+        });
+    });
+
+    const famillesDispo = indexerFamilles(parRole);
+    console.log('📦 ' + Object.keys(famillesDispo).length + ' familles en stock : '
+        + Object.keys(famillesDispo).sort().join(', '));
+
+    const faisables = await chargerRecettesFaisables(mode, famillesDispo);
+    console.log('✅ ' + faisables.length + ' recettes réalisables');
+
+    let vivier = choisirVivierRecettes(faisables, 18);
+
+    // ── FILET : si la base ne donne pas assez, on complète
+    //    avec des combinaisons, comme avant
+    if (vivier.length < 6) {
+        console.log('⚠️ Peu de recettes — complément par combinaisons');
+        if (parRole.proteine.length === 0 && parRole.feculent.length === 0) {
+            return vivier.length > 0 ? vivier : null;
+        }
+        const combinaisons = composerAssiettes(parRole, mode);
+        const complement = choisirVivier(combinaisons, 12 - vivier.length);
+        complement.forEach(function(a) {
+            a.nom = null;   // pas de nom : Gemini en inventera un
+            vivier.push(a);
+        });
+    }
+
+    return vivier.length > 0 ? vivier : null;
+}
+
+
+// ============================================================
+// 5. LE TEXTE DU VIVIER  (remplace l'ancienne)
+//    Le nom du plat, son temps, et les produits réels
+// ============================================================
+function vivierEnTexte(vivier, mode) {
+    const marquer = (mode === 'antigaspi');
+
+    return vivier.map(function(r, i) {
+        const produits = r.produits.map(function(p) {
+            return p.nom + (marquer && p.urgent ? ' ⚠️' : '');
+        }).join(', ');
+
+        if (r.nom) {
+            return (i + 1) + '. ' + r.nom
+                 + (r.temps ? ' (' + r.temps + ' min)' : '')
+                 + '\n     avec : ' + produits;
+        }
+        return (i + 1) + '. [à nommer] ' + produits;
+    }).join('\n');
+}
 
 </script>
 </body>
