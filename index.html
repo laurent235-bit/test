@@ -7134,6 +7134,45 @@ async function chargerStockParRole() {
     return parRole;
 }
 
+function lireReponseChef(brut, vivier) {
+    if (!brut) return { message: '', plats: [] };
+
+    let data = null;
+    try {
+        const propre = brut.replace(/```json/g, '').replace(/```/g, '').trim();
+        const debut = propre.indexOf('{');
+        const fin = propre.lastIndexOf('}');
+        if (debut !== -1 && fin > debut) {
+            data = JSON.parse(propre.substring(debut, fin + 1));
+        }
+    } catch (e) {
+        console.log('⚠️ Réponse non JSON');
+    }
+
+    if (!data || typeof data.message !== 'string') {
+        return { message: brut, plats: [] };
+    }
+
+    const choix = Array.isArray(data.choix) ? data.choix : [];
+    const plats = [];
+
+    choix.forEach(function(c) {
+        const assiette = vivier[(c.numero || 0) - 1];
+        if (!assiette) {
+            console.warn('🚫 Assiette inexistante : n°' + c.numero);
+            return;
+        }
+        plats.push({
+            nom: c.nom || assiette.produits.map(function(p) { return p.nom; }).join(' + '),
+            signature: assiette.signature,
+            produits: assiette.produits.map(function(p) { return p.id; }),
+            ingredients: assiette.produits.map(function(p) { return p.nom; })
+        });
+    });
+
+    return { message: data.message, plats: plats.slice(0, 3) };
+}
+
 
 // ============================================================
 // 2. COMPOSER LES ASSIETTES
