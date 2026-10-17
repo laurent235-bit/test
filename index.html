@@ -7924,6 +7924,56 @@ function tourDeTable(liste, taille) {
     return choisis;
 }
 
+function choisirVivierRecettes(faisables, taille, mode) {
+    const servies = window.assiettesServies || [];
+    const modeDemande = mode || 'quotidien';
+
+    let candidates = faisables.filter(function(r) {
+        return servies.indexOf(r.signature) === -1;
+    });
+
+    // Un dessert n'est pas un dîner, et l'inverse non plus
+    if (modeDemande === 'dessert') {
+        candidates = candidates.filter(function(r) { return r.modeRecette === 'dessert'; });
+    } else {
+        candidates = candidates.filter(function(r) { return r.modeRecette !== 'dessert'; });
+    }
+
+    if (candidates.length === 0) return [];
+
+    // ── Deux paniers ──
+    const principaux = candidates.filter(estPlatPrincipal);
+    const legers     = candidates.filter(function(r) { return !estPlatPrincipal(r); });
+
+    // Trois quarts de vrais plats, un quart de légumes et de soupes
+    const quotaPrincipaux = Math.max(1, Math.round(taille * 0.75));
+    const quotaLegers     = taille - quotaPrincipaux;
+
+    let vivier = tourDeTable(principaux, quotaPrincipaux);
+    vivier = vivier.concat(tourDeTable(legers, quotaLegers));
+
+    // S'il manque du monde dans un panier, l'autre complète
+    if (vivier.length < taille) {
+        const dejaPris = {};
+        vivier.forEach(function(r) { dejaPris[r.signature] = true; });
+        const reste = candidates.filter(function(r) { return !dejaPris[r.signature]; });
+        vivier = vivier.concat(tourDeTable(reste, taille - vivier.length));
+    }
+
+    // Mélanger l'ordre final : le n°1 n'est pas toujours un plat de viande
+    for (let i = vivier.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const t = vivier[i]; vivier[i] = vivier[j]; vivier[j] = t;
+    }
+
+    const nbPrinc = vivier.filter(estPlatPrincipal).length;
+    console.log('🍽️ Vivier : ' + vivier.length + ' plats — '
+        + nbPrinc + ' avec protéine, ' + (vivier.length - nbPrinc) + ' légers');
+    console.log('   ' + vivier.map(function(r) { return r.nom; }).join(' | '));
+
+    return vivier;
+}
+
 </script>
 </body>
 </html>
