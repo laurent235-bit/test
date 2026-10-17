@@ -6996,13 +6996,13 @@ function filtrerIncoherences(plats, mode) {
 function construirePromptChef(message, mode, vivier) {
 
     const contextesModes = {
-        quotidien: "C'est un soir de semaine : simple et rapide, moins de 25 minutes.",
-        weekend:   "C'est le week-end, il y a du temps : cuisson lente, gratin, mijoté.",
-        cookeo:    "Au Cookeo : tout dans la cuve, une seule cuisson, pas de four.",
-        healthy:   "Repas léger : cuissons douces, peu de matière grasse.",
-        monde:     "Inspiration d'une autre cuisine : asiatique, italienne, mexicaine, orientale.",
-        antigaspi: "Priorité absolue aux produits à finir, ils doivent être mangés vite.",
-        dessert:   "Un dessert ou un goûter."
+        quotidien: "C'est un soir de semaine : simple et rapide.",
+        weekend:   "C'est le week-end, il y a du temps.",
+        cookeo:    "Au Cookeo : tout dans la cuve, une seule cuisson.",
+        healthy:   "Repas léger.",
+        monde:     "Une cuisine d'ailleurs.",
+        antigaspi: "On finit en priorité ce qui doit être mangé vite.",
+        dessert:   "Un dessert."
     };
 
     let historique = '';
@@ -7013,14 +7013,6 @@ function construirePromptChef(message, mode, vivier) {
               }).join('\n') + '\n';
     }
 
-    const noteUrgence = (mode === 'antigaspi')
-        ? ' Le symbole ⚠️ marque un produit qui doit être mangé vite :\nce sont ceux-là qu\'il faut écouler en priorité.'
-        : '';
-
-    const regleUrgence = (mode === 'antigaspi')
-        ? '6. Si un produit est marqué ⚠️, dis-le avec le nom du produit :\n   "tes carottes sont à finir". Jamais "les produits marqués\n   d\'un drapeau" — cette notation ne doit pas apparaître.'
-        : '';
-
     return `Tu es le Chef. Tu cuisines pour une famille, tu les connais,
 tu leur parles comme un pote qui sait cuisiner.
 
@@ -7029,11 +7021,11 @@ ${contextesModes[mode] || contextesModes.quotidien}
 DEMANDE : "${message}"
 ${historique}
 ═══════════════════════════════════════
-ASSIETTES DISPONIBLES
+PLATS FAISABLES CE SOIR
 ═══════════════════════════════════════
 
-Voici les assiettes réalisables avec le stock, composées à partir
-des produits réellement présents.${noteUrgence}
+Ces plats sont réalisables : tous leurs ingrédients sont en stock.
+Sous chaque plat, les produits réels qui serviront.
 
 ${vivierEnTexte(vivier, mode)}
 
@@ -7041,39 +7033,33 @@ ${vivierEnTexte(vivier, mode)}
 TA MISSION
 ═══════════════════════════════════════
 
-Choisis les 3 assiettes qui répondent le mieux à la demande,
-et présente-les.
+Choisis les 3 plats de cette liste qui répondent le mieux à la
+demande, et annonce-les.
 
-CE QUE TU DOIS FAIRE :
-
-1. Choisir UNIQUEMENT dans la liste, par leur numéro. Tu n'ajoutes
-   aucun ingrédient absent. Sel, poivre, huile, vinaigre et épices
-   sèches sont sous-entendus.
-2. NOMMER LES TROIS PLATS DANS TON MESSAGE. Celui qui lit ta phrase
+1. Tu choisis UNIQUEMENT dans la liste, par leur numéro.
+2. NOMME LES TROIS PLATS DANS TON MESSAGE. Celui qui lit ta phrase
    sans rien d'autre doit savoir ce que tu proposes.
-3. Nommer les produits exactement comme dans la liste. Tu peux
-   décrire une découpe — "tes filets en lamelles" — pas renommer.
-4. Donner à chaque assiette un nom de plat appétissant, 2 à 6 mots.
-5. Si la demande est précise — une viande blanche, quelque chose de
-   léger — choisir celles qui y répondent vraiment. Si aucune ne
-   convient, le dire et proposer ce qui s'en rapproche.
-${regleUrgence}
+3. Les 3 doivent être franchement différents.
+4. Si la demande est précise — une viande blanche, quelque chose de
+   léger, du poisson — choisis ceux qui y répondent vraiment. Si
+   aucun ne convient, dis-le et propose ce qui s'en rapproche.
+5. Pour un plat marqué [à nommer], invente un nom appétissant de
+   2 à 6 mots à partir de ses produits.
 
 COMMENT TU PARLES :
 
-Tu dis TU, jamais vous. C'est une famille, pas un restaurant.
+Tu dis TU, au singulier. Pas de "vous", pas de "la famille".
 Tu ne l'appelles jamais "Chef" : c'est toi, le Chef.
 Trois phrases maximum. Direct et chaleureux, sans en faire trop.
 
 Interdits : "pépites", "papilles", "régaler", "concocté", "déniché",
 "merveilles", "perle rare", "gourmand", "savoureux", "express",
-"qui vont vous transporter", "sans attendre", "en un clin d'oeil".
-Pas de superlatifs, pas de langage de publicité. Tu annonces un repas
-à quelqu'un qui a faim, tu ne vends rien.
+"sans attendre", "en un clin d'oeil". Pas de superlatifs, pas de
+langage de publicité.
 
 Mauvais : "J'ai déniché trois pépites qui vont régaler tes papilles !"
-Bon : "Ce soir, knacks du Jura avec du riz, spaghettis au bacon, ou
-gnocchis jambon-fromage. Lequel te tente ?"
+Bon : "Ce soir, carbonara, colin pané aux haricots verts, ou knacks
+et ratatouille. Lequel te tente ?"
 
 ═══════════════════════════════════════
 FORMAT
@@ -7090,8 +7076,8 @@ Réponds UNIQUEMENT en JSON valide, sans markdown ni backticks :
   ]
 }
 
-Dans "message", ne cite jamais les numéros ni le symbole ⚠️.
-Pas de markdown, pas de liste à puces, pas de saut de ligne.
+Reprends le nom du plat tel qu'il figure dans la liste, sauf pour
+les [à nommer]. Ne cite jamais les numéros dans "message".
 
 Si la demande n'est pas une demande d'idées — une question sur le
 stock, une remarque — réponds dans "message" et laisse "choix" vide.`;
@@ -7436,24 +7422,24 @@ function vivierEnTexte(vivier, mode) {
 // 6. LE TEXTE DU VIVIER POUR LE PROMPT
 // Dix-huit lignes au lieu de cent soixante-cinq
 // ============================================================
-function vivierEnTexte(vivier) {
-    return vivier.map(function(a, i) {
-        const noms = a.produits.map(function(p) {
-            return p.nom + (p.urgent ? ' ⚠️' : '');
-        }).join(' + ');
-        return (i + 1) + '. ' + noms;
+function vivierEnTexte(vivier, mode) {
+    const marquer = (mode === 'antigaspi');
+
+    return vivier.map(function(r, i) {
+        const produits = r.produits.map(function(p) {
+            return p.nom + (marquer && p.urgent ? ' ⚠️' : '');
+        }).join(', ');
+
+        if (r.nom) {
+            return (i + 1) + '. ' + r.nom
+                 + (r.temps ? ' (' + r.temps + ' min)' : '')
+                 + '\n     avec : ' + produits;
+        }
+        // Combinaison sans nom
+        return (i + 1) + '. [à nommer] ' + produits;
     }).join('\n');
 }
 
-const MOTS_VIDES = [
-    'avec','sans','bio','frais','fraiche','fraiches','surgele','surgeles',
-    'surgelee','surgelees','conserve','boite','bocal','sachet','paquet',
-    'etui','extra','fin','fins','fine','fines','grand','grande','gros',
-    'grosse','petit','petite','petits','petites','qualite','superieure',
-    'nature','entier','entiere','demi','tranche','tranches','morceau',
-    'morceaux','filet','filets','sous','vide','pur','pure','special',
-    'les','des','aux','une','und','pour','par'
-];
 
 
 const FAMILLES_PAR_ROLE = {
@@ -7653,6 +7639,161 @@ async function testerFamilles() {
         });
     });
 }
+function indexerFamilles(parRole) {
+    // famille -> liste de produits de cette famille
+    const index = {};
+
+    Object.keys(parRole).forEach(function(role) {
+        (parRole[role] || []).forEach(function(p) {
+            const f = familleIngredient(p.nom, role);
+            if (!index[f]) index[f] = [];
+            index[f].push(p);
+        });
+    });
+
+    return index;
+}
+async function chargerRecettesFaisables(mode, famillesDispo) {
+    const { data: recettes, error } = await monSupabase
+        .from('recettes_chef')
+        .select('nom, mode, familles_obligatoires, familles_optionnelles, temps_minutes, difficulte')
+        .eq('actif', true);
+
+    if (error || !recettes) {
+        console.error('Erreur recettes :', error ? error.message : 'aucune');
+        return [];
+    }
+
+    const faisables = [];
+
+    recettes.forEach(function(r) {
+        const obligatoires = r.familles_obligatoires || [];
+        if (obligatoires.length === 0) return;
+
+        // Toutes les familles obligatoires doivent etre en stock
+        const manque = obligatoires.filter(function(f) {
+            return !famillesDispo[f] || famillesDispo[f].length === 0;
+        });
+        if (manque.length > 0) return;
+
+        // Resoudre chaque famille en un produit reel
+        const produits = [];
+        const vus = {};
+
+        obligatoires.forEach(function(f) {
+            const candidats = famillesDispo[f];
+            // On prend celui du frigo en priorite, sinon le premier
+            const choisi = candidats.find(function(p) { return p.emplacement === 'FRIGO'; })
+                        || candidats[0];
+            if (choisi && !vus[choisi.id]) {
+                vus[choisi.id] = true;
+                produits.push(choisi);
+            }
+        });
+
+        // Les optionnelles presentes enrichissent le plat
+        const optionnelles = r.familles_optionnelles || [];
+        let bonus = 0;
+        optionnelles.forEach(function(f) {
+            const candidats = famillesDispo[f];
+            if (candidats && candidats.length > 0) {
+                bonus++;
+                const choisi = candidats[0];
+                if (choisi && !vus[choisi.id]) {
+                    vus[choisi.id] = true;
+                    produits.push(choisi);
+                }
+            }
+        });
+
+        if (produits.length === 0) return;
+
+        // ── SCORE ──
+        let score = 10;
+        if (r.mode === mode) score += 8;                  // le bon registre
+        else if (mode === 'quotidien' && r.temps_minutes <= 30) score += 3;
+        if (mode === 'antigaspi') {
+            const urgents = produits.filter(function(p) { return p.urgent; }).length;
+            score += urgents * 5;
+        }
+        if (mode === 'quotidien' && r.temps_minutes > 45) score -= 6;
+        if (mode === 'weekend' && r.temps_minutes < 30) score -= 3;
+        score += bonus;                                    // plat plus complet
+        score += Math.random() * 8;
+
+        faisables.push({
+            nom: r.nom,
+            temps: r.temps_minutes,
+            modeRecette: r.mode,
+            produits: produits,
+            familles: obligatoires,
+            signature: 'r:' + r.nom,
+            score: score
+        });
+    });
+
+    return faisables;
+}
+
+function choisirVivierRecettes(faisables, taille) {
+    const servies = window.assiettesServies || [];
+
+    const candidates = faisables.filter(function(r) {
+        return servies.indexOf(r.signature) === -1;
+    });
+
+    if (candidates.length === 0) return [];
+
+    // Regrouper par premiere famille obligatoire : c'est le coeur du plat
+    const groupes = {};
+    candidates.forEach(function(r) {
+        const cle = r.familles[0] || 'autre';
+        if (!groupes[cle]) groupes[cle] = [];
+        groupes[cle].push(r);
+    });
+
+    Object.keys(groupes).forEach(function(cle) {
+        groupes[cle].sort(function(a, b) { return b.score - a.score; });
+    });
+
+    // Les familles rares d'abord
+    const ordre = Object.keys(groupes).sort(function(a, b) {
+        return groupes[a].length - groupes[b].length;
+    });
+
+    const vivier = [];
+    const index = {};
+    ordre.forEach(function(c) { index[c] = 0; });
+
+    let tour = 0;
+    while (vivier.length < taille && tour < 5) {
+        let avance = false;
+        for (let i = 0; i < ordre.length && vivier.length < taille; i++) {
+            const cle = ordre[i];
+            if (index[cle] < groupes[cle].length) {
+                vivier.push(groupes[cle][index[cle]]);
+                index[cle]++;
+                avance = true;
+            }
+        }
+        if (!avance) break;
+        tour++;
+    }
+
+    const parFamille = {};
+    vivier.forEach(function(r) {
+        const c = r.familles[0];
+        parFamille[c] = (parFamille[c] || 0) + 1;
+    });
+    console.log('🍽️ Vivier : ' + vivier.length + ' plats — '
+        + Object.keys(parFamille).map(function(k) {
+            return k + '×' + parFamille[k];
+          }).join(', '));
+
+    return vivier;
+}
+
+
 
 </script>
 </body>
