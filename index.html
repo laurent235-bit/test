@@ -7341,36 +7341,233 @@ function signatureAssiette(assiette) {
 
 
 // ============================================================
+// LES LÉGUMES SECS — ils traînent tantôt en protéine,
+// tantôt en féculent selon le classement. On les cherche
+// dans les deux rôles.
+// ============================================================
+const F_SECS = [
+    [/pois casse/,                        'pois casse'],
+    [/pois chiche|houmous|falafel/,       'pois chiche'],
+    [/lentille/,                          'lentille'],
+    [/haricots? rouges?|chili/,           'haricot rouge'],
+    [/flageolet/,                         'flageolet'],
+    [/haricots? blancs?|cassoulet/,       'flageolet'],
+    [/tofu|soja/,                         'soja']
+];
 
+
+// ============================================================
+// PROTÉINES
+// ============================================================
+const F_PROTEINE = [
+    // Poissons d'abord : "panes de colin" ne doit pas finir en poulet
+    [/colin|cabillaud|lieu noir|merlu|julienne de mer|poisson pane|pane.* poisson/, 'colin'],
+    [/saumon|truite/,                     'saumon'],
+    [/thon/,                              'thon'],
+    [/maquereau/,                         'maquereau'],
+    [/sardine|anchois/,                   'sardine'],
+    [/crevette|gambas|scampi|surimi|moule|crabe/, 'crevette'],
+
+    // Viandes
+    [/cordon bleu|nugget|croquette de poulet/, 'poulet'],
+    [/poulet|coquelet|volaille/,          'poulet'],
+    [/dinde/,                             'dinde'],
+    [/agneau|gigot|mouton/,               'agneau'],
+    [/knack|saucisse|chipolata|merguez|francfort|strasbourg|diot|boudin|andouill/, 'saucisse'],
+    [/lardon|jambon|porc|echine|travers|poitrines? fumees?|bacon|chorizo|rillette|palette/, 'porc'],
+    [/boeuf|steak|hache|bourguignon|rosbif|entrecote|bavette|carbonnade|pot au feu|veau|bolognaise/, 'boeuf'],
+
+    // Oeufs
+    [/oeuf/,                              'oeuf']
+].concat(F_SECS);
+
+
+// ============================================================
+// FÉCULENTS
+// ============================================================
+const F_FECULENT = [
+    // Pâtes à tarte : volontairement une famille absente de la base,
+    // pour qu'elles ne servent jamais de pâtes alimentaires
+    [/pates? (brisees?|feuilletees?|sablees?|a tarte|a pizza)|pate.*pizza/, 'pate a tarte'],
+
+    [/spaghetti|coquillette|macaroni|tagliatelle|penne|fusilli|farfalle|torsade|vermicelle|nouille|lasagne|cannelloni|ravioli|tortellini|conchiglie|linguine|papardelle|pate/, 'pate'],
+
+    // Pommes de terre : la frite est une famille à part
+    [/frite|pommes? noisettes?|potatoes|pommes? dauphines?|smile/, 'frite'],
+    [/rosti|pomme de terre|pommes de terre|patate|puree|dauphinois|vapeur|grenaille|ratte/, 'pomme de terre'],
+
+    [/semoule|couscous|tendres perles|boulgour|ble precuit|ebly/, 'semoule'],
+    [/riz|risotto|basmati|thai|pilaf/,    'riz'],
+    [/quinoa/,                            'quinoa'],
+    [/polenta/,                           'polenta'],
+    [/gnocchi/,                           'gnocchi'],
+    [/avoine|flocon|cereale/,             'avoine'],
+    [/pain|baguette|biscotte|tartine|wrap|tortilla|pita|buns|burger/, 'pain'],
+    [/mais/,                              'mais'],
+
+    // Farines et fécules : famille absente de la base, donc inutilisables
+    [/farine|fecule|maizena|levure|chapelure/, 'farine']
+].concat(F_SECS);
+
+
+// ============================================================
+// LÉGUMES
+// ============================================================
+const F_LEGUME = [
+    [/haricots? verts?/,                  'haricot vert'],
+    [/haricots? rouges?/,                 'haricot rouge'],
+    [/petits? pois|pois gourmands?/,      'petit pois'],
+    [/carotte/,                           'carotte'],
+    [/brocoli/,                           'brocolis'],
+    [/choux?.?fleurs?/,                   'chou-fleur'],
+    [/chou|choucroute/,                   'chou'],
+    [/courgette/,                         'courgette'],
+    [/aubergine/,                         'aubergine'],
+    [/poivron/,                           'poivron'],
+    [/tomate/,                            'tomate'],
+    [/salade|laitue|mache|roquette|cresson|batavia|scarole|iceberg/, 'salade'],
+    [/concombre/,                         'concombre'],
+    [/poireau/,                           'poireau'],
+    [/epinard/,                           'epinard'],
+    [/champignon|cepe|girolle|pleurote/,  'champignon'],
+    [/ratatouille/,                       'ratatouille'],
+    [/poelee|melange de legume|julienne|jardiniere|legumes pour|legumes du soleil|wok/, 'poelee legumes'],
+    [/macedoine/,                         'macedoine'],
+    [/salsifi/,                           'salsifi'],
+    [/endive/,                            'endive'],
+    [/betterave/,                         'betterave'],
+    [/potiron|courge|butternut|citrouille/, 'potiron'],
+    [/asperge/,                           'asperge'],
+    [/mais/,                              'mais'],
+    [/fenouil|celeri|navet|panais|radis|artichaut/, 'legume divers'],
+
+    // Aromates : famille absente de la base — jamais un plat à eux seuls
+    [/oignon|echalote|ail |ail$|gousse|persil|ciboulette|basilic|coriandre/, 'aromate']
+].concat(F_SECS);
+
+
+// ============================================================
+// FROMAGES ET LAITAGES
+// ============================================================
+const F_FROMAGE = [
+    [/rape|gruyere rape|emmental rape/,   'rape'],
+    [/parmesan|grana|pecorino/,           'parmesan'],
+    [/mozzarella|burrata/,                'mozzarella'],
+    [/comte|gruyere|emmental|beaufort|abondance/, 'comte'],
+    [/chevre|buchette|feta/,              'chevre'],
+    [/cheddar|mimolette/,                 'cheddar'],
+    [/raclette|reblochon|morbier/,        'raclette'],
+    [/camembert|brie|coulommier/,         'camembert'],
+    [/cancoillotte/,                      'cancoillotte'],
+    [/mascarpone|ricotta/,                'mascarpone'],
+    [/fromage frais|saint moret|philadelphia|carre frais|boursin|kiri|vache qui rit|tartare/, 'fromage frais'],
+    [/yaourt|skyr|fromage blanc|petits? suisses?/, 'yaourt'],
+    [/creme|mascarpone/,                  'creme'],
+    [/beurre|lait/,                       'laitier divers']
+];
+
+
+// ============================================================
+// SAUCES
+// ============================================================
+const F_SAUCE = [
+    [/bechamel/,                          'bechamel'],
+    [/pesto/,                             'pesto'],
+    [/sauce soja|soja sucre|nuoc mam/,    'sauce soja'],
+    [/lait de coco|coco/,                 'coco'],
+    [/mayonnaise|mayo|aioli|tartare/,     'mayonnaise'],
+    [/moutarde/,                          'moutarde'],
+    [/ketchup|barbecue|bbq/,              'condiment divers'],
+    [/bouillon|fond de |cube/,            'bouillon'],
+    [/creme/,                             'creme'],
+    [/tomate|coulis|passata|napolitaine|arrabiata|provencale/, 'tomate'],
+    [/curry|paprika|cumin|herbe|epice|piment|safran|colombo/, 'epice']
+];
+
+
+// ============================================================
+// CONDIMENTS
+// ============================================================
+const F_CONDIMENT = [
+    [/cornichon/,                         'cornichon'],
+    [/moutarde/,                          'moutarde'],
+    [/mayonnaise|mayo/,                   'mayonnaise'],
+    [/miel/,                              'miel'],
+    [/confiture|gelee/,                   'confiture'],
+    [/citron/,                            'citron'],
+    [/bouillon|cube/,                     'bouillon'],
+    [/olive|caprier|caper/,               'condiment divers'],
+    [/vinaigre|huile|sel|poivre|sucre/,   'base cuisine']
+];
+
+
+// ============================================================
+// DESSERTS
+// ============================================================
+const F_DESSERT = [
+    [/chocolat|cacao|nutella/,            'chocolat'],
+    [/yaourt|skyr|fromage blanc|petits? suisses?/, 'yaourt'],
+    [/compote|pomme|poire/,               'pomme'],
+    [/mascarpone|ricotta/,                'mascarpone'],
+    [/miel/,                              'miel'],
+    [/confiture/,                         'confiture'],
+    [/creme/,                             'creme'],
+    [/banane|fraise|peche|abricot|ananas|mangue|raisin|clementine|orange|framboise|myrtille|cerise|fruit/, 'fruit'],
+    [/biscuit|gateau|madeleine|speculoos|sable/, 'biscuit']
+];
+
+
+// ============================================================
+// PETIT DÉJEUNER
+// ============================================================
+const F_PETITDEJ = [
+    [/cafe/,                              'cafe'],
+    [/chocolat|cacao|nutella/,            'chocolat'],
+    [/confiture|gelee/,                   'confiture'],
+    [/miel/,                              'miel'],
+    [/cereale|avoine|flocon|muesli/,      'avoine'],
+    [/pain|biscotte|brioche/,             'pain'],
+    [/yaourt|fromage blanc/,              'yaourt'],
+    [/jus|lait/,                          'boisson']
+];
+
+
+// ============================================================
+// LA TABLE PAR RÔLE
+// ============================================================
+const FAMILLES_PAR_ROLE = {
+    proteine:        F_PROTEINE,
+    feculent:        F_FECULENT,
+    legume:          F_LEGUME,
+    fromage:         F_FROMAGE,
+    sauce:           F_SAUCE,
+    condiment:       F_CONDIMENT,
+    dessert:         F_DESSERT,
+    petit_dejeuner:  F_PETITDEJ,
+    grignotage:      F_DESSERT,
+
+    // Un plat tout prêt : on essaie quand même de l'identifier
+    plat_complet:    F_PROTEINE.concat(F_FECULENT).concat(F_LEGUME),
+
+    boisson:         [],
+    non_alimentaire: []
+};
+
+
+// ============================================================
+// LA FONCTION
+// ============================================================
 function familleIngredient(nom, role) {
-    const n = (nom || '')
-        .toLowerCase()
-        .normalize('NFD').replace(/[̀-ͯ]/g, '')
-        .replace(/[^a-z0-9\s\/.-]/g, ' ');
+    const n = normaliserNom(nom);
+    const regles = FAMILLES_PAR_ROLE[role] || FAMILLES_PAR_ROLE.plat_complet;
 
-    // 1. Les familles du role du produit, en priorite
-    const duRole = FAMILLES_PAR_ROLE[role] || [];
-    for (let i = 0; i < duRole.length; i++) {
-        if (duRole[i][1].test(n)) return duRole[i][0];
+    for (let i = 0; i < regles.length; i++) {
+        if (regles[i][0].test(n)) return regles[i][1];
     }
 
-    // 2. A defaut, toutes les autres
-    const autresRoles = Object.keys(FAMILLES_PAR_ROLE);
-    for (let r = 0; r < autresRoles.length; r++) {
-        if (autresRoles[r] === role) continue;
-        const liste = FAMILLES_PAR_ROLE[autresRoles[r]];
-        for (let i = 0; i < liste.length; i++) {
-            if (liste[i][1].test(n)) return liste[i][0];
-        }
-    }
-
-    // 3. Rien de connu : premier mot significatif
-    const mots = n.split(/[\s\/.-]+/).filter(function(m) {
-        return m.length >= 4 && !/^\d/.test(m);
-    });
-    let base = mots[0] || n.trim() || 'inconnu';
-    if (base.length > 4 && /[sx]$/.test(base)) base = base.slice(0, -1);
-    return base;
+    // Rien reconnu : famille absente de la base, donc le produit
+    // ne pourra pas servir d'ingrédient obligatoire.
+    return 'autre';
 }
 
 
@@ -7414,33 +7611,57 @@ async function diagnostiquerStock() {
 }
 
 async function testerFamilles() {
-    const parRole = await chargerStockParRole();
-    if (!parRole) { console.log('❌ Aucun stock'); return; }
+    const { data } = await monSupabase
+        .from('inventaire2')
+        .select('nom, role_culinaire')
+        .gt('quantite', 0)
+        .order('role_culinaire');
 
-    ['legume', 'feculent', 'proteine', 'fromage', 'sauce'].forEach(function(role) {
-        const produits = parRole[role] || [];
-        if (produits.length === 0) return;
+    if (!data) { console.log('Pas de données'); return; }
 
-        const familles = {};
-        produits.forEach(function(p) {
-            const f = familleIngredient(p.nom, role);
-            if (!familles[f]) familles[f] = [];
-            familles[f].push(p.nom);
-        });
+    const parFamille = {};
+    const inconnus = [];
 
-        console.log('── ' + role.toUpperCase() + ' : '
-            + Object.keys(familles).length + ' familles pour '
-            + produits.length + ' produits');
+    data.forEach(function(p) {
+        const r = p.role_culinaire || 'autre';
+        if (r === 'non_alimentaire' || r === 'boisson') return;
 
-        Object.keys(familles).sort().forEach(function(f) {
-            console.log('   ' + f + ' ← ' + familles[f].join(' | '));
-        });
+        const f = familleIngredient(p.nom, r);
+        const cle = r + ' / ' + f;
+        if (!parFamille[cle]) parFamille[cle] = [];
+        parFamille[cle].push(p.nom);
+
+        if (f === 'autre') inconnus.push(r + ' : ' + p.nom);
     });
+
+    console.log('═══ FAMILLES RECONNUES ═══');
+    Object.keys(parFamille).sort().forEach(function(cle) {
+        if (cle.indexOf('/ autre') === -1) {
+            console.log(cle + '  →  ' + parFamille[cle].join(' | '));
+        }
+    });
+
+    console.log('');
+    console.log('═══ NON RECONNUS (' + inconnus.length + ') ═══');
+    inconnus.forEach(function(l) { console.log('  ' + l); });
 }
+
 function indexerFamilles(parRole) {
     const index = {};
 
-    Object.keys(parRole).forEach(function(role) {
+    // L'ordre compte : plusieurs rôles peuvent donner la même famille.
+    // La sauce tomate et les tomates fraîches sont toutes deux 'tomate' ;
+    // on veut le produit frais en tête de liste, pas la sauce.
+    const ordre = ['legume', 'proteine', 'feculent', 'fromage',
+                   'plat_complet', 'dessert', 'petit_dejeuner',
+                   'sauce', 'condiment', 'grignotage'];
+
+    const roles = ordre.filter(function(r) { return parRole[r]; })
+        .concat(Object.keys(parRole).filter(function(r) {
+            return ordre.indexOf(r) === -1;
+        }));
+
+    roles.forEach(function(role) {
         (parRole[role] || []).forEach(function(p) {
             const f = familleIngredient(p.nom, role);
             if (!index[f]) index[f] = [];
@@ -7459,7 +7680,6 @@ async function chargerRecettesFaisables(mode, famillesDispo) {
         .eq('actif', true);
 
     if (error || !recettes) {
-        
         console.error('Erreur recettes :', error ? error.message : 'aucune');
         return [];
     }
@@ -7594,6 +7814,7 @@ function choisirVivierRecettes(faisables, taille) {
     return vivier;
 }
 
+
 async function preparerVivier(mode) {
     const parRole = await chargerStockParRole();
     if (!parRole) return null;
@@ -7632,7 +7853,6 @@ async function preparerVivier(mode) {
     return vivier.length > 0 ? vivier : null;
 }
 
-
 // ============================================================
 // 5. LE TEXTE DU VIVIER  (remplace l'ancienne)
 //    Le nom du plat, son temps, et les produits réels
@@ -7653,6 +7873,15 @@ function vivierEnTexte(vivier, mode) {
         return (i + 1) + '. [à nommer] ' + produits;
     }).join('\n');
 }
+function normaliserNom(nom) {
+    return (nom || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[̀-ͯ]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
 
 </script>
 </body>
