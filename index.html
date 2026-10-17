@@ -7796,62 +7796,7 @@ async function chargerRecettesFaisables(mode, famillesDispo) {
 }
 
 
-function choisirVivierRecettes(faisables, taille) {
-    const servies = window.assiettesServies || [];
 
-    const candidates = faisables.filter(function(r) {
-        return servies.indexOf(r.signature) === -1;
-    });
-
-    if (candidates.length === 0) return [];
-
-    const groupes = {};
-    candidates.forEach(function(r) {
-        const cle = r.familles[0] || 'autre';
-        if (!groupes[cle]) groupes[cle] = [];
-        groupes[cle].push(r);
-    });
-
-    Object.keys(groupes).forEach(function(cle) {
-        groupes[cle].sort(function(a, b) { return b.score - a.score; });
-    });
-
-    // Les familles rares d'abord
-    const ordre = Object.keys(groupes).sort(function(a, b) {
-        return groupes[a].length - groupes[b].length;
-    });
-
-    const vivier = [];
-    const index = {};
-    ordre.forEach(function(c) { index[c] = 0; });
-
-    let tour = 0;
-    while (vivier.length < taille && tour < 5) {
-        let avance = false;
-        for (let i = 0; i < ordre.length && vivier.length < taille; i++) {
-            const cle = ordre[i];
-            if (index[cle] < groupes[cle].length) {
-                vivier.push(groupes[cle][index[cle]]);
-                index[cle]++;
-                avance = true;
-            }
-        }
-        if (!avance) break;
-        tour++;
-    }
-
-    const parFamille = {};
-    vivier.forEach(function(r) {
-        const c = r.familles[0];
-        parFamille[c] = (parFamille[c] || 0) + 1;
-    });
-    console.log('🍽️ Vivier : ' + vivier.length + ' plats — '
-        + Object.keys(parFamille).map(function(k) {
-            return k + '×' + parFamille[k];
-          }).join(', '));
-
-    return vivier;
-}
 
 
 async function preparerVivier(mode) {
@@ -7872,7 +7817,7 @@ async function preparerVivier(mode) {
     const faisables = await chargerRecettesFaisables(mode, famillesDispo);
     console.log('✅ ' + faisables.length + ' recettes réalisables');
 
-    let vivier = choisirVivierRecettes(faisables, 18);
+   let vivier = choisirVivierRecettes(faisables, 18, mode);
 
     // ── FILET : si la base ne donne pas assez, on complète
     //    avec des combinaisons, comme avant
@@ -7921,6 +7866,63 @@ function normaliserNom(nom) {
         .trim();
 }
 
+
+function estPlatPrincipal(r) {
+    for (let i = 0; i < r.familles.length; i++) {
+        if (FAMILLES_PROTEINE.indexOf(r.familles[i]) !== -1) return true;
+    }
+    return false;
+}
+const FAMILLES_PROTEINE = [
+    'poulet', 'dinde', 'boeuf', 'porc', 'agneau', 'saucisse', 'oeuf',
+    'colin', 'saumon', 'thon', 'maquereau', 'sardine', 'crevette',
+    'lentille', 'pois casse', 'pois chiche', 'haricot rouge',
+    'flageolet', 'soja'
+];
+
+// Tour de table par famille, dans un ordre mélangé
+function tourDeTable(liste, taille) {
+    if (taille <= 0 || liste.length === 0) return [];
+
+    const groupes = {};
+    liste.forEach(function(r) {
+        const cle = r.familles[0] || 'autre';
+        if (!groupes[cle]) groupes[cle] = [];
+        groupes[cle].push(r);
+    });
+
+    Object.keys(groupes).forEach(function(cle) {
+        groupes[cle].sort(function(a, b) { return b.score - a.score; });
+    });
+
+    // Ordre aléatoire : aucune famille n'a de privilège permanent
+    const ordre = Object.keys(groupes);
+    for (let i = ordre.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const t = ordre[i]; ordre[i] = ordre[j]; ordre[j] = t;
+    }
+
+    const choisis = [];
+    const curseur = {};
+    ordre.forEach(function(c) { curseur[c] = 0; });
+
+    let tour = 0;
+    while (choisis.length < taille && tour < 6) {
+        let avance = false;
+        for (let i = 0; i < ordre.length && choisis.length < taille; i++) {
+            const cle = ordre[i];
+            if (curseur[cle] < groupes[cle].length) {
+                choisis.push(groupes[cle][curseur[cle]]);
+                curseur[cle]++;
+                avance = true;
+            }
+        }
+        if (!avance) break;
+        tour++;
+    }
+
+    return choisis;
+}
 
 </script>
 </body>
