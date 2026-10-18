@@ -6248,6 +6248,8 @@ async function envoyerMessageChef(modeForce) {
     zone.style.display = 'block';
     ajouterBulleChef(message, 'moi');
     statut.innerText = '👨‍🍳 Le Chef regarde ton stock...';
+    const maDemande = (window.chefDemande || 0) + 1;
+    window.chefDemande = maDemande;
 
     try {
         const mode = modeForce || detecterModeMessage(message);
@@ -6255,15 +6257,21 @@ async function envoyerMessageChef(modeForce) {
         // ── LE CODE COMPOSE ──
        const vivier = await preparerVivier(mode);
 
-        if (!vivier || vivier.length === 0) {
-            ajouterBulleChef(
-                "Je n'arrive plus à composer d'assiette complète avec ce qui reste. "
-                + "Il te manque soit une protéine, soit un féculent, soit un légume.",
-                'chef'
-            );
-            statut.innerText = '';
-            return;
-        }
+         if (maDemande !== window.chefDemande) {
+        console.log('↩️ Réponse périmée ignorée');
+        return;
+    }
+
+    if (!vivier || vivier.length === 0) {
+        ajouterBulleChef(
+            window.messageVivierVide
+            || "Je n'arrive plus à composer d'assiette complète avec ce qui reste. "
+               + "Il te manque soit une protéine, soit un féculent, soit un légume.",
+            'chef'
+        );
+        statut.innerText = '';
+        return;
+    }
 
         statut.innerText = '👨‍🍳 Le Chef choisit...';
 
@@ -6290,7 +6298,10 @@ async function envoyerMessageChef(modeForce) {
         }
 
         const resultat = lireReponseChef(brut, vivier);
-
+ if (maDemande !== window.chefDemande) {
+        console.log('↩️ Réponse périmée ignorée');
+        return;
+    }
         // Marquer comme servies : elles ne reviendront plus
         if (!window.assiettesServies) window.assiettesServies = [];
         resultat.plats.forEach(function(p) {
@@ -7847,6 +7858,8 @@ async function chargerRecettesFaisables(mode, famillesDispo) {
 }
 
 async function preparerVivier(mode) {
+    window.messageVivierVide = null;
+
     const parRole = await chargerStockParRole();
     if (!parRole) return null;
 
@@ -7858,31 +7871,26 @@ async function preparerVivier(mode) {
     });
 
     const famillesDispo = indexerFamilles(parRole);
-    console.log('📦 ' + Object.keys(famillesDispo).length + ' familles en stock : '
-        + Object.keys(famillesDispo).sort().join(', '));
+    console.log('📦 ' + Object.keys(famillesDispo).length + ' familles en stock');
 
     let faisables = await chargerRecettesFaisables(mode, famillesDispo);
-       faisables = appliquerFiltresChef(faisables);
+    faisables = appliquerFiltresChef(faisables);
+    console.log('✅ ' + faisables.length + ' recettes réalisables');
 
-   let vivier = choisirVivierRecettes(faisables, 18, mode);
-
-    // ── FILET : si la base ne donne pas assez, on complète
-    //    avec des combinaisons, comme avant
-    if (vivier.length < 6) {
-        console.log('⚠️ Peu de recettes — complément par combinaisons');
-        if (parRole.proteine.length === 0 && parRole.feculent.length === 0) {
-            return vivier.length > 0 ? vivier : null;
+    if (faisables.length === 0) {
+        const f = window.filtresChef || {};
+        if (f.envie || f.base || f.temps) {
+            window.messageVivierVide =
+                "Rien ne correspond à ce filtre avec ton stock de ce soir. "
+                + "Enlève-en un et redemande-moi.";
         }
-        const combinaisons = composerAssiettes(parRole, mode);
-        const complement = choisirVivier(combinaisons, 12 - vivier.length);
-        complement.forEach(function(a) {
-            a.nom = null;   // pas de nom : Gemini en inventera un
-            vivier.push(a);
-        });
+        return null;
     }
 
+    const vivier = choisirVivierRecettes(faisables, 18, mode);
     return vivier.length > 0 ? vivier : null;
 }
+
 
 // ============================================================
 // 5. LE TEXTE DU VIVIER  (remplace l'ancienne)
@@ -7975,34 +7983,40 @@ function tourDeTable(liste, taille) {
 }
 
 function choisirVivierRecettes(faisables, taille, mode) {
-    const servies = window.assiettesServies || [];
     const modeDemande = mode || 'quotidien';
 
+    // Un dessert n'est pas un dîner, et l'inverse non plus
     let candidates = faisables.filter(function(r) {
+        return (modeDemande === 'dessert')
+            ? r.modeRecette === 'dessert'
+            : r.modeRecette !== 'dessert';
+    });
+
+    if (candidates.length === 0) return [];
+
+    // Écarter ce qui a déjà été proposé — sauf s'il ne reste rien
+    const servies = window.assiettesServies || [];
+    const neuves = candidates.filter(function(r) {
         return servies.indexOf(r.signature) === -1;
     });
 
-    // Un dessert n'est pas un dîner, et l'inverse non plus
-    if (modeDemande === 'dessert') {
-        candidates = candidates.filter(function(r) { return r.modeRecette === 'dessert'; });
+    if (neuves.length >= 3) {
+        candidates = neuves;
     } else {
-        candidates = candidates.filter(function(r) { return r.modeRecette !== 'dessert'; });
+        window.assiettesServies = [];
+        console.log('♻️ Tout a déjà été proposé ici — on repart de zéro');
     }
-
-    if (candidates.length === 0) return [];
 
     // ── Deux paniers ──
     const principaux = candidates.filter(estPlatPrincipal);
     const legers     = candidates.filter(function(r) { return !estPlatPrincipal(r); });
 
-    // Trois quarts de vrais plats, un quart de légumes et de soupes
     const quotaPrincipaux = Math.max(1, Math.round(taille * 0.75));
     const quotaLegers     = taille - quotaPrincipaux;
 
     let vivier = tourDeTable(principaux, quotaPrincipaux);
     vivier = vivier.concat(tourDeTable(legers, quotaLegers));
 
-    // S'il manque du monde dans un panier, l'autre complète
     if (vivier.length < taille) {
         const dejaPris = {};
         vivier.forEach(function(r) { dejaPris[r.signature] = true; });
@@ -8019,7 +8033,6 @@ function choisirVivierRecettes(faisables, taille, mode) {
     const nbPrinc = vivier.filter(estPlatPrincipal).length;
     console.log('🍽️ Vivier : ' + vivier.length + ' plats — '
         + nbPrinc + ' avec protéine, ' + (vivier.length - nbPrinc) + ' légers');
-    console.log('   ' + vivier.map(function(r) { return r.nom; }).join(' | '));
 
     return vivier;
 }
@@ -8194,12 +8207,18 @@ function rendreFiltresChef() {
 // ─────────────────────────────────────────────────────────
 // CLIQUER SUR UNE PASTILLE
 // ─────────────────────────────────────────────────────────
+let minuterieFiltres = null;
+
 function basculerFiltre(type, id) {
     // Deuxième clic sur la même : on l'enlève
     window.filtresChef[type] = (window.filtresChef[type] === id) ? null : id;
     rendreFiltresChef();
-    demanderAvecFiltres();
+
+    // On attend un instant : deux taps de suite font une seule demande
+    clearTimeout(minuterieFiltres);
+    minuterieFiltres = setTimeout(demanderAvecFiltres, 600);
 }
+
 
 function effacerFiltresChef() {
     window.filtresChef = { envie: null, base: null, temps: null };
@@ -8235,6 +8254,7 @@ function demanderAvecFiltres() {
     input.value = phraseDesFiltres();
     envoyerMessageChef();
 }
+
 
 
 // ─────────────────────────────────────────────────────────
