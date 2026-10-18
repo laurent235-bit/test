@@ -7045,6 +7045,12 @@ demande, et annonce-les.
    aucun ne convient, dis-le et propose ce qui s'en rapproche.
 5. Pour un plat marqué [à nommer], invente un nom appétissant de
    2 à 6 mots à partir de ses produits.
+6. Un plat marqué ⚑ porte un nom qui ne correspond pas tout à fait
+   aux produits listés sous lui. Garde le plat, mais corrige le nom
+   d'après les produits réels.
+   Exemple : "Bacon et oeufs au plat ⚑ / avec : Lardons fumés, Oeufs bio"
+   s'annonce "Lardons et oeufs au plat".
+   Dans "choix", écris le nom corrigé.
 
 COMMENT TU PARLES :
 
@@ -7710,7 +7716,17 @@ function indexerFamilles(parRole) {
 
     return index;
 }
+function produitNommeDansTitre(nomProduit, titreNormalise) {
+    const mots = normaliserNom(nomProduit)
+        .split(/[^a-z0-9]+/)
+        .filter(function(w) { return w.length >= 4; })
+        .map(function(w) { return w.replace(/s$/, ''); });
 
+    for (let i = 0; i < mots.length; i++) {
+        if (titreNormalise.indexOf(mots[i]) !== -1) return true;
+    }
+    return false;
+}
 
 async function chargerRecettesFaisables(mode, famillesDispo) {
     const { data: recettes, error } = await monSupabase
@@ -7731,34 +7747,52 @@ async function chargerRecettesFaisables(mode, famillesDispo) {
         const obligatoires = r.familles_obligatoires || [];
         if (obligatoires.length === 0) return;
 
-        // Toutes les familles obligatoires doivent être en stock
         const manque = obligatoires.filter(function(f) {
             return !famillesDispo[f] || famillesDispo[f].length === 0;
         });
         if (manque.length > 0) return;
 
-        // Résoudre chaque famille en un produit réel
+        const titre = normaliserNom(r.nom);
         const produits = [];
         const vus = {};
+        let titreHonnete = true;
+
+        // ── Choisir un produit par famille ──
+        function resoudre(f) {
+            const candidats = famillesDispo[f];
+            if (!candidats || candidats.length === 0) return null;
+
+            // 1. celui que le titre nomme
+            const nomme = candidats.find(function(p) {
+                return produitNommeDansTitre(p.nom, titre);
+            });
+            if (nomme) return nomme;
+
+            // 2. celui du frigo
+            const frais = candidats.find(function(p) { return p.emplacement === 'FRIGO'; });
+            return frais || candidats[0];
+        }
 
         obligatoires.forEach(function(f) {
-            const candidats = famillesDispo[f];
-            const choisi = candidats.find(function(p) { return p.emplacement === 'FRIGO'; })
-                        || candidats[0];
-            if (choisi && !vus[choisi.id]) {
+            const choisi = resoudre(f);
+            if (!choisi) return;
+            if (!produitNommeDansTitre(choisi.nom, titre)) {
+                // Le titre parle d'autre chose que ce qu'on va cuisiner
+                titreHonnete = false;
+            }
+            if (!vus[choisi.id]) {
                 vus[choisi.id] = true;
                 produits.push(choisi);
             }
         });
 
-        // Les optionnelles présentes enrichissent le plat
         const optionnelles = r.familles_optionnelles || [];
         let bonus = 0;
         optionnelles.forEach(function(f) {
             const candidats = famillesDispo[f];
             if (candidats && candidats.length > 0) {
                 bonus++;
-                const choisi = candidats[0];
+                const choisi = resoudre(f);
                 if (choisi && !vus[choisi.id]) {
                     vus[choisi.id] = true;
                     produits.push(choisi);
@@ -7779,6 +7813,11 @@ async function chargerRecettesFaisables(mode, famillesDispo) {
         if (mode === 'quotidien' && r.temps_minutes > 45) score -= 6;
         if (mode === 'weekend' && r.temps_minutes < 30) score -= 3;
         score += bonus;
+
+        // Un plat dont le titre correspond vraiment aux produits
+        // passe devant un plat qu'il faudra renommer
+        if (titreHonnete) score += 4;
+
         score += Math.random() * 8;
 
         faisables.push({
@@ -7787,6 +7826,7 @@ async function chargerRecettesFaisables(mode, famillesDispo) {
             modeRecette: r.mode,
             produits: produits,
             familles: obligatoires,
+            titreHonnete: titreHonnete,
             signature: 'r:' + r.nom,
             score: score
         });
@@ -7794,10 +7834,6 @@ async function chargerRecettesFaisables(mode, famillesDispo) {
 
     return faisables;
 }
-
-
-
-
 
 async function preparerVivier(mode) {
     const parRole = await chargerStockParRole();
@@ -7849,14 +7885,17 @@ function vivierEnTexte(vivier, mode) {
             return p.nom + (marquer && p.urgent ? ' ⚠️' : '');
         }).join(', ');
 
-        if (r.nom) {
-            return (i + 1) + '. ' + r.nom
-                 + (r.temps ? ' (' + r.temps + ' min)' : '')
-                 + '\n     avec : ' + produits;
+        if (!r.nom) {
+            return (i + 1) + '. [à nommer] ' + produits;
         }
-        return (i + 1) + '. [à nommer] ' + produits;
+
+        return (i + 1) + '. ' + r.nom
+             + (r.temps ? ' (' + r.temps + ' min)' : '')
+             + (r.titreHonnete === false ? '  ⚑' : '')
+             + '\n     avec : ' + produits;
     }).join('\n');
 }
+
 function normaliserNom(nom) {
     return (nom || '')
         .toLowerCase()
