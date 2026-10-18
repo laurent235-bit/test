@@ -387,7 +387,7 @@
             ♻️ Anti-gaspi
         </button>
     </div>
-
+<div id="filtres-chef" style="margin-bottom:10px;"></div>
     <div id="chef-conversation" style="background:white; border-radius:12px; padding:12px; margin-bottom:10px; max-height:360px; overflow-y:auto; display:none;"></div>
 
     <div style="display:flex; gap:6px;">
@@ -7039,7 +7039,10 @@ demande, et annonce-les.
 1. Tu choisis UNIQUEMENT dans la liste, par leur numéro.
 2. NOMME LES TROIS PLATS DANS TON MESSAGE. Celui qui lit ta phrase
    sans rien d'autre doit savoir ce que tu proposes.
-3. Les 3 doivent être franchement différents.
+3. Les 3 doivent être franchement différents. S'il y a moins
+  de 3 plats dans la liste, propose-les tous et dis-lui
+ simplement qu'il n'y a pas plus de choix pour ce soir.
+ N'invente jamais un plat absent de la liste.
 4. Si la demande est précise — une viande blanche, quelque chose de
    léger, du poisson — choisis ceux qui y répondent vraiment. Si
    aucun ne convient, dis-le et propose ce qui s'en rapproche.
@@ -7051,6 +7054,14 @@ demande, et annonce-les.
    Exemple : "Bacon et oeufs au plat ⚑ / avec : Lardons fumés, Oeufs bio"
    s'annonce "Lardons et oeufs au plat".
    Dans "choix", écris le nom corrigé.
+  7.APRÈS UN CHANGEMENT DE STOCK (optionnel) ──
+   Pour que les compteurs se mettent à jour quand tu scannes ou
+   consommes quelque chose, ajoute cet appel à la fin de ta
+   fonction qui recharge le stock (chargerTout) :
+
+rafraichirDisponibiliteFiltres();
+
+   Sans ça, ils se recalent quand même à chaque demande au Chef.
 
 COMMENT TU PARLES :
 
@@ -7850,8 +7861,8 @@ async function preparerVivier(mode) {
     console.log('📦 ' + Object.keys(famillesDispo).length + ' familles en stock : '
         + Object.keys(famillesDispo).sort().join(', '));
 
-    const faisables = await chargerRecettesFaisables(mode, famillesDispo);
-    console.log('✅ ' + faisables.length + ' recettes réalisables');
+    let faisables = await chargerRecettesFaisables(mode, famillesDispo);
+       faisables = appliquerFiltresChef(faisables);
 
    let vivier = choisirVivierRecettes(faisables, 18, mode);
 
@@ -8012,6 +8023,260 @@ function choisirVivierRecettes(faisables, taille, mode) {
 
     return vivier;
 }
+
+// ─────────────────────────────────────────────────────────
+// LES FILTRES DISPONIBLES
+// ─────────────────────────────────────────────────────────
+const ENVIES = [
+    { id: 'volaille', label: '🍗 Volaille', familles: ['poulet', 'dinde'] },
+    { id: 'boeuf',    label: '🥩 Bœuf',     familles: ['boeuf', 'agneau'] },
+    { id: 'porc',     label: '🥓 Porc',     familles: ['porc', 'saucisse'] },
+    { id: 'poisson',  label: '🐟 Poisson',  familles: ['colin', 'saumon', 'thon',
+                                                       'maquereau', 'sardine', 'crevette'] },
+    { id: 'oeuf',     label: '🥚 Œufs',     familles: ['oeuf'] },
+    { id: 'vege',     label: '🌱 Végé',     exclut:   ['poulet', 'dinde', 'boeuf', 'agneau',
+                                                       'porc', 'saucisse', 'colin', 'saumon',
+                                                       'thon', 'maquereau', 'sardine', 'crevette'] }
+];
+
+const BASES = [
+    { id: 'pate',    label: '🍝 Pâtes',   familles: ['pate'] },
+    { id: 'riz',     label: '🍚 Riz',     familles: ['riz'] },
+    { id: 'patate',  label: '🥔 Patates', familles: ['pomme de terre', 'frite'] },
+    { id: 'semoule', label: '🥣 Semoule', familles: ['semoule', 'quinoa', 'polenta', 'gnocchi'] },
+    { id: 'pain',    label: '🥖 Pain',    familles: ['pain'] },
+    { id: 'sans',    label: '🚫 Sans féculent',
+                     exclut: ['pate', 'riz', 'pomme de terre', 'frite', 'semoule',
+                              'quinoa', 'polenta', 'gnocchi', 'pain'] }
+];
+
+const TEMPS = [
+    { id: 'rapide', label: '⏱️ 20 min', max: 20 },
+    { id: 'moyen',  label: '⏱️ 30 min', max: 30 }
+];
+
+window.filtresChef   = { envie: null, base: null, temps: null };
+window.comptesFiltres = null;   // rempli dès qu'on connaît le stock
+
+
+// ─────────────────────────────────────────────────────────
+// UNE RECETTE CORRESPOND-ELLE À UN FILTRE ?
+// Une seule règle, utilisée pour filtrer ET pour compter :
+// le nombre affiché ne peut donc pas mentir sur le résultat.
+// ─────────────────────────────────────────────────────────
+function recetteCorrespond(r, f) {
+    if (!f) return true;
+
+    if (f.familles) {
+        return r.familles.some(function(fam) { return f.familles.indexOf(fam) !== -1; });
+    }
+    if (f.exclut) {
+        return !r.familles.some(function(fam) { return f.exclut.indexOf(fam) !== -1; });
+    }
+    if (f.max) {
+        return r.temps <= f.max;
+    }
+    return true;
+}
+
+function trouverFiltre(type, id) {
+    if (!id) return null;
+    const table = (type === 'envie') ? ENVIES : (type === 'base') ? BASES : TEMPS;
+    return table.find(function(x) { return x.id === id; }) || null;
+}
+
+
+// ─────────────────────────────────────────────────────────
+// COMPTER CE QUI EST FAISABLE, FILTRE PAR FILTRE
+//
+// On compte en tenant compte des AUTRES filtres déjà actifs :
+// avec 🐟 Poisson sélectionné, 🍝 Pâtes affiche le nombre de
+// plats poisson + pâtes, pas le total des plats de pâtes.
+// ─────────────────────────────────────────────────────────
+function compterFiltres(faisables) {
+    const actif = window.filtresChef || {};
+    const comptes = { envie: {}, base: {}, temps: {} };
+
+    function compter(type, f) {
+        const autres = ['envie', 'base', 'temps'].filter(function(t) { return t !== type; });
+        return faisables.filter(function(r) {
+            if (!recetteCorrespond(r, f)) return false;
+            for (let i = 0; i < autres.length; i++) {
+                if (!recetteCorrespond(r, trouverFiltre(autres[i], actif[autres[i]]))) return false;
+            }
+            return true;
+        }).length;
+    }
+
+    ENVIES.forEach(function(e) { comptes.envie[e.id] = compter('envie', e); });
+    BASES.forEach(function(b)  { comptes.base[b.id]  = compter('base', b); });
+    TEMPS.forEach(function(t)  { comptes.temps[t.id] = compter('temps', t); });
+
+    window.comptesFiltres = comptes;
+    rendreFiltresChef();
+}
+
+
+// Recalculer à partir du stock, sans passer par une demande au Chef.
+// À appeler à l'ouverture de l'appli et après un changement de stock.
+async function rafraichirDisponibiliteFiltres() {
+    try {
+        const parRole = await chargerStockParRole();
+        if (!parRole) return;
+        const famillesDispo = indexerFamilles(parRole);
+        const faisables = await chargerRecettesFaisables('quotidien', famillesDispo);
+        compterFiltres(faisables.filter(function(r) { return r.modeRecette !== 'dessert'; }));
+    } catch (e) {
+        console.log('Comptage des filtres impossible :', e.message);
+        rendreFiltresChef();
+    }
+}
+
+
+// ─────────────────────────────────────────────────────────
+// AFFICHER LES PASTILLES
+// ─────────────────────────────────────────────────────────
+function pastille(f, type, actif) {
+    const comptes = window.comptesFiltres;
+    const n = comptes ? comptes[type][f.id] : null;
+    const vide = (n === 0);
+
+    let fond, texte, bord, poids, curseur, opacite;
+
+    if (vide) {
+        fond = '#f7fafc'; texte = '#cbd5e0'; bord = '#edf2f7';
+        poids = 'normal'; curseur = 'default'; opacite = '1';
+    } else if (actif) {
+        fond = '#ff9800'; texte = 'white'; bord = '#ff9800';
+        poids = 'bold'; curseur = 'pointer'; opacite = '1';
+    } else {
+        fond = 'white'; texte = '#6d4c41'; bord = '#ffcc80';
+        poids = 'normal'; curseur = 'pointer'; opacite = '1';
+    }
+
+    const clic = vide ? '' : 'onclick="basculerFiltre(\'' + type + '\',\'' + f.id + '\')"';
+    const suffixe = (n === null) ? '' :
+        '<span style="opacity:.65; font-size:10px; margin-left:4px;">' + n + '</span>';
+
+    return '<button ' + clic + (vide ? ' disabled' : '') + ' '
+         + 'style="background:' + fond + '; color:' + texte + '; border:1px solid ' + bord + '; '
+         + 'border-radius:14px; padding:6px 11px; cursor:' + curseur + '; font-size:12px; '
+         + 'font-weight:' + poids + '; white-space:nowrap; opacity:' + opacite + ';">'
+         + f.label + suffixe + '</button>';
+}
+
+function rendreFiltresChef() {
+    const zone = document.getElementById('filtres-chef');
+    if (!zone) return;
+
+    const f = window.filtresChef;
+    const rangee = 'display:flex; gap:5px; flex-wrap:wrap; margin-bottom:5px;';
+
+    let html = '<div style="' + rangee + '">'
+        + ENVIES.map(function(e) { return pastille(e, 'envie', f.envie === e.id); }).join('')
+        + '</div>'
+        + '<div style="' + rangee + '">'
+        + BASES.map(function(b) { return pastille(b, 'base', f.base === b.id); }).join('')
+        + TEMPS.map(function(t) { return pastille(t, 'temps', f.temps === t.id); }).join('')
+        + '</div>';
+
+    if (f.envie || f.base || f.temps) {
+        html += '<div style="text-align:right;">'
+             +  '<button onclick="effacerFiltresChef()" '
+             +  'style="background:none; border:none; color:#a0616a; cursor:pointer; font-size:11px;">'
+             +  '✕ Tout enlever</button></div>';
+    }
+
+    zone.innerHTML = html;
+}
+
+
+// ─────────────────────────────────────────────────────────
+// CLIQUER SUR UNE PASTILLE
+// ─────────────────────────────────────────────────────────
+function basculerFiltre(type, id) {
+    // Deuxième clic sur la même : on l'enlève
+    window.filtresChef[type] = (window.filtresChef[type] === id) ? null : id;
+    rendreFiltresChef();
+    demanderAvecFiltres();
+}
+
+function effacerFiltresChef() {
+    window.filtresChef = { envie: null, base: null, temps: null };
+    rendreFiltresChef();
+    rafraichirDisponibiliteFiltres();
+}
+
+function phraseDesFiltres() {
+    const f = window.filtresChef;
+    const bouts = [];
+    const sansEmoji = function(s) { return s.replace(/^\S+\s/, '').toLowerCase(); };
+
+    if (f.envie) {
+        const e = trouverFiltre('envie', f.envie);
+        bouts.push(e.id === 'vege' ? 'sans viande ni poisson' : 'avec ' + sansEmoji(e.label));
+    }
+    if (f.base) {
+        const b = trouverFiltre('base', f.base);
+        bouts.push(b.id === 'sans' ? 'sans féculent' : 'avec ' + sansEmoji(b.label));
+    }
+    if (f.temps) {
+        const t = trouverFiltre('temps', f.temps);
+        bouts.push('en moins de ' + t.max + ' minutes');
+    }
+
+    if (bouts.length === 0) return 'Autre chose ?';
+    return 'Une idée de repas ' + bouts.join(', ') + '.';
+}
+
+function demanderAvecFiltres() {
+    const input = document.getElementById('chef-message');
+    if (!input) return;
+    input.value = phraseDesFiltres();
+    envoyerMessageChef();
+}
+
+
+// ─────────────────────────────────────────────────────────
+// APPLIQUER LES FILTRES AUX RECETTES RÉALISABLES
+// ─────────────────────────────────────────────────────────
+function appliquerFiltresChef(faisables) {
+    // Les compteurs se recalent sur le stock du moment
+    compterFiltres(faisables.filter(function(r) { return r.modeRecette !== 'dessert'; }));
+
+    const f = window.filtresChef || {};
+    let liste = faisables;
+    const dits = [];
+
+    ['envie', 'base'].forEach(function(type) {
+        const regle = trouverFiltre(type, f[type]);
+        if (!regle) return;
+        liste = liste.filter(function(r) { return recetteCorrespond(r, regle); });
+        dits.push(regle.label);
+    });
+
+    if (f.temps) {
+        const t = trouverFiltre('temps', f.temps);
+        // Le temps cède en premier : mieux vaut un plat de 25 min
+        // qui correspond à l'envie que rien du tout
+        const serre = liste.filter(function(r) { return recetteCorrespond(r, t); });
+        if (serre.length >= 3) {
+            liste = serre;
+            dits.push(t.label);
+        } else {
+            console.log('⏱️ Filtre temps relâché : seulement ' + serre.length + ' plat(s)');
+        }
+    }
+
+    if (dits.length > 0) {
+        console.log('🔎 ' + dits.join(' + ') + ' → ' + liste.length + ' recettes');
+    }
+
+    return liste;
+}
+
+rendreFiltresChef();
+rafraichirDisponibiliteFiltres();
 
 </script>
 </body>
