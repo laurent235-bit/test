@@ -2607,6 +2607,7 @@ async function chargerTout() {
     remplirSuggestions();
     mettreAJourBoutonSupprimer();
     verifierPeremptions();
+     rafraichirDisponibiliteFiltres();
 }
 
 // ============================================================
@@ -7024,6 +7025,20 @@ function construirePromptChef(message, mode, vivier) {
               }).join('\n') + '\n';
     }
 
+    const n = vivier.length;
+    const combien = (n === 1) ? 'UN SEUL plat est réalisable'
+                  : (n < 3)   ? 'SEULEMENT ' + n + ' plats sont réalisables'
+                              : n + ' plats sont réalisables';
+
+    const mission = (n < 3)
+        ? 'Il n\'y a que ' + n + ' plat' + (n > 1 ? 's' : '') + ' possible'
+          + (n > 1 ? 's' : '') + ' ce soir. Propose-'
+          + (n > 1 ? 'les TOUS' : 'le') + ', et dis-lui\n'
+          + 'simplement qu\'il n\'y a pas plus de choix avec ce qu\'il a.\n'
+          + 'N\'en invente surtout pas un autre.'
+        : 'Choisis les 3 plats de cette liste qui répondent le mieux à la\n'
+          + 'demande, et annonce-les. Les 3 doivent être franchement différents.';
+
     return `Tu es le Chef. Tu cuisines pour une famille, tu les connais,
 tu leur parles comme un pote qui sait cuisiner.
 
@@ -7035,8 +7050,11 @@ ${historique}
 PLATS FAISABLES CE SOIR
 ═══════════════════════════════════════
 
-Ces plats sont réalisables : tous leurs ingrédients sont en stock.
+${combien}. ${n > 1 ? 'Tous leurs ingrédients sont' : 'Tous ses ingrédients sont'} en stock.
 Sous chaque plat, les produits réels qui serviront.
+
+LA LISTE COMPTE ${n} PLAT${n > 1 ? 'S' : ''}, ${n > 1 ? 'NUMÉROTÉS DE 1 À ' + n : 'LE NUMÉRO 1'}.
+Tout numéro supérieur à ${n} n'existe pas.
 
 ${vivierEnTexte(vivier, mode)}
 
@@ -7044,16 +7062,13 @@ ${vivierEnTexte(vivier, mode)}
 TA MISSION
 ═══════════════════════════════════════
 
-Choisis les 3 plats de cette liste qui répondent le mieux à la
-demande, et annonce-les.
+${mission}
 
-1. Tu choisis UNIQUEMENT dans la liste, par leur numéro.
-2. NOMME LES TROIS PLATS DANS TON MESSAGE. Celui qui lit ta phrase
-   sans rien d'autre doit savoir ce que tu proposes.
-3. Les 3 doivent être franchement différents. S'il y a moins
-  de 3 plats dans la liste, propose-les tous et dis-lui
- simplement qu'il n'y a pas plus de choix pour ce soir.
- N'invente jamais un plat absent de la liste.
+1. Tu choisis UNIQUEMENT dans la liste, par leur numéro, entre 1 et ${n}.
+2. NOMME LES PLATS DANS TON MESSAGE. Celui qui lit ta phrase sans
+   rien d'autre doit savoir ce que tu proposes.
+3. Autant de plats dans "message" que dans "choix" : jamais un plat
+   annoncé qui ne soit pas dans la liste.
 4. Si la demande est précise — une viande blanche, quelque chose de
    léger, du poisson — choisis ceux qui y répondent vraiment. Si
    aucun ne convient, dis-le et propose ce qui s'en rapproche.
@@ -7065,14 +7080,6 @@ demande, et annonce-les.
    Exemple : "Bacon et oeufs au plat ⚑ / avec : Lardons fumés, Oeufs bio"
    s'annonce "Lardons et oeufs au plat".
    Dans "choix", écris le nom corrigé.
-  7.APRÈS UN CHANGEMENT DE STOCK (optionnel) ──
-   Pour que les compteurs se mettent à jour quand tu scannes ou
-   consommes quelque chose, ajoute cet appel à la fin de ta
-   fonction qui recharge le stock (chargerTout) :
-
-rafraichirDisponibiliteFiltres();
-
-   Sans ça, ils se recalent quand même à chaque demande au Chef.
 
 COMMENT TU PARLES :
 
@@ -7096,20 +7103,22 @@ FORMAT
 Réponds UNIQUEMENT en JSON valide, sans markdown ni backticks :
 
 {
-  "message": "ta réponse, 3 phrases maximum, les 3 plats nommés",
+  "message": "ta réponse, 3 phrases maximum, les plats nommés",
   "choix": [
-    { "numero": 4, "nom": "Nom du plat" },
-    { "numero": 11, "nom": "Nom du plat" },
-    { "numero": 2, "nom": "Nom du plat" }
+    { "numero": 1, "nom": "Nom du plat" }
   ]
 }
 
+Un objet dans "choix" par plat annoncé, au maximum 3, et aucun
+numéro au-delà de ${n}.
 Reprends le nom du plat tel qu'il figure dans la liste, sauf pour
-les [à nommer]. Ne cite jamais les numéros dans "message".
+les [à nommer] et les ⚑.
+Ne cite jamais les numéros dans "message".
 
 Si la demande n'est pas une demande d'idées — une question sur le
 stock, une remarque — réponds dans "message" et laisse "choix" vide.`;
 }
+
 
 async function chargerStockParRole() {
     const { data, error } = await monSupabase
@@ -8000,9 +8009,10 @@ function choisirVivierRecettes(faisables, taille, mode) {
         return servies.indexOf(r.signature) === -1;
     });
 
-    if (neuves.length >= 3) {
+    const minimum = Math.min(3, candidates.length);
+    if (neuves.length >= minimum) {
         candidates = neuves;
-    } else {
+    } else if (servies.length > 0) {
         window.assiettesServies = [];
         console.log('♻️ Tout a déjà été proposé ici — on repart de zéro');
     }
@@ -8296,7 +8306,6 @@ function appliquerFiltresChef(faisables) {
 }
 
 rendreFiltresChef();
-rafraichirDisponibiliteFiltres();
 
 </script>
 </body>
