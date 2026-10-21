@@ -4069,26 +4069,40 @@ async function verifierPeremptions() {
     try {
         const { data: produits, error } = await monSupabase
             .from('inventaire2')
-            .select('id, nom, quantite, date_peremption, emplacement, date_scannee')
+            .select('id, nom, quantite, date_peremption, emplacement, date_scannee, sans_alerte')
             .eq('proprietaire', utilisateurActuel)
             .neq('etat', 'Vide')
             .not('date_peremption', 'is', null)
             .order('date_peremption');
 
+        const bandeau = document.getElementById('bandeau-peremption');
+
         if (error || !produits?.length) {
-            document.getElementById('bandeau-peremption').style.display = 'none';
+            if (bandeau) bandeau.style.display = 'none';
             return;
         }
+
+        // ── Ce qui ne doit pas alerter ──
+        // Le congélateur : la DLC imprimée ne s'applique plus.
+        // sans_alerte : tu l'as écarté toi-même.
+        let masquees = 0;
+
+        const aSurveiller = produits.filter(function(p) {
+            if (p.emplacement === 'CONGELATEUR') return false;
+            if (p.sans_alerte === true) { masquees++; return false; }
+            return true;
+        });
+
+        window.alertesMasquees = masquees;
 
         const aujourdhui = new Date();
         aujourdhui.setHours(0, 0, 0, 0);
 
-        // Classer les produits par urgence
         const perimes = [];
         const urgents = [];   // aujourd'hui ou demain
         const bientot = [];   // 2 à 4 jours
 
-        produits.forEach(p => {
+        aSurveiller.forEach(function(p) {
             const datePeremption = new Date(p.date_peremption);
             datePeremption.setHours(0, 0, 0, 0);
             const jours = Math.ceil((datePeremption - aujourdhui) / 86400000);
@@ -4101,18 +4115,32 @@ async function verifierPeremptions() {
         const total = perimes.length + urgents.length + bientot.length;
 
         if (total === 0) {
-            document.getElementById('bandeau-peremption').style.display = 'none';
+            if (bandeau) bandeau.style.display = 'none';
             return;
         }
 
-        // Afficher le bandeau
         afficherBandeauPeremption(perimes, urgents, bientot);
+
+        // ── Le rappel de ce qui est masqué ──
+        if (masquees > 0) {
+            const details = document.getElementById('details-peremption');
+            if (details) {
+                const rappel = document.createElement('div');
+                rappel.style.cssText = 'text-align:center; margin-top:10px; font-size:11px; color:#718096;';
+                rappel.innerHTML =
+                    masquees + ' alerte' + (masquees > 1 ? 's' : '') + ' masquée'
+                  + (masquees > 1 ? 's' : '') + ' · '
+                  + '<button onclick="event.stopPropagation(); reactiverToutesLesAlertes()" '
+                  + 'style="background:none; border:none; color:#ff9800; cursor:pointer; '
+                  + 'font-size:11px; text-decoration:underline;">réafficher</button>';
+                details.appendChild(rappel);
+            }
+        }
 
     } catch (err) {
         console.error('Erreur vérification péremptions:', err);
     }
 }
-
 // ============================================================
 // AFFICHER LE BANDEAU
 // ============================================================
@@ -4205,11 +4233,7 @@ function ligneProduitPeremption(p, couleur) {
                     ${texteJours}${badge} • qté ${p.quantite}
                 </small>
             </div>
-            <div style="display:flex; gap:6px;">
-                <button onclick="event.stopPropagation(); prolongerDate(${p.id}, '${p.date_peremption}')"
-                        style="flex:1; background:#edf2f7; border:1px solid #cbd5e0; border-radius:6px; padding:8px; cursor:pointer; font-size:11px;">
-                    +2j
-                </button>
+            <div style="display:flex; gap:6px; margin-bottom:6px;">
                 <button onclick="event.stopPropagation(); marquerConsomme(${p.id}, ${p.quantite})"
                         style="flex:1; background:#48bb78; color:white; border:none; border-radius:6px; padding:8px; cursor:pointer; font-size:11px; font-weight:bold;">
                     ✓ Consommé
@@ -4219,8 +4243,20 @@ function ligneProduitPeremption(p, couleur) {
                     🗑️ Jeté
                 </button>
             </div>
+            <div style="display:flex; gap:6px;">
+                <button onclick="event.stopPropagation(); prolongerDate(${p.id}, '${p.date_peremption}')"
+                        style="flex:1; background:#edf2f7; border:1px solid #cbd5e0; border-radius:6px; padding:8px; cursor:pointer; font-size:11px;">
+                    +2j
+                </button>
+                <button onclick="event.stopPropagation(); ignorerAlerte(${p.id})"
+                        title="Le produit reste en stock, l'alerte disparaît"
+                        style="flex:1; background:#edf2f7; border:1px solid #cbd5e0; border-radius:6px; padding:8px; cursor:pointer; font-size:11px;">
+                    🔕 Plus d'alerte
+                </button>
+            </div>
         </div>`;
 }
+
 // ============================================================
 // BASCULER L'AFFICHAGE DES DÉTAILS
 // ============================================================
@@ -8306,6 +8342,50 @@ function appliquerFiltresChef(faisables) {
 }
 
 rendreFiltresChef();
+
+async function ignorerAlerte(id) {
+    if (!utilisateurActuel) return;
+
+    const { error } = await monSupabase
+        .from('inventaire2')
+        .update({ sans_alerte: true })
+        .eq('id', id)
+        .eq('proprietaire', utilisateurActuel);
+
+    if (error) {
+        console.error('Alerte :', error.message);
+        if (typeof afficherToast === 'function') afficherToast('Pas enregistré');
+        return;
+    }
+
+    if (typeof afficherToast === 'function') {
+        afficherToast('🔕 Alerte masquée, le produit reste en stock');
+    }
+    await verifierPeremptions();
+    await chargerTout();
+}
+
+
+// Tout réafficher, si tu as masqué quelque chose par erreur
+async function reactiverToutesLesAlertes() {
+    if (!utilisateurActuel) return;
+
+    const { error } = await monSupabase
+        .from('inventaire2')
+        .update({ sans_alerte: false })
+        .eq('proprietaire', utilisateurActuel)
+        .eq('sans_alerte', true);
+
+    if (error) {
+        console.error('Alerte :', error.message);
+        return;
+    }
+
+    if (typeof afficherToast === 'function') afficherToast('🔔 Alertes réaffichées');
+    await verifierPeremptions();
+    await chargerTout();
+}
+
 
 </script>
 </body>
