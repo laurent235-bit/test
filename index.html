@@ -411,6 +411,40 @@
             🔄 Nouvelle conversation
         </button>
     </div>
+<div class="card" style="padding:14px; border:2px solid #805ad5;">
+    <div style="font-size:13px; font-weight:bold; color:#553c9a; margin-bottom:4px;">
+        🔍 On pourrait manger quoi d'autre ?
+    </div>
+    <div style="font-size:11px; color:#718096; margin-bottom:10px;">
+        Des recettes qu'il te manque peu de choses pour faire.
+    </div>
+    <button onclick="decouvrirRecettes(1)"
+            style="width:100%; background:#805ad5; color:white; border:none;
+                   border-radius:10px; padding:12px; cursor:pointer;
+                   font-size:13px; font-weight:bold; margin-bottom:10px;">
+        Chercher
+    </button>
+    <div id="liste-decouvertes"></div>
+</div>
+
+
+   Et ce deuxième bloc, pour les achats les plus utiles :
+
+<div class="card" style="padding:14px; border:2px solid #805ad5;">
+    <div style="font-size:13px; font-weight:bold; color:#553c9a; margin-bottom:4px;">
+        🛒 Quoi acheter en priorité ?
+    </div>
+    <div style="font-size:11px; color:#718096; margin-bottom:10px;">
+        Les achats qui débloquent le plus de plats d'un coup.
+    </div>
+    <button onclick="suggererCourses()"
+            style="width:100%; background:#805ad5; color:white; border:none;
+                   border-radius:10px; padding:12px; cursor:pointer;
+                   font-size:13px; font-weight:bold; margin-bottom:10px;">
+        Calculer
+    </button>
+    <div id="liste-achats-utiles"></div>
+</div>
 
     <div id="statut-chef" style="text-align:center; margin-top:8px; font-size:12px; font-weight:bold; min-height:18px; color:#ff9800;"></div>
 </div>
@@ -8384,6 +8418,398 @@ async function reactiverToutesLesAlertes() {
     if (typeof afficherToast === 'function') afficherToast('🔔 Alertes réaffichées');
     await verifierPeremptions();
     await chargerTout();
+}
+
+const LABELS_FAMILLES = {
+    'agneau': 'Agneau', 'asperge': 'Asperges', 'aubergine': 'Aubergines',
+    'avoine': "Flocons d'avoine", 'bechamel': 'Béchamel', 'betterave': 'Betteraves',
+    'boeuf': 'Bœuf', 'bouillon': 'Bouillon cube', 'brocolis': 'Brocolis',
+    'cafe': 'Café', 'camembert': 'Camembert', 'cancoillotte': 'Cancoillotte',
+    'carotte': 'Carottes', 'champignon': 'Champignons', 'cheddar': 'Cheddar',
+    'chevre': 'Fromage de chèvre', 'chocolat': 'Chocolat', 'chou': 'Chou',
+    'chou-fleur': 'Chou-fleur', 'citron': 'Citron', 'coco': 'Lait de coco',
+    'colin': 'Filets de colin', 'comte': 'Comté', 'concombre': 'Concombre',
+    'confiture': 'Confiture', 'cornichon': 'Cornichons', 'courgette': 'Courgettes',
+    'creme': 'Crème fraîche', 'crevette': 'Crevettes', 'dinde': 'Escalopes de dinde',
+    'endive': 'Endives', 'epinard': 'Épinards', 'flageolet': 'Flageolets',
+    'frite': 'Frites', 'fromage frais': 'Fromage frais', 'fruit': 'Fruits',
+    'gnocchi': 'Gnocchis', 'haricot rouge': 'Haricots rouges',
+    'haricot vert': 'Haricots verts', 'lentille': 'Lentilles',
+    'macedoine': 'Macédoine de légumes', 'mais': 'Maïs', 'maquereau': 'Maquereaux',
+    'mascarpone': 'Mascarpone', 'mayonnaise': 'Mayonnaise', 'miel': 'Miel',
+    'moutarde': 'Moutarde', 'mozzarella': 'Mozzarella', 'oeuf': 'Œufs',
+    'pain': 'Pain', 'parmesan': 'Parmesan', 'pate': 'Pâtes', 'pesto': 'Pesto',
+    'petit pois': 'Petits pois', 'poelee legumes': 'Poêlée de légumes',
+    'poireau': 'Poireaux', 'pois casse': 'Pois cassés', 'pois chiche': 'Pois chiches',
+    'polenta': 'Polenta', 'pomme': 'Pommes', 'pomme de terre': 'Pommes de terre',
+    'porc': 'Lardons ou jambon', 'potiron': 'Potiron', 'poulet': 'Filets de poulet',
+    'quinoa': 'Quinoa', 'raclette': 'Fromage à raclette', 'rape': 'Fromage râpé',
+    'ratatouille': 'Ratatouille', 'riz': 'Riz', 'salade': 'Salade',
+    'salsifi': 'Salsifis', 'sardine': 'Sardines', 'saucisse': 'Saucisses',
+    'saumon': 'Saumon', 'semoule': 'Semoule', 'soja': 'Tofu ou pousses de soja',
+    'thon': 'Thon', 'tomate': 'Tomates', 'yaourt': 'Yaourts'
+};
+
+function labelFamille(f) {
+    return LABELS_FAMILLES[f] || (f.charAt(0).toUpperCase() + f.slice(1));
+}
+
+async function decouvrirRecettes(manqueMax) {
+    const zone = document.getElementById('liste-decouvertes');
+    if (!zone) return;
+
+    window.manqueMaxDecouverte = manqueMax || 1;
+    zone.innerHTML = '<div style="text-align:center; padding:14px; font-size:12px; '
+                   + 'color:#718096;">Je cherche...</div>';
+
+    try {
+        const parRole = await chargerStockParRole();
+        if (!parRole) throw new Error('Stock illisible');
+        const famillesDispo = indexerFamilles(parRole);
+
+        const { data: recettes, error } = await monSupabase
+            .from('recettes_chef')
+            .select('nom, mode, familles_obligatoires, familles_optionnelles, temps_minutes')
+            .eq('actif', true);
+
+        if (error || !recettes) throw new Error(error ? error.message : 'aucune recette');
+
+        const trouvees = [];
+
+        recettes.forEach(function(r) {
+            const obl = r.familles_obligatoires || [];
+            if (obl.length === 0) return;
+
+            const manque = obl.filter(function(f) {
+                return !famillesDispo[f] || famillesDispo[f].length === 0;
+            });
+
+            // Rien ne manque : c'est le domaine du Chef, pas le nôtre
+            if (manque.length === 0) return;
+            if (manque.length > window.manqueMaxDecouverte) return;
+
+            const dejaLa = obl.length - manque.length;
+
+            // Plus tu as déjà d'ingrédients, moins il en manque,
+            // plus la recette remonte
+            let score = dejaLa * 4 - manque.length * 6;
+            if (r.mode === 'quotidien') score += 3;
+            score += Math.random() * 7;
+
+            trouvees.push({
+                nom: r.nom,
+                temps: r.temps_minutes,
+                familles: obl,
+                manque: manque,
+                dejaLa: dejaLa,
+                signature: 'd:' + r.nom,
+                score: score
+            });
+        });
+
+        console.log('🔍 ' + trouvees.length + ' recettes à '
+            + window.manqueMaxDecouverte + ' ingrédient(s) près');
+
+        // Variété par ingrédient principal — on réutilise tourDeTable
+        const liste = (typeof tourDeTable === 'function')
+            ? tourDeTable(trouvees, 15)
+            : trouvees.sort(function(a, b) { return b.score - a.score; }).slice(0, 15);
+
+        window.decouvertes = liste;
+        rendreDecouvertes(liste);
+
+    } catch (e) {
+        console.error('Découverte :', e.message);
+        zone.innerHTML = '<div style="text-align:center; padding:14px; font-size:12px; '
+                       + 'color:#c53030;">Je n\'ai pas réussi à chercher. '
+                       + e.message + '</div>';
+    }
+}
+
+
+// ─────────────────────────────────────────────────────────
+// AFFICHER
+// ─────────────────────────────────────────────────────────
+function rendreDecouvertes(liste) {
+    const zone = document.getElementById('liste-decouvertes');
+    if (!zone) return;
+
+    const n = window.manqueMaxDecouverte || 1;
+
+    // Les boutons 1 / 2 / 3
+    let html = '<div style="display:flex; gap:6px; margin-bottom:10px;">';
+    [1, 2, 3].forEach(function(k) {
+        const actif = (k === n);
+        html += '<button onclick="decouvrirRecettes(' + k + ')" '
+             +  'style="flex:1; background:' + (actif ? '#805ad5' : 'white') + '; '
+             +  'color:' + (actif ? 'white' : '#6b46c1') + '; '
+             +  'border:1px solid #b794f4; border-radius:9px; padding:7px; '
+             +  'cursor:pointer; font-size:11px; font-weight:' + (actif ? 'bold' : 'normal') + ';">'
+             +  (k === 1 ? '1 ingrédient' : k + ' ingrédients') + '</button>';
+    });
+    html += '</div>';
+
+    if (!liste || liste.length === 0) {
+        html += '<div style="text-align:center; padding:14px; font-size:12px; color:#718096;">'
+             +  'Rien à ' + n + ' ingrédient' + (n > 1 ? 's' : '') + ' près. '
+             +  'Essaie un cran au-dessus.</div>';
+        zone.innerHTML = html;
+        return;
+    }
+
+    liste.forEach(function(r, i) {
+        const manquants = r.manque.map(labelFamille).join(', ');
+
+        html +=
+          '<div style="background:white; border-radius:9px; padding:11px 12px; '
+        + 'margin-bottom:7px; border:1px solid #e9d8fd;">'
+
+        + '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">'
+        + '<b style="font-size:13px; color:#2d3748;">' + r.nom + '</b>'
+        + '<small style="font-size:10px; color:#a0aec0; white-space:nowrap;">'
+        + (r.temps ? r.temps + ' min' : '') + '</small>'
+        + '</div>'
+
+        + '<div style="font-size:11px; color:#6b46c1; margin:5px 0 8px 0;">'
+        + 'il te manque : <b>' + manquants + '</b>'
+        + '</div>'
+
+        + '<button onclick="ajouterManquantsAuxCourses(' + i + ')" '
+        + 'style="width:100%; background:#805ad5; color:white; border:none; '
+        + 'border-radius:7px; padding:8px; cursor:pointer; font-size:11px; '
+        + 'font-weight:bold;">🛒 Ajouter aux courses</button>'
+
+        + '</div>';
+    });
+
+    zone.innerHTML = html;
+}
+
+
+// ─────────────────────────────────────────────────────────
+// VERSER LES MANQUANTS DANS LA LISTE DE COURSES
+// ─────────────────────────────────────────────────────────
+async function ajouterManquantsAuxCourses(index) {
+    if (!utilisateurActuel) return;
+
+    const liste = window.decouvertes || [];
+    const r = liste[index];
+    if (!r) return;
+
+    try {
+        // Ce qui est déjà sur la liste, pour ne pas doublonner
+        const { data: dejaLa } = await monSupabase
+            .from('inventaire2')
+            .select('nom')
+            .eq('proprietaire', utilisateurActuel)
+            .eq('etat', 'Vide');
+
+        const presents = (dejaLa || []).map(function(p) {
+            return (p.nom || '').toLowerCase().trim();
+        });
+
+        const aAjouter = r.manque
+            .map(labelFamille)
+            .filter(function(label) {
+                return presents.indexOf(label.toLowerCase().trim()) === -1;
+            });
+
+        if (aAjouter.length === 0) {
+            if (typeof afficherToast === 'function') {
+                afficherToast('C\'est déjà sur ta liste');
+            }
+            return;
+        }
+
+        const lignes = aAjouter.map(function(label) {
+            return {
+                nom: label,
+                etat: 'Vide',
+                emplacement: 'PLACARD',
+                quantite: 1,
+                proprietaire: utilisateurActuel
+            };
+        });
+
+        const { error } = await monSupabase.from('inventaire2').insert(lignes);
+        if (error) throw new Error(error.message);
+
+        if (typeof afficherToast === 'function') {
+            afficherToast('🛒 ' + aAjouter.join(', ') + ' → courses');
+        }
+
+        await chargerTout();
+        await decouvrirRecettes(window.manqueMaxDecouverte);
+
+    } catch (e) {
+        console.error('Courses :', e.message);
+        if (typeof afficherToast === 'function') {
+            afficherToast('❌ ' + e.message);
+        }
+    }
+}
+
+
+// ═════════════════════════════════════════════════════════
+// LES ACHATS LES PLUS UTILES
+//
+// L'autre façon de poser la question : non pas « quel plat »,
+// mais « quel achat ». Un seul paquet de fromage râpé débloque
+// vingt-deux recettes d'un coup. C'est ça qu'on veut savoir
+// avant de partir faire les courses.
+// ═════════════════════════════════════════════════════════
+async function suggererCourses() {
+    const zone = document.getElementById('liste-achats-utiles');
+    if (!zone) return;
+
+    zone.innerHTML = '<div style="text-align:center; padding:14px; font-size:12px; '
+                   + 'color:#718096;">Je calcule...</div>';
+
+    try {
+        const parRole = await chargerStockParRole();
+        if (!parRole) throw new Error('Stock illisible');
+        const famillesDispo = indexerFamilles(parRole);
+
+        const { data: recettes, error } = await monSupabase
+            .from('recettes_chef')
+            .select('nom, familles_obligatoires, temps_minutes')
+            .eq('actif', true);
+
+        if (error || !recettes) throw new Error(error ? error.message : 'aucune recette');
+
+        // Pour chaque famille absente, quels plats elle débloquerait
+        const parAchat = {};
+
+        recettes.forEach(function(r) {
+            const obl = r.familles_obligatoires || [];
+            if (obl.length === 0) return;
+
+            const manque = obl.filter(function(f) {
+                return !famillesDispo[f] || famillesDispo[f].length === 0;
+            });
+
+            // Un seul ingrédient manquant : cet achat suffit à lui seul
+            if (manque.length !== 1) return;
+
+            const f = manque[0];
+            if (!parAchat[f]) parAchat[f] = [];
+            parAchat[f].push(r.nom);
+        });
+
+        const classement = Object.keys(parAchat)
+            .map(function(f) {
+                return { famille: f, label: labelFamille(f), plats: parAchat[f] };
+            })
+            .sort(function(a, b) { return b.plats.length - a.plats.length; })
+            .slice(0, 10);
+
+        window.achatsUtiles = classement;
+        console.log('🛒 ' + classement.length + ' achats utiles calculés');
+        rendreAchatsUtiles(classement);
+
+    } catch (e) {
+        console.error('Achats utiles :', e.message);
+        zone.innerHTML = '<div style="text-align:center; padding:14px; font-size:12px; '
+                       + 'color:#c53030;">Calcul impossible. ' + e.message + '</div>';
+    }
+}
+
+
+function rendreAchatsUtiles(classement) {
+    const zone = document.getElementById('liste-achats-utiles');
+    if (!zone) return;
+
+    if (!classement || classement.length === 0) {
+        zone.innerHTML = '<div style="text-align:center; padding:14px; font-size:12px; '
+                       + 'color:#718096;">Rien à signaler : avec ton stock, aucun achat '
+                       + 'unique ne débloque de nouveau plat.</div>';
+        return;
+    }
+
+    let html = '';
+
+    classement.forEach(function(a, i) {
+        html +=
+          '<div style="background:white; border-radius:9px; padding:10px 12px; '
+        + 'margin-bottom:6px; border:1px solid #e9d8fd;">'
+
+        + '<div style="display:flex; align-items:center; gap:8px;">'
+        + '<div style="flex:1; min-width:0;">'
+        + '<b style="font-size:13px; color:#2d3748;">' + a.label + '</b>'
+        + '<small style="display:block; font-size:11px; color:#6b46c1;">'
+        + 'débloque ' + a.plats.length + ' plat' + (a.plats.length > 1 ? 's' : '')
+        + '</small>'
+        + '</div>'
+        + '<button onclick="voirPlatsDebloques(' + i + ')" '
+        + 'style="background:#edf2f7; border:1px solid #cbd5e0; border-radius:7px; '
+        + 'padding:7px 10px; cursor:pointer; font-size:11px; flex-shrink:0;">Voir</button>'
+        + '<button onclick="ajouterAchatUtile(' + i + ')" '
+        + 'style="background:#805ad5; color:white; border:none; border-radius:7px; '
+        + 'padding:7px 11px; cursor:pointer; font-size:11px; font-weight:bold; '
+        + 'flex-shrink:0;">🛒</button>'
+        + '</div>'
+
+        + '<div id="plats-debloques-' + i + '" '
+        + 'style="display:none; margin-top:8px; padding-top:8px; '
+        + 'border-top:1px solid #f1f5f9; font-size:11px; color:#4a5568; line-height:1.6;">'
+        + a.plats.join(' · ')
+        + '</div>'
+
+        + '</div>';
+    });
+
+    zone.innerHTML = html;
+}
+
+
+function voirPlatsDebloques(i) {
+    const bloc = document.getElementById('plats-debloques-' + i);
+    if (!bloc) return;
+    bloc.style.display = (bloc.style.display === 'none') ? 'block' : 'none';
+}
+
+
+async function ajouterAchatUtile(i) {
+    if (!utilisateurActuel) return;
+
+    const a = (window.achatsUtiles || [])[i];
+    if (!a) return;
+
+    try {
+        const { data: dejaLa } = await monSupabase
+            .from('inventaire2')
+            .select('nom')
+            .eq('proprietaire', utilisateurActuel)
+            .eq('etat', 'Vide');
+
+        const presents = (dejaLa || []).map(function(p) {
+            return (p.nom || '').toLowerCase().trim();
+        });
+
+        if (presents.indexOf(a.label.toLowerCase().trim()) !== -1) {
+            if (typeof afficherToast === 'function') afficherToast('Déjà sur ta liste');
+            return;
+        }
+
+        const { error } = await monSupabase.from('inventaire2').insert([{
+            nom: a.label,
+            etat: 'Vide',
+            emplacement: 'PLACARD',
+            quantite: 1,
+            proprietaire: utilisateurActuel
+        }]);
+
+        if (error) throw new Error(error.message);
+
+        if (typeof afficherToast === 'function') {
+            afficherToast('🛒 ' + a.label + ' → courses (' + a.plats.length + ' plats)');
+        }
+        await chargerTout();
+
+    } catch (e) {
+        console.error('Courses :', e.message);
+        if (typeof afficherToast === 'function') afficherToast('❌ ' + e.message);
+    }
 }
 
 
