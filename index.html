@@ -4874,106 +4874,156 @@ async function chargerEconomies() {
             .from('economies')
             .select('*')
             .eq('proprietaire', utilisateurActuel)
+            .eq('type', 'gaspille')
             .order('date_evenement', { ascending: false });
 
         if (error) throw error;
 
-        const evenements = data || [];
+        const pertes = data || [];
 
-        if (!evenements.length) {
-            contenu.innerHTML = '<p style="text-align:center; color:#a0aec0; font-size:13px; padding:30px 0;">'
-                + 'Aucune donnee pour le moment.<br><br>'
-                + 'Scannez vos tickets pour enregistrer les prix,<br>puis consommez vos produits avant peremption.'
-                + '</p>';
+        if (!pertes.length) {
+            contenu.innerHTML = '<div style="text-align:center; padding:40px 20px;">'
+                + '<div style="font-size:46px;">🌱</div>'
+                + '<b style="font-size:16px; color:#2d3748; display:block; margin-top:12px;">'
+                + 'Rien de jet&eacute;</b>'
+                + '<p style="font-size:12px; color:#718096; margin-top:8px;">'
+                + 'Aucune perte enregistr&eacute;e. Les montants n\'apparaissent que pour '
+                + 'les produits dont le prix est connu — scanne tes tickets pour les renseigner.'
+                + '</p></div>';
             return;
         }
 
-        // Calculs
+        // ── Découpage par mois ──
         const debutMois = new Date();
         debutMois.setDate(1);
         debutMois.setHours(0, 0, 0, 0);
 
-        let sauveMois = 0, gaspilleMois = 0;
-        let sauveTotal = 0, gaspilleTotal = 0;
+        const debutMoisPrecedent = new Date(debutMois);
+        debutMoisPrecedent.setMonth(debutMoisPrecedent.getMonth() - 1);
 
-        evenements.forEach(function(e) {
+        let ceMois = 0, moisPrecedent = 0, total = 0;
+        let articlesCeMois = 0;
+        const parProduit = {};
+
+        pertes.forEach(function(e) {
             const montant = parseFloat(e.montant) || 0;
+            const qte = parseInt(e.quantite) || 1;
             const date = new Date(e.date_evenement);
 
-            if (e.type === 'sauve') {
-                sauveTotal += montant;
-                if (date >= debutMois) sauveMois += montant;
-            } else {
-                gaspilleTotal += montant;
-                if (date >= debutMois) gaspilleMois += montant;
+            total += montant;
+
+            if (date >= debutMois) {
+                ceMois += montant;
+                articlesCeMois += qte;
+            } else if (date >= debutMoisPrecedent) {
+                moisPrecedent += montant;
             }
+
+            const cle = (e.nom_produit || 'Inconnu').trim();
+            if (!parProduit[cle]) parProduit[cle] = { montant: 0, fois: 0, qte: 0 };
+            parProduit[cle].montant += montant;
+            parProduit[cle].fois++;
+            parProduit[cle].qte += qte;
         });
 
-        const bilanMois = sauveMois - gaspilleMois;
-        const bilanTotal = sauveTotal - gaspilleTotal;
-
-        // Taux anti-gaspi
-        const totalMois = sauveMois + gaspilleMois;
-        const tauxMois = totalMois > 0 ? Math.round((sauveMois / totalMois) * 100) : 100;
-
-        // Construction de l'affichage
         let html = '';
 
-        // Bloc principal du mois
-        html += '<div style="background:white; border-radius:16px; padding:20px; margin-bottom:14px; text-align:center;">'
-            + '<small style="font-size:11px; color:#718096; text-transform:uppercase; font-weight:bold;">Ce mois-ci</small>'
-            + '<div style="font-size:38px; font-weight:bold; color:#38a169; margin:8px 0;">'
-            + bilanMois.toFixed(2) + ' &euro;</div>'
-            + '<div style="display:flex; justify-content:space-around; margin-top:15px; padding-top:15px; border-top:1px solid #e2e8f0;">'
-            + '<div><div style="font-size:18px; font-weight:bold; color:#38a169;">' + sauveMois.toFixed(2) + ' &euro;</div>'
-            + '<small style="font-size:10px; color:#718096;">sauve</small></div>'
-            + '<div><div style="font-size:18px; font-weight:bold; color:#e53e3e;">' + gaspilleMois.toFixed(2) + ' &euro;</div>'
-            + '<small style="font-size:10px; color:#718096;">gaspille</small></div>'
-            + '</div></div>';
+        // ── Le chiffre du mois, et la tendance ──
+        let tendance = '';
+        if (moisPrecedent > 0) {
+            const ecart = ceMois - moisPrecedent;
+            const pourcent = Math.round(Math.abs(ecart) / moisPrecedent * 100);
+            if (Math.abs(ecart) < 0.01) {
+                tendance = '<small style="font-size:11px; color:#718096;">comme le mois dernier</small>';
+            } else if (ecart < 0) {
+                tendance = '<small style="font-size:12px; color:#38a169; font-weight:bold;">▼ '
+                    + pourcent + ' % de moins que le mois dernier</small>';
+            } else {
+                tendance = '<small style="font-size:12px; color:#e53e3e; font-weight:bold;">▲ '
+                    + pourcent + ' % de plus que le mois dernier</small>';
+            }
+        }
 
-        // Jauge anti-gaspi
-        let couleurJauge = '#e53e3e';
-        let messageJauge = 'A ameliorer';
-        if (tauxMois >= 90) { couleurJauge = '#38a169'; messageJauge = 'Excellent'; }
-        else if (tauxMois >= 75) { couleurJauge = '#48bb78'; messageJauge = 'Tres bien'; }
-        else if (tauxMois >= 50) { couleurJauge = '#ed8936'; messageJauge = 'Correct'; }
-
-        html += '<div style="background:white; border-radius:16px; padding:18px; margin-bottom:14px;">'
-            + '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">'
-            + '<b style="font-size:13px; color:#2d3748;">Taux anti-gaspi</b>'
-            + '<span style="font-size:20px; font-weight:bold; color:' + couleurJauge + ';">' + tauxMois + '%</span>'
-            + '</div>'
-            + '<div style="background:#e2e8f0; border-radius:10px; height:12px; overflow:hidden;">'
-            + '<div style="background:' + couleurJauge + '; height:100%; width:' + tauxMois + '%; border-radius:10px;"></div>'
-            + '</div>'
-            + '<small style="font-size:11px; color:' + couleurJauge + '; display:block; margin-top:8px; font-weight:bold;">'
-            + messageJauge + '</small>'
+        html += '<div style="background:white; border-radius:16px; padding:22px; margin-bottom:14px; text-align:center;">'
+            + '<small style="font-size:11px; color:#718096; text-transform:uppercase; font-weight:bold;">'
+            + 'Jet&eacute; ce mois-ci</small>'
+            + '<div style="font-size:40px; font-weight:bold; color:#e53e3e; margin:8px 0 4px 0;">'
+            + ceMois.toFixed(2) + ' &euro;</div>'
+            + (articlesCeMois > 0
+                ? '<small style="font-size:11px; color:#a0aec0; display:block; margin-bottom:8px;">'
+                  + articlesCeMois + ' article' + (articlesCeMois > 1 ? 's' : '') + '</small>'
+                : '')
+            + tendance
             + '</div>';
 
-        // Total depuis le début
-        html += '<div style="background:white; border-radius:16px; padding:18px; margin-bottom:14px; text-align:center;">'
-            + '<small style="font-size:11px; color:#718096; text-transform:uppercase; font-weight:bold;">Depuis le debut</small>'
-            + '<div style="font-size:28px; font-weight:bold; color:#2d3748; margin-top:6px;">'
-            + bilanTotal.toFixed(2) + ' &euro;</div>'
+        // ── Ce que tu jettes le plus : le seul tableau qui dise quoi faire ──
+        const classement = Object.keys(parProduit)
+            .map(function(nom) {
+                return {
+                    nom: nom,
+                    montant: parProduit[nom].montant,
+                    fois: parProduit[nom].fois,
+                    qte: parProduit[nom].qte
+                };
+            })
+            .sort(function(a, b) { return b.montant - a.montant; })
+            .slice(0, 6);
+
+        if (classement.length > 1) {
+            html += '<div style="background:white; border-radius:16px; padding:18px; margin-bottom:14px;">'
+                + '<b style="font-size:13px; color:#2d3748; display:block; margin-bottom:4px;">'
+                + 'Ce que tu jettes le plus</b>'
+                + '<small style="font-size:11px; color:#718096; display:block; margin-bottom:12px;">'
+                + 'Depuis le d&eacute;but. C\'est l&agrave; qu\'il y a quelque chose &agrave; changer.</small>';
+
+            const maxi = classement[0].montant || 1;
+
+            classement.forEach(function(p) {
+                const largeur = Math.max(4, Math.round(p.montant / maxi * 100));
+                html += '<div style="margin-bottom:11px;">'
+                    + '<div style="display:flex; justify-content:space-between; align-items:baseline;">'
+                    + '<span style="font-size:12px; color:#2d3748;">' + p.nom + '</span>'
+                    + '<b style="font-size:12px; color:#e53e3e; white-space:nowrap; padding-left:8px;">'
+                    + p.montant.toFixed(2) + ' &euro;</b>'
+                    + '</div>'
+                    + '<div style="background:#fed7d7; border-radius:6px; height:7px; margin-top:4px; overflow:hidden;">'
+                    + '<div style="background:#e53e3e; height:100%; width:' + largeur + '%;"></div>'
+                    + '</div>'
+                    + '<small style="font-size:10px; color:#a0aec0;">'
+                    + p.fois + ' fois' + (p.qte > p.fois ? ', ' + p.qte + ' articles' : '') + '</small>'
+                    + '</div>';
+            });
+
+            html += '</div>';
+        }
+
+        // ── Le cumul, sans emphase ──
+        html += '<div style="background:white; border-radius:16px; padding:16px; margin-bottom:14px; text-align:center;">'
+            + '<small style="font-size:11px; color:#718096; text-transform:uppercase; font-weight:bold;">'
+            + 'Depuis le d&eacute;but</small>'
+            + '<div style="font-size:24px; font-weight:bold; color:#4a5568; margin-top:4px;">'
+            + total.toFixed(2) + ' &euro;</div>'
             + '</div>';
 
-        // Derniers mouvements
+        // ── Les dernières pertes ──
         html += '<div style="background:white; border-radius:16px; padding:18px;">'
-            + '<b style="font-size:13px; color:#2d3748; display:block; margin-bottom:12px;">Derniers mouvements</b>';
+            + '<b style="font-size:13px; color:#2d3748; display:block; margin-bottom:12px;">'
+            + 'Derni&egrave;res pertes</b>';
 
-        evenements.slice(0, 15).forEach(function(e) {
-            const estSauve = e.type === 'sauve';
-            const couleur = estSauve ? '#38a169' : '#e53e3e';
-            const signe = estSauve ? '+' : '-';
-            const date = new Date(e.date_evenement).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+        pertes.slice(0, 15).forEach(function(e) {
+            const date = new Date(e.date_evenement)
+                .toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+            const qte = parseInt(e.quantite) || 1;
 
             html += '<div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid #f1f5f9;">'
-                + '<div style="flex:1;">'
-                + '<div style="font-size:12px; color:#2d3748;">' + e.nom_produit + '</div>'
+                + '<div style="flex:1; min-width:0;">'
+                + '<div style="font-size:12px; color:#2d3748;">' + e.nom_produit
+                + (qte > 1 ? ' <small style="color:#a0aec0;">&times;' + qte + '</small>' : '')
+                + '</div>'
                 + '<small style="font-size:10px; color:#a0aec0;">' + date + '</small>'
                 + '</div>'
-                + '<b style="font-size:13px; color:' + couleur + ';">'
-                + signe + parseFloat(e.montant).toFixed(2) + ' &euro;</b>'
+                + '<b style="font-size:13px; color:#e53e3e; white-space:nowrap; padding-left:8px;">'
+                + parseFloat(e.montant).toFixed(2) + ' &euro;</b>'
                 + '</div>';
         });
 
@@ -4982,8 +5032,9 @@ async function chargerEconomies() {
         contenu.innerHTML = html;
 
     } catch (err) {
-        console.error('Erreur chargement economies:', err);
-        contenu.innerHTML = '<p style="text-align:center; color:#e53e3e; font-size:13px;">Erreur de chargement</p>';
+        console.error('Erreur chargement gaspillage:', err);
+        contenu.innerHTML = '<p style="text-align:center; color:#e53e3e; font-size:13px;">'
+            + 'Erreur de chargement</p>';
     }
 }
 
@@ -5001,28 +5052,27 @@ async function rafraichirApercuEconomies() {
 
         const { data } = await monSupabase
             .from('economies')
-            .select('type, montant')
+            .select('montant')
             .eq('proprietaire', utilisateurActuel)
+            .eq('type', 'gaspille')
             .gte('date_evenement', debutMois.toISOString());
 
         if (!data || !data.length) {
-            apercu.innerText = 'Aucune donnee ce mois-ci';
+            apercu.innerHTML = '<b style="color:#38a169;">Rien de jet&eacute; ce mois-ci</b>';
             return;
         }
 
-        let sauve = 0, gaspille = 0;
-        data.forEach(function(e) {
-            const m = parseFloat(e.montant) || 0;
-            if (e.type === 'sauve') sauve += m; else gaspille += m;
-        });
+        let total = 0;
+        data.forEach(function(e) { total += parseFloat(e.montant) || 0; });
 
-        const bilan = sauve - gaspille;
-        apercu.innerHTML = 'Ce mois-ci : <b style="color:#38a169;">' + bilan.toFixed(2) + ' &euro;</b> economises';
+        apercu.innerHTML = 'Jet&eacute; ce mois-ci : <b style="color:#e53e3e;">'
+            + total.toFixed(2) + ' &euro;</b>';
 
     } catch (err) {
         apercu.innerText = '';
     }
 }
+
 // ============================================================
 // 1. ENREGISTRER UN GASPILLAGE
 // ============================================================
@@ -5205,16 +5255,51 @@ async function confirmerJete(index) {
     const p = produitsPerimes[index];
     if (!p) return;
 
-    await enregistrerGaspillage(p.id, p.nom, p.quantite);
+    const enStock = parseInt(p.quantite) || 1;
+    let jetes = enStock;
 
-    await monSupabase
-        .from('inventaire2')
-        .update({ quantite: 0, etat: 'Vide' })
-        .eq('id', p.id)
-        .eq('proprietaire', utilisateurActuel);
+    // Une seule unité : rien à demander
+    if (enStock > 1) {
+        const rep = prompt(
+            'Combien de « ' + p.nom + ' » as-tu jeté ?\n'
+            + '(tu en as ' + enStock + ' en stock)',
+            enStock
+        );
+        if (rep === null) return;                 // annulé
+        jetes = parseInt(rep);
+        if (!jetes || jetes < 1) return;
+        if (jetes > enStock) jetes = enStock;
+    }
 
+    await enregistrerGaspillage(p.id, p.nom, jetes);
+
+    const restant = enStock - jetes;
+
+    if (restant > 0) {
+        // Il en reste : on décrémente sans sortir le produit du stock
+        await monSupabase
+            .from('inventaire2')
+            .update({ quantite: restant })
+            .eq('id', p.id)
+            .eq('proprietaire', utilisateurActuel);
+    } else {
+        await monSupabase
+            .from('inventaire2')
+            .update({ quantite: 0, etat: 'Vide' })
+            .eq('id', p.id)
+            .eq('proprietaire', utilisateurActuel);
+    }
+
+    if (typeof afficherToast === 'function') {
+        afficherToast('🗑️ ' + jetes + ' × ' + p.nom + ' compté'
+            + (jetes > 1 ? 's' : '') + ' en perte');
+    }
+
+    // Même mécanique que l'originale : elle referme la fenêtre
+    // quand il n'y a plus rien à traiter, et recharge le stock.
     retirerLignePerime(index);
 }
+
 
 async function confirmerConsomme(index) {
     const p = produitsPerimes[index];
