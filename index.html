@@ -740,9 +740,13 @@
         </div>
 
         <div style="background:white; border-radius:0 0 20px 20px; padding:18px;">
+            <button onclick="ouvrirPhotoEtiquette()"
+                    style="width:100%; background:#805ad5; color:white; border:none; border-radius:12px; padding:13px; cursor:pointer; font-size:14px; font-weight:bold; margin-bottom:10px;">
+                📷 Photographier l'étiquette
+            </button>
             <button onclick="creerNouveauProduitAssociation()"
                     style="width:100%; background:#3182ce; color:white; border:none; border-radius:12px; padding:13px; cursor:pointer; font-size:14px; font-weight:bold; margin-bottom:10px;">
-                ➕ Aucun — créer un nouveau produit
+                    ➕ Aucun — créer un nouveau produit
             </button>
             <button onclick="fermerAssociation()"
                     style="width:100%; background:#718096; color:white; border:none; border-radius:12px; padding:12px; cursor:pointer; font-size:14px;">
@@ -751,6 +755,30 @@
         </div>
     </div>
 </div>
+
+
+<!-- La fenetre camera, qui avait disparu -->
+<div id="modal-etiquette" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.97); z-index:10002; flex-direction:column; align-items:center; justify-content:center; padding:20px;">
+    <div style="width:94%; max-width:460px; text-align:center;">
+        <p style="color:white; font-size:16px; font-weight:bold; margin:0 0 4px 0;">
+            📷 FACE AVANT DU PAQUET
+        </p>
+        <p id="statut-etiquette" style="color:#ffcc80; font-size:12px; min-height:18px; margin:0 0 10px 0;">
+            Cadre la face avant du paquet
+        </p>
+        <video id="video-etiquette" playsinline muted
+               style="width:100%; border-radius:14px; background:#000;"></video>
+        <button onclick="capturerEtiquette()"
+                style="width:100%; background:#38a169; color:white; border:none; border-radius:12px; padding:15px; cursor:pointer; font-size:15px; font-weight:bold; margin-top:12px;">
+            📸 Lire le nom
+        </button>
+        <button onclick="fermerPhotoEtiquette()"
+                style="width:100%; background:#4a5568; color:white; border:none; border-radius:12px; padding:12px; cursor:pointer; font-size:14px; margin-top:8px;">
+            ✕ Annuler
+        </button>
+    </div>
+</div>
+
         <!-- ÉTAPE 2 : Scan -->
         <div id="etape-scan-inventaire" style="display:none;">
             <p style="color:white; font-size:18px; font-weight:bold; margin-bottom:5px;">
@@ -785,6 +813,7 @@
         </div>
     </div>
 </div>
+
 <!-- 2. MODALE SCANNER DATES — avant </body> -->
 <div id="modal-dates" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:9999; flex-direction:column; align-items:center; justify-content:center;">
     <div style="width:95%; max-width:500px; text-align:center;">
@@ -8812,6 +8841,142 @@ async function ajouterAchatUtile(i) {
     }
 }
 
+
+let streamEtiquette = null;
+
+
+// ─────────────────────────────────────────────────────────
+// OUVRIR LA CAMÉRA
+// ─────────────────────────────────────────────────────────
+async function ouvrirPhotoEtiquette() {
+    const modale = document.getElementById('modal-etiquette');
+    const video = document.getElementById('video-etiquette');
+    const statut = document.getElementById('statut-etiquette');
+    if (!modale || !video) return;
+
+    statut.innerText = 'Cadre la face avant du paquet';
+    modale.style.display = 'flex';
+
+    try {
+        streamEtiquette = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'environment' }
+        });
+        video.srcObject = streamEtiquette;
+        await video.play();
+    } catch (e) {
+        console.error('Caméra étiquette :', e.message);
+        statut.innerText = '❌ Caméra inaccessible';
+    }
+}
+
+
+function fermerPhotoEtiquette() {
+    const modale = document.getElementById('modal-etiquette');
+    if (streamEtiquette) {
+        streamEtiquette.getTracks().forEach(function(t) { t.stop(); });
+        streamEtiquette = null;
+    }
+    if (modale) modale.style.display = 'none';
+}
+
+
+// ─────────────────────────────────────────────────────────
+// CAPTURER ET LIRE
+// ─────────────────────────────────────────────────────────
+async function capturerEtiquette() {
+    const video = document.getElementById('video-etiquette');
+    const statut = document.getElementById('statut-etiquette');
+    if (!video || !streamEtiquette) return;
+
+    statut.innerText = '🧠 Lecture de l\'étiquette...';
+
+    try {
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext('2d').drawImage(video, 0, 0);
+        const base64 = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+
+        const payload = {
+            contents: [{
+                parts: [
+                    { text: `Analyse cette photo de la face avant d'un emballage.
+
+MISSION : donne le nom du produit tel qu'on le dirait à voix haute
+dans une cuisine, pas tel qu'il est imprimé en majuscules.
+
+  "Coquillettes" et non "COQUILLETTES QUALITE SUPERIEURE 500G"
+  "Dés de jambon" et non "DES DE JAMBON SUPERIEUR 2X75G"
+  "Nutella" pour une marque qui EST le nom usuel du produit
+
+Règles :
+- 2 à 5 mots, en minuscules sauf la première lettre
+- pas de poids, pas de code, pas de mention légale
+- la marque seulement si elle fait partie du nom courant
+- si tu hésites entre plusieurs textes, prends le plus gros
+  caractère au centre du paquet
+
+Réponds UNIQUEMENT en JSON, sans markdown :
+{
+  "nom": "Dés de jambon",
+  "marque": "Herta",
+  "quantite": "2x75g",
+  "categorie": "charcuterie",
+  "confiance": 0.9
+}
+
+Si l'image est illisible :
+{ "nom": null, "confiance": 0 }` },
+                    { inline_data: { mime_type: "image/jpeg", data: base64 } }
+                ]
+            }],
+            generationConfig: { temperature: 0.1 }
+        };
+
+        const brut = await appelGemini(payload);
+        const propre = brut.replace(/```json/g, '').replace(/```/g, '').trim();
+        const jsonStr = propre.substring(propre.indexOf('{'), propre.lastIndexOf('}') + 1);
+        const lu = JSON.parse(jsonStr);
+
+        if (!lu.nom || (lu.confiance || 0) < 0.4) {
+            statut.innerText = '⚠️ Illisible — rapproche-toi et réessaie';
+            return;
+        }
+
+        console.log('🏷️ Étiquette lue :', JSON.stringify(lu));
+
+        // ── Le nom lu alimente la fenêtre d'association ──
+        nomDetecteAssociation = lu.nom;
+        window.etiquetteLue = lu;   // marque, quantité, catégorie : pour la contribution
+
+        const info = document.getElementById('association-info');
+        if (info) {
+            info.innerHTML = 'Lu sur l\'emballage : <b>' + lu.nom + '</b>'
+                + (lu.marque ? ' <small>(' + lu.marque + ')</small>' : '')
+                + '<br><small>EAN ' + eanAAssocier + '</small>';
+        }
+
+        // Reclasser la liste du stock sur ce nouveau nom : peut-être
+        // que le produit y est déjà sous une autre écriture
+        if (typeof stockAssociation !== 'undefined' && stockAssociation.length) {
+            const mots = extraireMotsCles(lu.nom);
+            stockAssociation.sort(function(a, b) {
+                return compterMotsCommuns(b.nom, mots) - compterMotsCommuns(a.nom, mots);
+            });
+            afficherListeAssociation(stockAssociation);
+        }
+
+        fermerPhotoEtiquette();
+        if (typeof afficherToast === 'function') {
+            afficherToast('🏷️ ' + lu.nom);
+        }
+        if (navigator.vibrate) navigator.vibrate(150);
+
+    } catch (e) {
+        console.error('Lecture étiquette :', e.message);
+        statut.innerText = '❌ ' + e.message;
+    }
+}
 
 </script>
 </body>
