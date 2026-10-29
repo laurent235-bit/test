@@ -8887,6 +8887,259 @@ Si l'image est illisible :
     }
 }
 
+async function enregistrerAchatConsommable(id) {
+    if (!id || !monSupabase) return;
+
+    try {
+        const { data, error } = await monSupabase.rpc('enregistrer_achat', { p_id: id });
+        if (error) throw new Error(error.message);
+
+        const r = (data && data[0]) || null;
+        if (r && r.appris) {
+            console.log('🔄 Rythme de rachat : environ ' + r.jours + ' jours');
+        }
+    } catch (e) {
+        console.log('🔄 Achat non enregistré : ' + e.message);
+    }
+}
+
+
+// ─────────────────────────────────────────────────────────
+// LE PANNEAU
+// Appelé depuis chargerTout, avec les produits déjà chargés.
+// ─────────────────────────────────────────────────────────
+function rendreConsommables(items) {
+    const zone = document.getElementById('liste-consommables');
+    if (!zone) return;
+
+    const liste = (items || []).filter(function(p) { return p.unitaire === true; });
+    window.consommables = liste;
+
+    if (liste.length === 0) {
+        zone.innerHTML =
+            '<div style="font-size:12px; color:#718096; text-align:center; padding:10px;">'
+          + 'Aucun consommable suivi. '
+          + '<button onclick="ouvrirAjoutConsommable()" '
+          + 'style="background:none; border:none; color:#3182ce; cursor:pointer; '
+          + 'font-size:12px; text-decoration:underline;">En ajouter un</button>'
+          + '</div>';
+        return;
+    }
+
+    const aujourdhui = new Date();
+    aujourdhui.setHours(0, 0, 0, 0);
+
+    // Calculer l'échéance de chacun
+    liste.forEach(function(p) {
+        p._depuis = null;
+        p._restant = null;
+
+        if (p.date_dernier_achat) {
+            const d = new Date(p.date_dernier_achat);
+            d.setHours(0, 0, 0, 0);
+            p._depuis = Math.round((aujourdhui - d) / 86400000);
+            if (p.jours_rachat) p._restant = p.jours_rachat - p._depuis;
+        }
+    });
+
+    // Les plus pressants en haut ; ceux sans rythme à la fin
+    liste.sort(function(a, b) {
+        if (a._restant === null && b._restant === null) return a.nom.localeCompare(b.nom);
+        if (a._restant === null) return 1;
+        if (b._restant === null) return -1;
+        return a._restant - b._restant;
+    });
+
+    const aRacheter = liste.filter(function(p) {
+        return p._restant !== null && p._restant <= 0;
+    }).length;
+
+    let html = '';
+
+    if (aRacheter > 0) {
+        html += '<div style="background:#fff5f5; border:1px solid #fed7d7; border-radius:9px; '
+             +  'padding:8px 11px; margin-bottom:9px; font-size:12px; color:#c53030; font-weight:bold;">'
+             +  '🛒 ' + aRacheter + ' &agrave; racheter'
+             +  '</div>';
+    }
+
+    liste.forEach(function(p) {
+        let etat, couleur, fond;
+
+        if (p._restant === null) {
+            etat = p._depuis !== null
+                ? 'acheté il y a ' + p._depuis + ' j · rythme en apprentissage'
+                : 'rythme en apprentissage';
+            couleur = '#a0aec0'; fond = 'white';
+        } else if (p._restant <= 0) {
+            etat = p._restant === 0 ? 'à racheter' : 'à racheter depuis ' + (-p._restant) + ' j';
+            couleur = '#c53030'; fond = '#fff5f5';
+        } else if (p._restant <= 2) {
+            etat = 'à racheter dans ' + p._restant + ' j';
+            couleur = '#c05621'; fond = '#fffaf0';
+        } else {
+            etat = 'à racheter dans ~' + p._restant + ' j';
+            couleur = '#718096'; fond = 'white';
+        }
+
+        html +=
+          '<div style="background:' + fond + '; border:1px solid #e2e8f0; border-radius:9px; '
+        + 'padding:9px 11px; margin-bottom:6px; display:flex; align-items:center; gap:9px;">'
+
+        + '<div style="flex:1; min-width:0;">'
+        + '<div style="font-size:13px; color:#2d3748; font-weight:600; '
+        + 'overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + p.nom + '</div>'
+        + '<small style="font-size:11px; color:' + couleur + ';">' + etat + '</small>'
+        + '</div>'
+
+        + '<button onclick="reglerRythmeConsommable(' + p.id + ')" '
+        + 'title="Régler le rythme à la main" '
+        + 'style="background:#edf2f7; border:1px solid #cbd5e0; border-radius:7px; '
+        + 'padding:6px 9px; cursor:pointer; font-size:11px; flex-shrink:0;">'
+        + (p.jours_rachat ? p.jours_rachat + ' j' : '· j') + '</button>'
+
+        + '<button onclick="ajouterConsommableAuxCourses(' + p.id + ')" '
+        + 'title="Ajouter à la liste de courses" '
+        + 'style="background:#3182ce; color:white; border:none; border-radius:7px; '
+        + 'padding:6px 10px; cursor:pointer; font-size:12px; flex-shrink:0;">🛒</button>'
+
+        + '<button onclick="retirerDesConsommables(' + p.id + ')" '
+        + 'title="Ne plus suivre" '
+        + 'style="background:none; border:none; color:#cbd5e0; cursor:pointer; '
+        + 'font-size:14px; flex-shrink:0;">✕</button>'
+
+        + '</div>';
+    });
+
+    html += '<div style="text-align:center; padding-top:6px;">'
+         +  '<button onclick="ouvrirAjoutConsommable()" '
+         +  'style="background:none; border:none; color:#3182ce; cursor:pointer; '
+         +  'font-size:12px;">➕ Suivre un autre produit</button></div>';
+
+    zone.innerHTML = html;
+}
+
+
+// ─────────────────────────────────────────────────────────
+// RÉGLER LE RYTHME À LA MAIN
+// L'apprentissage demande deux achats. En attendant, tu sais
+// déjà que tu achètes des yaourts tous les dix jours.
+// ─────────────────────────────────────────────────────────
+async function reglerRythmeConsommable(id) {
+    const p = (window.consommables || []).find(function(x) { return x.id === id; });
+    if (!p) return;
+
+    const rep = prompt(
+        'Tous les combien de jours rachètes-tu « ' + p.nom + ' » ?\n'
+        + '(laisse vide pour que l\'appli l\'apprenne seule)',
+        p.jours_rachat || ''
+    );
+    if (rep === null) return;
+
+    const n = rep.trim() === '' ? null : parseInt(rep);
+    if (rep.trim() !== '' && (!n || n < 1 || n > 365)) return;
+
+    try {
+        const { error } = await monSupabase
+            .from('inventaire2')
+            .update({ jours_rachat: n })
+            .eq('id', id)
+            .eq('proprietaire', utilisateurActuel);
+        if (error) throw new Error(error.message);
+        await chargerTout();
+    } catch (e) {
+        if (typeof afficherToast === 'function') afficherToast('❌ ' + e.message);
+    }
+}
+
+
+// ─────────────────────────────────────────────────────────
+// VERSER DANS LA LISTE DE COURSES
+// ─────────────────────────────────────────────────────────
+async function ajouterConsommableAuxCourses(id) {
+    const p = (window.consommables || []).find(function(x) { return x.id === id; });
+    if (!p || !utilisateurActuel) return;
+
+    try {
+        const { data: deja } = await monSupabase
+            .from('inventaire2')
+            .select('nom')
+            .eq('proprietaire', utilisateurActuel)
+            .eq('etat', 'Vide');
+
+        const presents = (deja || []).map(function(x) {
+            return (x.nom || '').toLowerCase().trim();
+        });
+
+        if (presents.indexOf(p.nom.toLowerCase().trim()) !== -1) {
+            if (typeof afficherToast === 'function') afficherToast('Déjà sur ta liste');
+            return;
+        }
+
+        const { error } = await monSupabase.from('inventaire2').insert([{
+            nom: p.nom,
+            etat: 'Vide',
+            emplacement: p.emplacement || 'PLACARD',
+            quantite: 1,
+            proprietaire: utilisateurActuel
+        }]);
+        if (error) throw new Error(error.message);
+
+        if (typeof afficherToast === 'function') afficherToast('🛒 ' + p.nom + ' → courses');
+        await chargerTout();
+
+    } catch (e) {
+        if (typeof afficherToast === 'function') afficherToast('❌ ' + e.message);
+    }
+}
+
+
+// ─────────────────────────────────────────────────────────
+// ENTRER ET SORTIR DU SUIVI
+// ─────────────────────────────────────────────────────────
+async function ouvrirAjoutConsommable() {
+    const { data } = await monSupabase
+        .from('inventaire2')
+        .select('id, nom')
+        .eq('proprietaire', utilisateurActuel)
+        .neq('etat', 'Vide')
+        .or('unitaire.is.null,unitaire.eq.false')
+        .order('nom');
+
+    if (!data || data.length === 0) {
+        if (typeof afficherToast === 'function') afficherToast('Rien à ajouter');
+        return;
+    }
+
+    const lignes = data.map(function(p, i) { return (i + 1) + '. ' + p.nom; }).join('\n');
+    const rep = prompt(
+        'Quel produit se consomme sans qu\'on le compte ?\n'
+        + 'Tape son numéro.\n\n' + lignes
+    );
+
+    const n = parseInt(rep);
+    if (!n || n < 1 || n > data.length) return;
+
+    await monSupabase
+        .from('inventaire2')
+        .update({ unitaire: true, date_dernier_achat: new Date().toISOString().slice(0, 10) })
+        .eq('id', data[n - 1].id)
+        .eq('proprietaire', utilisateurActuel);
+
+    await chargerTout();
+}
+
+
+async function retirerDesConsommables(id) {
+    await monSupabase
+        .from('inventaire2')
+        .update({ unitaire: false })
+        .eq('id', id)
+        .eq('proprietaire', utilisateurActuel);
+    await chargerTout();
+}
+
+
 </script>
 
 <!-- ============================================================
