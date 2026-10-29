@@ -581,6 +581,16 @@
         onclick="supprimerSelection()"
         style="display:none; width:100%; background:#e53e3e; color:white; border:none; border-radius:10px; padding:12px; cursor:pointer; font-weight:bold; font-size:14px; margin:10px 0;">
     🗑️ Supprimer la sélection
+    div class="card" style="padding:14px; border:2px solid #3182ce;">
+    <div style="font-size:13px; font-weight:bold; color:#2c5282; margin-bottom:3px;">
+        🥛 Consommables
+    </div>
+    <div style="font-size:11px; color:#718096; margin-bottom:10px;">
+        Pas comptés — suivis au rythme de tes achats.
+    </div>
+    <div id="liste-consommables"></div>
+</div>
+
 </button>
 <!-- INVENTAIRE PAR EMPLACEMENT -->
 <div class="card"><button class="collapsible">🥦 FRIGO</button><div class="content"><div id="list-Frigo" class="loading">Chargement...</div></div></div>
@@ -2337,6 +2347,7 @@ async function chargerTout() {
         .order('nom');
 
     if (error) { console.error("Erreur chargement :", error.message); return; }
+    rendreConsommables(items);
 
     const mapping = {
         'FRIGO': 'list-Frigo',
@@ -3252,6 +3263,9 @@ async function identifierProduitParEAN(ean) {
 // ============================================================
 async function passerEtapeDate() {
     etapeActuelle = 'date';
+    if (produitEnCours && produitEnCours.id) {
+        enregistrerAchatConsommable(produitEnCours.id);
+    }
 
     document.getElementById('titre-etape').innerText = '2️⃣ PHOTOGRAPHIE LA DATE';
     document.getElementById('soustitre-etape').innerText = 'Tourne l\'emballage vers la date';
