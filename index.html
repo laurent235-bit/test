@@ -7424,6 +7424,25 @@ function produitNommeDansTitre(nomProduit, titreNormalise) {
     return false;
 }
 
+const MOTS_NON_SUBSTITUABLES = [
+    'cordon bleu', 'nugget', 'bacon', 'jambon', 'lardon', 'chorizo',
+    'knack', 'merguez', 'chipolata', 'surimi', 'saucisson',
+    'boudin', 'andouille', 'rillette'
+];
+
+// Le titre promet-il un produit précis qu'on n'a pas ?
+// Renvoie la liste des mots trahis, vide si tout va bien.
+function motsTrahisParLeTitre(titreNormalise, produits) {
+    const nomsProduits = produits
+        .map(function(p) { return normaliserNom(p.nom); })
+        .join(' ');
+
+    return MOTS_NON_SUBSTITUABLES.filter(function(mot) {
+        return titreNormalise.indexOf(mot) !== -1
+            && nomsProduits.indexOf(mot) === -1;
+    });
+}
+
 async function chargerRecettesFaisables(mode, famillesDispo) {
     const { data: recettes, error } = await monSupabase
         .from('recettes_chef')
@@ -7472,10 +7491,6 @@ async function chargerRecettesFaisables(mode, famillesDispo) {
         obligatoires.forEach(function(f) {
             const choisi = resoudre(f);
             if (!choisi) return;
-            if (!produitNommeDansTitre(choisi.nom, titre)) {
-                // Le titre parle d'autre chose que ce qu'on va cuisiner
-                titreHonnete = false;
-            }
             if (!vus[choisi.id]) {
                 vus[choisi.id] = true;
                 produits.push(choisi);
@@ -7495,7 +7510,9 @@ async function chargerRecettesFaisables(mode, famillesDispo) {
                 }
             }
         });
-
+  
+        const trahis = motsTrahisParLeTitre(titre, produits);
+        titreHonnete = (trahis.length === 0);
         if (produits.length === 0) return;
 
         // ── SCORE ──
@@ -7520,7 +7537,10 @@ async function chargerRecettesFaisables(mode, famillesDispo) {
             else score -= 8;
         }
 
+        // Un titre juste passe largement devant. Les autres
+        // restent possibles, mais en dernier recours.
         if (titreHonnete) score += 4;
+        else score -= 12;
 
         score += Math.random() * 8;
 
@@ -7587,16 +7607,16 @@ function vivierEnTexte(vivier, mode) {
             return p.nom + (marquer && p.urgent ? ' ⚠️' : '');
         }).join(', ');
 
-        if (!r.nom) {
+        if (!r.nom || r.titreHonnete === false) {
             return (i + 1) + '. [à nommer] ' + produits;
         }
 
         return (i + 1) + '. ' + r.nom
              + (r.temps ? ' (' + r.temps + ' min)' : '')
-             + (r.titreHonnete === false ? '  ⚑' : '')
              + '\n     avec : ' + produits;
     }).join('\n');
 }
+
 
 function normaliserNom(nom) {
     return (nom || '')
