@@ -7427,7 +7427,7 @@ function produitNommeDansTitre(nomProduit, titreNormalise) {
 async function chargerRecettesFaisables(mode, famillesDispo) {
     const { data: recettes, error } = await monSupabase
         .from('recettes_chef')
-        .select('nom, mode, familles_obligatoires, familles_optionnelles, temps_minutes, difficulte')
+        .select('nom, mode, familles_obligatoires, familles_optionnelles, temps_minutes, difficulte, saison')
         .eq('actif', true);
 
     if (error || !recettes) {
@@ -7510,8 +7510,16 @@ async function chargerRecettesFaisables(mode, famillesDispo) {
         if (mode === 'weekend' && r.temps_minutes < 30) score -= 3;
         score += bonus;
 
-        // Un plat dont le titre correspond vraiment aux produits
-        // passe devant un plat qu'il faudra renommer
+        // ── LA SAISON ──
+        // Un bonus pour ce qui tombe bien, un malus pour ce qui
+        // tombe mal. Jamais une exclusion : un gratin de
+        // courgettes en février avec des surgelés reste faisable.
+        const saisonDuJour = saisonActuelle();
+        if (r.saison && r.saison !== 'toute' && saisonDuJour !== 'toute') {
+            if (r.saison === saisonDuJour) score += 5;
+            else score -= 8;
+        }
+
         if (titreHonnete) score += 4;
 
         score += Math.random() * 8;
@@ -7525,6 +7533,7 @@ async function chargerRecettesFaisables(mode, famillesDispo) {
             titreHonnete: titreHonnete,
             signature: 'r:' + r.nom,
             score: score
+            saison: r.saison || 'toute',
         });
     });
 
@@ -8796,6 +8805,12 @@ async function retirerDesConsommables(id) {
     await chargerTout();
 }
 
+function saisonActuelle() {
+    const mois = new Date().getMonth();   // 0 = janvier
+    if (mois >= 4 && mois <= 8) return 'ete';     // mai à septembre
+    if (mois >= 10 || mois <= 2) return 'hiver';  // novembre à mars
+    return 'toute';                                // avril, octobre
+}
 
 </script>
 
