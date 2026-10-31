@@ -7531,9 +7531,9 @@ async function chargerRecettesFaisables(mode, famillesDispo) {
             produits: produits,
             familles: obligatoires,
             titreHonnete: titreHonnete,
+            saison: r.saison || 'toute',
             signature: 'r:' + r.nom,
-            score: score,
-            saison: r.saison || 'toute'
+            score: score
         });
     });
 
