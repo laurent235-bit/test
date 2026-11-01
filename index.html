@@ -1643,6 +1643,24 @@ function plafondRaisonnable(produit) {
     return alaPiece ? 8 : 2;
 }
 
+        
+                const ingredientsStock = produits.map(function(p) {
+            let n = quantitesGemini[p.nom.toLowerCase().trim()];
+            if (!n || n < 1) n = 1;
+
+            // Jamais plus que le stock...
+            if (n > p.quantite) n = p.quantite;
+
+            // ...ni plus qu'un repas n'en demande raisonnablement.
+            const plafond = plafondRaisonnable(p);
+            if (n > plafond) {
+                console.log('⚖️ ' + p.nom + ' : ' + n + ' → ' + plafond);
+                n = plafond;
+            }
+
+            return { id: p.id, nom: p.nom, quantite_utilisee: n };
+        });
+
         recette.ingredients_stock = ingredientsStock;
 
         window.recetteEnCours = recette;
@@ -1658,7 +1676,6 @@ function plafondRaisonnable(produit) {
 
         const bloc = document.createElement('div');
         bloc.style.cssText = 'margin-bottom:12px; display:flex; justify-content:flex-start;';
-
         bloc.innerHTML =
             '<div style="max-width:95%; background:#f1f5f9; border-radius:14px; border-bottom-left-radius:4px; padding:14px;">'
 
