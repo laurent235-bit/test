@@ -581,7 +581,10 @@
         onclick="supprimerSelection()"
         style="display:none; width:100%; background:#e53e3e; color:white; border:none; border-radius:10px; padding:12px; cursor:pointer; font-weight:bold; font-size:14px; margin:10px 0;">
     🗑️ Supprimer la sélection
-    div class="card" style="padding:14px; border:2px solid #3182ce;">
+</button>
+
+<!-- CONSOMMABLES -->
+<div class="card" style="padding:14px; border:2px solid #3182ce;">
     <div style="font-size:13px; font-weight:bold; color:#2c5282; margin-bottom:3px;">
         🥛 Consommables
     </div>
@@ -590,8 +593,6 @@
     </div>
     <div id="liste-consommables"></div>
 </div>
-
-</button>
 <!-- INVENTAIRE PAR EMPLACEMENT -->
 <div class="card"><button class="collapsible">🥦 FRIGO</button><div class="content"><div id="list-Frigo" class="loading">Chargement...</div></div></div>
 <div class="card"><button class="collapsible">❄️ CONGÉLATEUR</button><div class="content"><div id="list-Congélateur"></div></div></div>
@@ -1473,7 +1474,10 @@ const PREPARATIONS_EXIGEANTES = [
       quoi: 'une pièce à rôtir' },
     { mot: /\bbrochette/,
       exige: /brochette|pique|pic a/,
-      quoi: 'des pics à brochette' }
+      quoi: 'des pics à brochette' },
+    { mot: /\brosti|\broesti/,
+      exige: /pomme de terre|patate|rosti|grenaille|ratte/,
+      quoi: 'des pommes de terre' },
 ];
 
 function preparationsInventees(titre, produits) {
@@ -5666,10 +5670,11 @@ async function annulerAjoutCourses() {
     document.getElementById('modal-similaires').style.display = 'none';
 
     if (produitEpuise) {
-        // On retire la ligne du stock sans la mettre en courses
+        // Hors stock et hors liste de courses, mais la ligne garde son
+        // code-barres et son prix pour la prochaine fois.
         await monSupabase
             .from('inventaire2')
-            .delete()
+            .update({ quantite: 0, etat: 'Archive' })
             .eq('id', produitEpuise.id)
             .eq('proprietaire', utilisateurActuel);
 
@@ -7558,7 +7563,7 @@ const F_PROTEINE = [
     [/crevette|gambas|scampi|surimi|moule|crabe/, 'crevette'],
 
     // Viandes
-    [/cordon bleu|nugget|croquette de poulet/, 'poulet'],
+    [/cordon bleu|nugget|croquette de poulet|escalope panee|escalope pane/, 'pane volaille'],
     [/poulet|coquelet|volaille/,          'poulet'],
     [/dinde/,                             'dinde'],
     [/agneau|gigot|mouton/,               'agneau'],
@@ -7583,7 +7588,8 @@ const F_FECULENT = [
 
     // Pommes de terre : la frite est une famille à part
     [/frite|pommes? noisettes?|potatoes|pommes? dauphines?|smile/, 'frite'],
-    [/rosti|pomme de terre|pommes de terre|patate|puree|dauphinois|vapeur|grenaille|ratte/, 'pomme de terre'],
+        [/compote|gourdes?|puree de fruit|puree de pomme(?!s? de terre)|puree pomme|puree de poire|puree de banane|pomme poire|pomme banane|fruits mixes|sans sucres ajoutes/, 'compote'],
+        [/rosti|pomme de terre|pommes de terre|patate|dauphinois|grenaille|ratte|mousline|flocons de puree|puree nature|puree mousseline/, 'pomme de terre'],
 
     [/semoule|couscous|tendres perles|boulgour|ble precuit|ebly/, 'semoule'],
     [/riz|risotto|basmati|thai|pilaf/,    'riz'],
@@ -7651,6 +7657,7 @@ const F_FROMAGE = [
     [/mascarpone|ricotta/,                'mascarpone'],
     [/fromage frais|saint moret|philadelphia|carre frais|boursin|kiri|vache qui rit|tartare/, 'fromage frais'],
     [/yaourt|skyr|fromage blanc|petits? suisses?/, 'yaourt'],
+    [/creme patissiere|creme dessert|creme anglaise|creme brulee|creme fouettee|chantilly/, 'creme sucree'],
     [/creme|mascarpone/,                  'creme'],
     [/beurre|lait/,                       'laitier divers']
 ];
@@ -7668,6 +7675,7 @@ const F_SAUCE = [
     [/moutarde/,                          'moutarde'],
     [/ketchup|barbecue|bbq/,              'condiment divers'],
     [/bouillon|fond de |cube/,            'bouillon'],
+    [/creme patissiere|creme dessert|creme anglaise|creme brulee|creme fouettee|chantilly/, 'creme sucree'],
     [/creme/,                             'creme'],
     [/tomate|coulis|passata|napolitaine|arrabiata|provencale/, 'tomate'],
     [/curry|paprika|cumin|herbe|epice|piment|safran|colombo/, 'epice']
@@ -7700,6 +7708,7 @@ const F_DESSERT = [
     [/mascarpone|ricotta/,                'mascarpone'],
     [/miel/,                              'miel'],
     [/confiture/,                         'confiture'],
+    [/creme patissiere|creme dessert|creme anglaise|creme brulee|creme fouettee|chantilly/, 'creme sucree'],
     [/creme/,                             'creme'],
     [/banane|fraise|peche|abricot|ananas|mangue|raisin|clementine|orange|framboise|myrtille|cerise|fruit/, 'fruit'],
     [/biscuit|gateau|madeleine|speculoos|sable/, 'biscuit']
