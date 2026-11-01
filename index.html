@@ -2950,7 +2950,7 @@ async function rangerUnExemplaire(produit) {
 
         const { error } = await monSupabase
             .from('inventaire2')
-            .update({ quantite: nouvelle, etat: 'Plein' })
+            .update({ quantite: nouvelle, etat: 'Plein', est_termine: false })
             .eq('id', produit.id)
             .eq('proprietaire', utilisateurActuel);
 
