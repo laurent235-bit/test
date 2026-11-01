@@ -2934,6 +2934,39 @@ async function demarrerScanCodeBarre() {
     }
 }
 
+async function rangerUnExemplaire(produit) {
+    if (!produit || !produit.id || !utilisateurActuel) return;
+
+    try {
+        // On relit la quantité en base : celle de produitEnCours
+        // peut dater, surtout après une remise à zéro.
+        const { data: actuel } = await monSupabase
+            .from('inventaire2')
+            .select('quantite')
+            .eq('id', produit.id)
+            .maybeSingle();
+
+        const nouvelle = (parseInt(actuel && actuel.quantite) || 0) + 1;
+
+        const { error } = await monSupabase
+            .from('inventaire2')
+            .update({ quantite: nouvelle, etat: 'Plein' })
+            .eq('id', produit.id)
+            .eq('proprietaire', utilisateurActuel);
+
+        if (error) throw new Error(error.message);
+
+        produit.quantite = nouvelle;
+        console.log('📥 ' + produit.nom + ' → ' + nouvelle);
+
+    } catch (e) {
+        console.error('Rangement :', e.message);
+        if (typeof afficherToast === 'function') {
+            afficherToast('⚠️ Quantité non mise à jour');
+        }
+    }
+}
+
 // ============================================================
 // IDENTIFIER LE PRODUIT PAR EAN
 // ============================================================
@@ -2950,9 +2983,10 @@ async function identifierProduitParEAN(ean) {
             .eq('ean', ean)
             .neq('etat', 'Vide');
  
-        if (produits?.length > 0) {
+         if (produits?.length > 0) {
             produitEnCours = produits[0];
-            statut.innerText = `✅ ${produitEnCours.nom}`;
+            await rangerUnExemplaire(produitEnCours);
+            statut.innerText = `✅ ${produitEnCours.nom} (×${produitEnCours.quantite})`;
             await passerEtapeDate();
             return;
         }
@@ -2971,13 +3005,10 @@ async function identifierProduitParEAN(ean) {
  
         const data = await response.json();
         console.log('📦 Réponse Worker:', data);
- 
-        if (data.success && data.produit) {
-            produitEnCours = {
-                id: data.id,
-                nom: data.produit,
-                ean: ean
-            };
+ if (data.success && data.produit) {
+            produitEnCours = { id: data.id, nom: data.produit, ean: ean };
+            await rangerUnExemplaire(produitEnCours);
+            statut.innerText = `✅ ${data.produit} (×${produitEnCours.quantite})`;
             statut.innerText = `✅ ${data.produit}`;
             ajouterHistoriqueDate(`🔗 EAN lié à ${data.produit}`, '#3182ce');
             await passerEtapeDate();
