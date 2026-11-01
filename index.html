@@ -1445,6 +1445,47 @@ function detecterFamille(ingredients) {
     return 'AUTRE';
 }
  
+function sansAccentTitre(s) {
+    return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
+const PREPARATIONS_EXIGEANTES = [
+    { mot: /\bpane|\bpanure|\bmilanaise\b/,
+      exige: /chapelure|panure|pane|corn ?flakes/,
+      quoi: 'de la chapelure' },
+    { mot: /\bgratin|\bgratine/,
+      exige: /rape|gruyere|emmental|parmesan|mozzarella|comte|cheddar|fromage|creme|bechamel/,
+      quoi: 'du fromage ou de la crème' },
+    { mot: /\bfarci/,
+      exige: /farce|chair a saucisse|hache|hachee|boudin|mie de pain/,
+      quoi: 'une farce' },
+    { mot: /\bfeuillete|\bfriand\b|vol[- ]au[- ]vent|\bchausson/,
+      exige: /pate feuilletee|pate a tarte|pate brisee/,
+      quoi: 'de la pâte feuilletée' },
+    { mot: /\bquiche|\btarte|\btourte|\bpizza/,
+      exige: /pate|pizza|tarte/,
+      quoi: 'une pâte' },
+    { mot: /\bbeignet|\btempura|\bcrumble/,
+      exige: /farine|crumble/,
+      quoi: 'de la farine' },
+    { mot: /\broti\b|\brotie\b|\brotis\b/,
+      exige: /roti|entier|cuisse|gigot|epaule|rouelle|coquelet|^poulet$|^boeuf$|^porc$|^agneau$|roulade/,
+      quoi: 'une pièce à rôtir' },
+    { mot: /\bbrochette/,
+      exige: /brochette|pique|pic a/,
+      quoi: 'des pics à brochette' }
+];
+
+function preparationsInventees(titre, produits) {
+    const t = sansAccentTitre(titre);
+    const panier = (produits || []).map(function(p) { return sansAccentTitre(p.nom); });
+
+    return PREPARATIONS_EXIGEANTES.filter(function(regle) {
+        if (!regle.mot.test(t)) return false;
+        return !panier.some(function(nom) { return regle.exige.test(nom); });
+    });
+}
+
 async function choisirEtRedigerRecette(mode, choix) {
     const statut = document.getElementById('statut-chef');
     const zone = document.getElementById('chef-conversation');
@@ -1480,7 +1521,7 @@ async function choisirEtRedigerRecette(mode, choix) {
 
         const listeProduits = produits
             .map(function(p) {
-                return '- ' + p.nom + '  (tu en as ' + p.quantite + ')';
+                return '- ' + p.nom + '  (' + p.quantite + ' en stock, maximum disponible)';
             })
             .join('\n');
 
@@ -1535,12 +1576,22 @@ Pour "quantites", une ligne par produit utilisé.
 un paquet de pâtes entamé pour 4 personnes, c'est 1, pas 4.
 Mais si le stock compte des pièces — des oeufs, par exemple —
 indique le nombre de pièces réellement utilisées.
-Dans le doute, mets 1.`;
+Dans le doute, mets 1`;
 
         const brut = await appelGemini(prompt);
         const propre = brut.replace(/```json/g, '').replace(/```/g, '').trim();
         const jsonStr = propre.substring(propre.indexOf('{'), propre.lastIndexOf('}') + 1);
         const recette = JSON.parse(jsonStr);
+
+    // Le titre annonce-t-il une préparation impossible ?
+        const inventions = preparationsInventees(recette.titre, produits);
+        if (inventions.length > 0) {
+            console.warn('✏️ Titre écarté : "' + recette.titre + '" — il manque '
+                + inventions.map(function(r) { return r.quoi; }).join(', '));
+            recette.titre = preparationsInventees(plat.nom, produits).length === 0
+                ? plat.nom
+                : composerNomPlat(produits);
+        }
 
         // ── LA DEDUCTION EST CONSTRUITE PAR LE CODE ──
         // Gemini propose un nombre, le code verifie et borne.
@@ -1549,12 +1600,48 @@ Dans le doute, mets 1.`;
             if (q && q.nom) quantitesGemini[q.nom.toLowerCase().trim()] = parseInt(q.unites) || 1;
         });
 
-        const ingredientsStock = produits.map(function(p) {
-            let n = quantitesGemini[p.nom.toLowerCase().trim()];
-            if (!n || n < 1) n = 1;
-            if (n > p.quantite) n = p.quantite;   // jamais plus que le stock
-            return { id: p.id, nom: p.nom, quantite_utilisee: n };
-        });
+        const COMPTES_A_LA_PIECE = [
+    'oeuf','oeufs','\u0153uf','\u0153ufs','pomme de terre','pommes de terre',
+    'patate','patates','carotte','carottes','oignon','oignons',
+    'echalote','echalotes','\u00e9chalote','\u00e9chalotes',
+    'tomate','tomates','citron','citrons','pomme','pommes','banane','bananes',
+    'orange','oranges','poire','poires','kiwi','kiwis',
+    'clementine','clementines','cl\u00e9mentine','cl\u00e9mentines',
+    'courgette','courgettes','aubergine','aubergines',
+    'poivron','poivrons','gousse','gousses'
+];
+
+// Mots qui trahissent une preparation industrielle : une compote de
+// pommes se compte en pots, pas en pommes.
+const PREPARATIONS = [
+    'puree','pur\u00e9e','compote','jus','sauce','coulis','confiture','soupe',
+    'veloute','velout\u00e9','sirop','conserve','surgel','flocon','chips',
+    'frite','gratin','sachet','boite','bo\u00eete','bocal',
+    'concentre','concentr\u00e9','pulpe','pelee','pel\u00e9e','extra fin'
+];
+
+// Un poids ou un conditionnement dans le nom : c'est un emballage.
+// « POIS EXTRA FINS CAROTTE.U 530G » contient le mot carotte mais
+// reste une conserve.
+const POIDS_EMBALLAGE = /\d+\s*(g|kg|cl|ml|l|gr)\b|\d+\s*x\s*\d+/i;
+
+function plafondRaisonnable(produit) {
+    const nom = (produit.nom || '').toLowerCase();
+
+    if (POIDS_EMBALLAGE.test(nom)) return 2;
+    if (PREPARATIONS.some(function(m) { return nom.indexOf(m) !== -1; })) return 2;
+
+    // Mot entier uniquement : « pommes de terre » ne doit pas faire
+    // passer « Puree de pommes de terre » pour un legume frais.
+    const alaPiece = COMPTES_A_LA_PIECE.some(function(mot) {
+        const bord = '[^a-z\u00e0\u00e2\u00e4\u00e9\u00e8\u00ea\u00eb\u00ee\u00ef\u00f4\u00f6\u00f9\u00fb\u00fc\u00e7]';
+        const r = new RegExp('(^|' + bord + ')'
+                           + mot.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+                           + '($|' + bord + ')');
+        return r.test(nom);
+    });
+    return alaPiece ? 8 : 2;
+}
 
         recette.ingredients_stock = ingredientsStock;
 
@@ -2458,11 +2545,50 @@ async function ajouterAuMur() {
 
 async function viderTouteLaListe() {
     if (!utilisateurActuel) return;
-    if (confirm("Vider TOUTE votre liste de courses ?")) {
-        await monSupabase.from('inventaire2').delete().eq('etat', 'Vide').eq('proprietaire', utilisateurActuel);
+    if (!confirm("Vider TOUTE votre liste de courses ?")) return;
+
+    try {
+        const { data: lignes } = await monSupabase
+            .from('inventaire2')
+            .select('id, nom, ean, prix, role_culinaire, nom_alexa, unitaire')
+            .eq('proprietaire', utilisateurActuel)
+            .eq('etat', 'Vide');
+
+        // Une ligne qui porte un code-barres, un prix, un role ou un
+        // nom Alexa represente du travail : on l'archive. Une ligne
+        // tapee a la main et sans rien d'autre peut partir.
+        const aArchiver = [], aSupprimer = [];
+        (lignes || []).forEach(function(l) {
+            if (l.ean || l.prix || l.role_culinaire || l.nom_alexa || l.unitaire) {
+                aArchiver.push(l.id);
+            } else {
+                aSupprimer.push(l.id);
+            }
+        });
+
+        if (aArchiver.length > 0) {
+            await monSupabase.from('inventaire2')
+                .update({ quantite: 0, etat: 'Archive' })
+                .in('id', aArchiver)
+                .eq('proprietaire', utilisateurActuel);
+        }
+
+        if (aSupprimer.length > 0) {
+            await monSupabase.from('inventaire2')
+                .delete()
+                .in('id', aSupprimer)
+                .eq('proprietaire', utilisateurActuel);
+        }
+
+        console.log('🗂️ ' + aArchiver.length + ' archivés, ' + aSupprimer.length + ' supprimés');
         await chargerTout();
+
+    } catch (e) {
+        console.error('viderTouteLaListe :', e);
+        afficherToast('❌ ' + e.message);
     }
 }
+
 
 function copierNom(nom, btn) {
     navigator.clipboard.writeText(nom).then(() => {
@@ -2890,9 +3016,111 @@ async function traiterEANContinu(ean) {
         statut.innerText = '❌ Erreur de connexion';
     }
 }
+
+function eanValide(code) {
+    if (!/^\d+$/.test(code)) return false;
+    if (code.length === 12) code = '0' + code;
+    if (code.length !== 8 && code.length !== 13) return false;
+
+    const chiffres = code.split('').map(Number);
+    const cle = chiffres.pop();
+    let somme = 0;
+
+    if (code.length === 13) {
+        chiffres.forEach(function(d, i) { somme += d * (i % 2 === 0 ? 1 : 3); });
+    } else {
+        chiffres.forEach(function(d, i) { somme += d * (i % 2 === 0 ? 3 : 1); });
+    }
+    return cle === (10 - (somme % 10)) % 10;
+}
+
+
+// La fenetre de validation. Renvoie true si tu confirmes.
+function demanderConfirmation(libelle, ean) {
+    return new Promise(function(resoudre) {
+        const fond = document.createElement('div');
+        fond.style.cssText =
+            'position:fixed; inset:0; z-index:10050;' +
+            'background:rgba(45,55,72,0.88);' +
+            'display:flex; align-items:center; justify-content:center;' +
+            'padding:20px; font-family:"Segoe UI",sans-serif;';
+
+        const boite = document.createElement('div');
+        boite.style.cssText =
+            'background:#fff; border-radius:15px; padding:26px 22px;' +
+            'max-width:420px; width:100%; text-align:center;' +
+            'box-shadow:0 12px 40px rgba(0,0,0,0.3);';
+
+        const titre = document.createElement('div');
+        titre.style.cssText = 'font-size:14px; color:#718096; margin-bottom:10px;';
+        titre.innerText = 'C\'est bien ce produit ?';
+
+        const nom = document.createElement('div');
+        nom.style.cssText =
+            'font-size:21px; font-weight:700; color:#2d3748;' +
+            'line-height:1.3; margin-bottom:8px; word-break:break-word;';
+        nom.innerText = libelle;
+
+        const code = document.createElement('div');
+        code.style.cssText = 'font-size:12px; color:#a0aec0; margin-bottom:22px;';
+        code.innerText = ean || '';
+
+        const oui = document.createElement('button');
+        oui.style.cssText =
+            'width:100%; padding:16px; border:none; border-radius:15px;' +
+            'background:#38a169; color:#fff; font-size:17px; font-weight:700;' +
+            'font-family:inherit; cursor:pointer; margin-bottom:10px;';
+        oui.innerText = '✅ OUI, JE LE RANGE';
+
+        const non = document.createElement('button');
+        non.style.cssText =
+            'width:100%; padding:14px; border:2px solid #e53e3e; border-radius:15px;' +
+            'background:#fff; color:#e53e3e; font-size:15px; font-weight:600;' +
+            'font-family:inherit; cursor:pointer;';
+        non.innerText = '🔄 NON, RESCANNER';
+
+        function fermer(reponse) {
+            if (fond.parentNode) document.body.removeChild(fond);
+            resoudre(reponse);
+        }
+        oui.onclick = function() { fermer(true); };
+        non.onclick = function() { fermer(false); };
+
+        boite.appendChild(titre);
+        boite.appendChild(nom);
+        boite.appendChild(code);
+        boite.appendChild(oui);
+        boite.appendChild(non);
+        fond.appendChild(boite);
+        document.body.appendChild(fond);
+    });
+}
+
+
+// Valider, puis ranger, puis passer a la date.
+// Si tu refuses, on relance la camera sans rien modifier.
+async function confirmerEtRanger(libelle, ean) {
+    const accepte = await demanderConfirmation(libelle, ean);
+
+    if (!accepte) {
+        produitEnCours = null;
+        const statut = document.getElementById('statut-dates');
+        if (statut) statut.innerText = '🔍 En attente d\'un code-barres...';
+        await demarrerScanCodeBarre();
+        return false;
+    }
+
+    await rangerUnExemplaire(produitEnCours);
+    const statut = document.getElementById('statut-dates');
+    if (statut) statut.innerText = '✅ ' + libelle + ' (×' + produitEnCours.quantite + ')';
+    await passerEtapeDate();
+    return true;
+}
 // ============================================================
 // ÉTAPE 1 : SCAN CODE-BARRES
 // ============================================================
+const LECTURES_REQUISES = 2;
+
 async function demarrerScanCodeBarre() {
     etapeActuelle = 'codebarre';
 
@@ -2904,6 +3132,11 @@ async function demarrerScanCodeBarre() {
     const statut = document.getElementById('statut-dates');
     statut.innerText = '🔍 En attente d\'un code-barres...';
 
+    // Remis à zéro à chaque démarrage : les lectures d'un produit
+    // précédent ne doivent pas compter pour le suivant.
+    const lectures = {};
+    let verrou = false;
+
     try {
         scannerDates = new Html5Qrcode("video-dates");
 
@@ -2911,18 +3144,30 @@ async function demarrerScanCodeBarre() {
             { facingMode: "environment" },
             { fps: 15, qrbox: { width: 300, height: 200 }, aspectRatio: 1.5 },
             async (ean) => {
-                if (etapeActuelle !== 'codebarre') return;
+                if (etapeActuelle !== 'codebarre' || verrou) return;
+
+                // Garde-fou 1 : la clé de contrôle
+                if (!eanValide(ean)) {
+                    statut.innerText = '🔍 Lecture incertaine, maintiens le code...';
+                    return;
+                }
+
+                // Garde-fou 2 : deux lectures identiques
+                lectures[ean] = (lectures[ean] || 0) + 1;
+                if (lectures[ean] < LECTURES_REQUISES) {
+                    statut.innerText = '🔍 Lecture ' + lectures[ean] + '/' + LECTURES_REQUISES + '...';
+                    return;
+                }
+
+                verrou = true;
 
                 if (navigator.vibrate) navigator.vibrate(150);
                 jouerBip();
+                statut.innerText = '🔍 Recherche du produit...';
 
-                statut.innerText = `🔍 Recherche du produit...`;
-
-                // Arrêter le scan
                 await scannerDates.stop();
                 scannerDates = null;
 
-                // Identifier le produit
                 await identifierProduitParEAN(ean);
             },
             (error) => {}
@@ -2983,11 +3228,9 @@ async function identifierProduitParEAN(ean) {
             .eq('ean', ean)
             .neq('etat', 'Vide');
  
-         if (produits?.length > 0) {
+      if (produits?.length > 0) {
             produitEnCours = produits[0];
-            await rangerUnExemplaire(produitEnCours);
-            statut.innerText = `✅ ${produitEnCours.nom} (×${produitEnCours.quantite})`;
-            await passerEtapeDate();
+            await confirmerEtRanger(produitEnCours.nom, ean);
             return;
         }
  
@@ -3007,11 +3250,9 @@ async function identifierProduitParEAN(ean) {
         console.log('📦 Réponse Worker:', data);
  if (data.success && data.produit) {
             produitEnCours = { id: data.id, nom: data.produit, ean: ean };
-            await rangerUnExemplaire(produitEnCours);
-            statut.innerText = `✅ ${data.produit} (×${produitEnCours.quantite})`;
-            statut.innerText = `✅ ${data.produit}`;
+            
             ajouterHistoriqueDate(`🔗 EAN lié à ${data.produit}`, '#3182ce');
-            await passerEtapeDate();
+            await confirmerEtRanger(data.produit, ean);
         } else {
             const msg = data.nomDetecte
                 ? `⚠️ "${data.nomDetecte}" pas dans votre stock`
@@ -4858,6 +5099,89 @@ async function rafraichirApercuEconomies() {
     }
 }
 
+let platEnValidation = false;
+
+async function validerPlatCuisine() {
+    if (platEnValidation) return;
+
+    const recette = window.recetteEnCours;
+    if (!recette || !Array.isArray(recette.ingredients_stock)
+        || recette.ingredients_stock.length === 0) {
+        afficherToast('⚠️ Ce plat a déjà été validé');
+        return;
+    }
+
+    const resume = recette.ingredients_stock
+        .map(function(i) { return '• ' + i.nom + ' ×' + i.quantite_utilisee; })
+        .join('\n');
+
+    if (!confirm('Retirer de ton stock :\n\n' + resume + '\n\nC\'est bon ?')) return;
+
+    platEnValidation = true;
+    window.recetteEnCours = null;        // pas de double validation
+
+    const retires = [], echecs = [];
+
+    try {
+        for (const ing of recette.ingredients_stock) {
+
+            // On relit la quantite reelle : l'affichage peut dater
+            // de plusieurs minutes, et un autre appareil a pu passer.
+            const { data: actuel } = await monSupabase
+                .from('inventaire2')
+                .select('nom, quantite')
+                .eq('id', ing.id)
+                .eq('proprietaire', utilisateurActuel)
+                .maybeSingle();
+
+            if (!actuel) { echecs.push(ing.nom + ' (introuvable)'); continue; }
+
+            const dispo = parseInt(actuel.quantite) || 0;
+            if (dispo <= 0) { echecs.push(actuel.nom + ' (déjà à zéro)'); continue; }
+
+            const utilise = Math.min(parseInt(ing.quantite_utilisee) || 1, dispo);
+            const reste = dispo - utilise;
+
+            // A zero, le produit passe sur la liste de courses — c'est
+            // exactement ce qu'on veut apres avoir fini le dernier paquet.
+            const maj = (reste === 0)
+                ? { quantite: 0, etat: 'Vide' }
+                : { quantite: reste };
+
+            const { error } = await monSupabase
+                .from('inventaire2')
+                .update(maj)
+                .eq('id', ing.id)
+                .eq('proprietaire', utilisateurActuel);
+
+            if (error) { echecs.push(actuel.nom + ' (' + error.message + ')'); continue; }
+
+            // Cuisiner un produit avant sa peremption, c'est une economie.
+            // La fonction verifie elle-meme la date et le prix.
+            await enregistrerEconomieSauvee(ing.id, actuel.nom, utilise);
+
+            retires.push(actuel.nom + ' ' + dispo + '→' + reste);
+            console.log('🍽️ ' + actuel.nom + ' : ' + dispo + ' → ' + reste);
+        }
+
+        if (echecs.length > 0) {
+            console.warn('Non retirés : ' + echecs.join(', '));
+            afficherToast('⚠️ ' + retires.length + ' retirés, ' + echecs.length + ' en échec');
+        } else {
+            afficherToast('🍽️ Bon appétit — ' + retires.length + ' produits retirés');
+        }
+
+        await chargerTout();
+        if (typeof verifierPeremptions === 'function') await verifierPeremptions();
+
+    } catch (e) {
+        console.error('validerPlatCuisine :', e);
+        afficherToast('❌ Erreur — stock peut-être partiellement modifié');
+    } finally {
+        platEnValidation = false;
+    }
+}
+
 // ============================================================
 // 1. ENREGISTRER UN GASPILLAGE
 // ============================================================
@@ -5302,14 +5626,17 @@ async function confirmerAjoutCourses() {
     document.getElementById('modal-similaires').style.display = 'none';
 
     if (produitEpuise) {
-        await monSupabase
-            .from('inventaire2')
-            .update({ quantite: 0, etat: 'Vide' })
-            .eq('id', produitEpuise.id)
-            .eq('proprietaire', utilisateurActuel);
+            // Hors stock et hors liste de courses, mais la ligne
+            // garde son code-barres et son prix pour la prochaine fois.
+            await monSupabase
+                .from('inventaire2')
+                .update({ quantite: 0, etat: 'Archive' })
+                .eq('id', produitEpuise.id)
+                .eq('proprietaire', utilisateurActuel);
 
-        afficherToast('🛒 ' + produitEpuise.nom + ' ajouté aux courses');
-    }
+            afficherToast('✓ ' + produitEpuise.nom + ' retiré du stock');
+        }
+
 
     produitEpuise = null;
     await chargerTout();
@@ -6819,7 +7146,7 @@ stock, une remarque — réponds dans "message" et laisse "choix" vide.`;
 async function chargerStockParRole() {
     const { data, error } = await monSupabase
         .from('inventaire2')
-        .select('id, nom, quantite, emplacement, etat, date_peremption, role_culinaire')
+        .select('id, nom, nom_alexa, quantite, emplacement, etat, date_peremption, role_culinaire')
         .eq('proprietaire', utilisateurActuel)
         .gt('quantite', 0)
         .not('emplacement', 'in', '("ANIMAUX","SALLE_DE_BAIN","AUTRES")');
@@ -6867,6 +7194,79 @@ async function chargerStockParRole() {
     return parRole;
 }
 
+const BRUIT_PRODUIT = [
+    /\b\d+\s*x\s*\d+\s*(g|kg|cl|ml|l)?\b/gi,
+    /\b\d+\s*(g|kg|cl|ml|l|gr)\b/gi,
+    /\bx\s*\d+\b/gi,
+    /\b(paquet|sachet|boite|boîte|bocal|barquette|pot|lot|pack|brique|filet de)\b/gi,
+    /\b(u|carrefour|leclerc|auchan|lidl|casino|monoprix|bio|msc|igp|aop|label rouge|plein air)\b/gi,
+    /\b(surgele|surgelé|surgeles|surgelés|frais|fraiche|fraîche|nature|classique|classiques|extra|fin|fins|original)\b/gi,
+    /\b\d+\b/g,
+    /[.·•]+/g
+];
+
+function nomCourtProduit(p) {
+    if (p.nom_alexa && p.nom_alexa.trim()) return p.nom_alexa.trim().toLowerCase();
+
+    let n = (p.nom || '').toLowerCase();
+    BRUIT_PRODUIT.forEach(function(r) { n = n.replace(r, ' '); });
+    n = n.replace(/\s+/g, ' ').trim();
+    return n || (p.nom || '').toLowerCase();
+}
+
+// Composer un nom honnete a partir des produits reels.
+// Plat, mais jamais faux — c'est tout ce qu'on lui demande.
+const ORDRE_NOM = ['proteine', 'feculent', 'legume', 'fromage', 'sauce', 'condiment'];
+
+function composerNomPlat(produits) {
+    const tries = (produits || []).slice().sort(function(a, b) {
+        const ia = ORDRE_NOM.indexOf(a.role_culinaire || '');
+        const ib = ORDRE_NOM.indexOf(b.role_culinaire || '');
+        return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+    });
+
+    const noms = tries.slice(0, 3).map(nomCourtProduit).filter(Boolean);
+    if (noms.length === 0) return 'Plat du soir';
+    if (noms.length === 1) return noms[0].charAt(0).toUpperCase() + noms[0].slice(1);
+
+    const dernier = noms.pop();
+    const phrase = noms.join(', ') + ' et ' + dernier;
+    return phrase.charAt(0).toUpperCase() + phrase.slice(1);
+}
+
+// Le modele a-t-il simplement recopie la liste des produits ?
+function nomRecopieLesProduits(nom, produits) {
+    const n = (nom || '').toLowerCase();
+    if (!n) return true;
+
+    // Le code lui-meme joint les produits par ' + '. Si on le recoit
+    // en retour, c'est que rien n'a ete nomme.
+    if (n.indexOf(' + ') !== -1) return true;
+
+    let touches = 0;
+    (produits || []).forEach(function(p) {
+        const court = nomCourtProduit(p);
+        const brut = (p.nom || '').toLowerCase();
+        if ((court.length > 3 && n.indexOf(court) !== -1)
+         || (brut.length > 3 && n.indexOf(brut) !== -1)) touches++;
+    });
+
+    // Deux produits entiers recopies et aucun mot de cuisine :
+    // ce n'est pas un nom de plat, c'est un inventaire.
+    const motCuisine = /\b(a la|à la|au|aux|facon|façon|maison|express|gratine|gratiné|mijote|mijoté|poele|poêlé|poêlée|roti|rôti|saute|sauté|braise|braisé|farci|carbonara|bolognaise|basquaise|forestiere|forestière|parmentier|cocotte|four)\b/;
+
+    return touches >= 2 && !motCuisine.test(n);
+}
+
+function nomDePlatFiable(nomPropose, assiette) {
+    if (!nomPropose || nomRecopieLesProduits(nomPropose, assiette.produits)) {
+        const compose = composerNomPlat(assiette.produits);
+        console.log('✏️ Nom recomposé : "' + (nomPropose || '(vide)') + '" → "' + compose + '"');
+        return compose;
+    }
+    return nomPropose;
+}
+
 function lireReponseChef(brut, vivier) {
     if (!brut) return { message: '', plats: [] };
 
@@ -6896,7 +7296,7 @@ function lireReponseChef(brut, vivier) {
             return;
         }
         plats.push({
-            nom: c.nom || assiette.produits.map(function(p) { return p.nom; }).join(' + '),
+            nom: nomDePlatFiable(c.nom, assiette),
             signature: assiette.signature,
             produits: assiette.produits.map(function(p) { return p.id; }),
             ingredients: assiette.produits.map(function(p) { return p.nom; })
