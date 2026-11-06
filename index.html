@@ -177,6 +177,62 @@
 
 <!-- TOAST -->
 <div id="toast"></div>
+
+<!-- ÉCRAN DE CONNEXION -->
+<div id="ecran-auth" style="display:none; position:fixed; inset:0; z-index:10000; background:linear-gradient(135deg,#f0fff4,#ebf8ff); align-items:center; justify-content:center; padding:15px;">
+  <div style="width:100%; max-width:380px; background:white; border-radius:20px; padding:25px; box-shadow:0 10px 30px rgba(0,0,0,0.12);">
+    <div style="text-align:center; margin-bottom:18px;">
+      <div style="font-size:42px;">🧊</div>
+      <b style="font-size:20px; color:#2d3748;">FRIGO ELITE</b>
+    </div>
+
+    <div id="auth-connexion" style="display:none;">
+      <input id="auth-email" type="email" autocomplete="email" placeholder="Email" style="width:100%; box-sizing:border-box; padding:13px; border:2px solid #cbd5e0; border-radius:12px; font-size:16px; margin-bottom:10px;">
+      <input id="auth-mdp" type="password" autocomplete="current-password" placeholder="Mot de passe" style="width:100%; box-sizing:border-box; padding:13px; border:2px solid #cbd5e0; border-radius:12px; font-size:16px; margin-bottom:10px;"
+             onkeydown="if(event.key==='Enter') seConnecter()">
+      <button onclick="seConnecter()" style="width:100%; border:none; border-radius:12px; padding:14px; cursor:pointer; font-size:15px; font-weight:bold; color:white; margin-bottom:10px; background:#38a169;">Se connecter</button>
+      <button onclick="creerCompte()" style="width:100%; border:none; border-radius:12px; padding:14px; cursor:pointer; font-size:15px; font-weight:bold; color:white; margin-bottom:10px; background:#3182ce;">Créer un compte</button>
+      <div style="text-align:center;"><button onclick="motDePasseOublie()" style="background:none; border:none; color:#3182ce; cursor:pointer; font-size:13px; text-decoration:underline; padding:4px;">Mot de passe oublié ?</button></div>
+    </div>
+
+    <div id="auth-foyer" style="display:none;">
+      <p style="font-size:14px; color:#4a5568; margin-top:0;">Dernière étape : ton <b>foyer</b>, c'est le frigo que tu partages avec ta famille.</p>
+      <input id="auth-nom-foyer" placeholder="Nom du foyer (ex : Maison)" style="width:100%; box-sizing:border-box; padding:13px; border:2px solid #cbd5e0; border-radius:12px; font-size:16px; margin-bottom:10px;">
+      <button onclick="creerFoyer()" style="width:100%; border:none; border-radius:12px; padding:14px; cursor:pointer; font-size:15px; font-weight:bold; color:white; margin-bottom:10px; background:#38a169;">🏠 Créer mon foyer</button>
+      <p style="text-align:center; color:#a0aec0; font-size:12px; margin:6px 0 12px;">— ou —</p>
+      <input id="auth-code-foyer" placeholder="Code d'invitation" style="width:100%; box-sizing:border-box; padding:13px; border:2px solid #cbd5e0; border-radius:12px; font-size:16px; margin-bottom:10px; text-transform:uppercase;">
+      <button onclick="rejoindreFoyer()" style="width:100%; border:none; border-radius:12px; padding:14px; cursor:pointer; font-size:15px; font-weight:bold; color:white; margin-bottom:10px; background:#3182ce;">🔑 Rejoindre un foyer</button>
+      <div style="text-align:center;"><button onclick="seDeconnecter()" style="background:none; border:none; color:#3182ce; cursor:pointer; font-size:13px; text-decoration:underline; padding:4px;">Changer de compte</button></div>
+    </div>
+
+    <div id="auth-nouveau-mdp" style="display:none;">
+      <input id="auth-nouveau-mdp-champ" type="password" autocomplete="new-password" placeholder="Nouveau mot de passe" style="width:100%; box-sizing:border-box; padding:13px; border:2px solid #cbd5e0; border-radius:12px; font-size:16px; margin-bottom:10px;">
+      <button onclick="enregistrerNouveauMdp()" style="width:100%; border:none; border-radius:12px; padding:14px; cursor:pointer; font-size:15px; font-weight:bold; color:white; margin-bottom:10px; background:#38a169;">Enregistrer</button>
+    </div>
+
+    <p id="auth-message" style="font-size:13px; text-align:center; margin:8px 0 0; min-height:18px;"></p>
+  </div>
+</div>
+
+<!-- BOUTON + FENÊTRE "MON COMPTE" -->
+<button onclick="ouvrirMonCompte()" title="Mon compte"
+        style="position:fixed; top:10px; right:10px; z-index:900; width:42px; height:42px; border-radius:50%; border:none; background:white; box-shadow:0 2px 8px rgba(0,0,0,0.15); font-size:20px; cursor:pointer;">👤</button>
+<div id="modal-compte" onclick="if(event.target===this) fermerMonCompte()"
+     style="display:none; position:fixed; inset:0; z-index:9000; background:rgba(0,0,0,0.6); align-items:center; justify-content:center; padding:15px;">
+  <div style="width:100%; max-width:380px; background:white; border-radius:20px; padding:22px; font-size:14px; color:#2d3748;">
+    <b style="font-size:17px;">👤 Mon compte</b>
+    <p style="margin:14px 0 4px; color:#718096;">Email</p><div id="compte-email"></div>
+    <p style="margin:14px 0 4px; color:#718096;">Foyer</p><div><span id="compte-foyer"></span> · <span id="compte-membres"></span> membre(s)</div>
+    <p style="margin:14px 0 4px; color:#718096;">Code d'invitation (à donner à ta famille)</p>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <code id="compte-code" style="font-size:18px; letter-spacing:2px; background:#edf2f7; padding:6px 10px; border-radius:8px;"></code>
+      <button onclick="copierCodeFoyer()" style="border:none; background:#edf2f7; border-radius:8px; padding:8px 10px; cursor:pointer;">📋</button>
+    </div>
+    <button onclick="seDeconnecter()" style="width:100%; border:none; border-radius:12px; padding:14px; cursor:pointer; font-size:15px; font-weight:bold; color:white; margin-bottom:10px; background:#e53e3e; margin-top:20px;">Se déconnecter</button>
+    <button onclick="fermerMonCompte()" style="width:100%; border:none; border-radius:12px; padding:14px; cursor:pointer; font-size:15px; font-weight:bold; color:white; margin-bottom:10px; background:#a0aec0; margin-bottom:0;">Fermer</button>
+  </div>
+</div>
+
 <div id="bandeau-peremption" style="display:none; background:linear-gradient(135deg,#fff5f5,#fed7d7); border:2px solid #fc8181; border-radius:15px; padding:15px; margin-bottom:12px; cursor:pointer;"
      onclick="basculerDetailsPeremption()">
 
@@ -833,13 +889,173 @@
 // ============================================================
 // 0. IDENTITÉ UTILISATEUR
 // ============================================================
-let utilisateurActuel = localStorage.getItem('monFrigo_User');
-while (!utilisateurActuel || utilisateurActuel.trim() === "") {
-    utilisateurActuel = prompt("Bienvenue ! Entre ton prénom pour accéder à ton inventaire :");
-    if (utilisateurActuel && utilisateurActuel.trim() !== "") {
-        utilisateurActuel = utilisateurActuel.trim();
-        localStorage.setItem('monFrigo_User', utilisateurActuel);
+// Identifiant du FOYER (valeur de la colonne "proprietaire").
+// Il n'est plus saisi à la main : il vient du compte connecté (Supabase Auth).
+let utilisateurActuel = null;
+
+// ------------------------------------------------------------
+// CONNEXION / FOYER
+// ------------------------------------------------------------
+let _resoudreEtapeAuth = null;
+function attendreEtapeAuth() {
+    return new Promise(resolve => { _resoudreEtapeAuth = resolve; });
+}
+function terminerEtapeAuth(valeur) {
+    if (_resoudreEtapeAuth) { const r = _resoudreEtapeAuth; _resoudreEtapeAuth = null; r(valeur); }
+}
+
+function afficherEcranAuth(etape) {
+    document.getElementById('ecran-auth').style.display = 'flex';
+    ['connexion', 'foyer', 'nouveau-mdp'].forEach(e => {
+        document.getElementById('auth-' + e).style.display = (e === etape) ? 'block' : 'none';
+    });
+    messageAuth('');
+}
+function masquerEcranAuth() {
+    document.getElementById('ecran-auth').style.display = 'none';
+}
+function messageAuth(texte, erreur = true) {
+    const el = document.getElementById('auth-message');
+    el.textContent = texte;
+    el.style.color = erreur ? '#c53030' : '#2f855a';
+}
+function traduireErreurAuth(msg) {
+    msg = msg || '';
+    if (/Invalid login credentials/i.test(msg)) return 'Email ou mot de passe incorrect.';
+    if (/Email not confirmed/i.test(msg)) return "Ton email n'est pas encore confirmé : clique sur le lien reçu par mail.";
+    if (/already registered/i.test(msg)) return 'Un compte existe déjà avec cet email.';
+    if (/at least 6 characters|Password should be/i.test(msg)) return 'Le mot de passe doit faire au moins 6 caractères.';
+    if (/rate limit|too many/i.test(msg)) return 'Trop de tentatives, réessaie dans quelques minutes.';
+    if (/Code invalide/i.test(msg)) return "Code d'invitation invalide.";
+    if (/déjà partie/i.test(msg)) return "Ce compte fait déjà partie d'un foyer.";
+    return msg;
+}
+function lireIdentifiants() {
+    const email = document.getElementById('auth-email').value.trim();
+    const mdp = document.getElementById('auth-mdp').value;
+    if (!email || !mdp) { messageAuth('Renseigne ton email et ton mot de passe.'); return null; }
+    return { email, mdp };
+}
+
+async function seConnecter() {
+    const id = lireIdentifiants(); if (!id) return;
+    messageAuth('Connexion…', false);
+    const { error } = await monSupabase.auth.signInWithPassword({ email: id.email, password: id.mdp });
+    if (error) return messageAuth(traduireErreurAuth(error.message));
+    terminerEtapeAuth(true);
+}
+
+async function creerCompte() {
+    const id = lireIdentifiants(); if (!id) return;
+    messageAuth('Création du compte…', false);
+    const { data, error } = await monSupabase.auth.signUp({
+        email: id.email, password: id.mdp,
+        options: { emailRedirectTo: location.origin + location.pathname }
+    });
+    if (error) return messageAuth(traduireErreurAuth(error.message));
+    if (data.session) return terminerEtapeAuth(true);
+    messageAuth('📧 Compte créé ! Confirme ton email avec le lien reçu, puis connecte-toi.', false);
+}
+
+async function motDePasseOublie() {
+    const email = document.getElementById('auth-email').value.trim();
+    if (!email) return messageAuth("Renseigne d'abord ton email.");
+    const { error } = await monSupabase.auth.resetPasswordForEmail(email, {
+        redirectTo: location.origin + location.pathname
+    });
+    if (error) return messageAuth(traduireErreurAuth(error.message));
+    messageAuth('📧 Si ce compte existe, un lien de réinitialisation vient de partir.', false);
+}
+
+async function enregistrerNouveauMdp() {
+    const mdp = document.getElementById('auth-nouveau-mdp-champ').value;
+    const { error } = await monSupabase.auth.updateUser({ password: mdp });
+    if (error) return messageAuth(traduireErreurAuth(error.message));
+    messageAuth('✅ Mot de passe changé.', false);
+    setTimeout(() => location.replace(location.origin + location.pathname), 1200);
+}
+
+async function chargerFoyer() {
+    const { data, error } = await monSupabase.rpc('mon_foyer');
+    if (error) { console.error('Foyer :', error.message); return null; }
+    return data || null;
+}
+
+async function creerFoyer() {
+    const nom = document.getElementById('auth-nom-foyer').value.trim();
+    const { data, error } = await monSupabase.rpc('creer_foyer', { p_nom: nom });
+    if (error) return messageAuth(traduireErreurAuth(error.message));
+    terminerEtapeAuth(data);
+}
+
+async function rejoindreFoyer() {
+    const code = document.getElementById('auth-code-foyer').value.trim();
+    if (!code) return messageAuth("Entre le code d'invitation.");
+    const { data, error } = await monSupabase.rpc('rejoindre_foyer', { p_code: code });
+    if (error) return messageAuth(traduireErreurAuth(error.message));
+    terminerEtapeAuth(data);
+}
+
+// Bloque le démarrage tant que l'utilisateur n'est pas connecté ET rattaché à un foyer
+async function assurerConnexion() {
+    // Retour depuis le lien "mot de passe oublié"
+    if (/type=recovery/.test(location.hash)) {
+        afficherEcranAuth('nouveau-mdp');
+        await attendreEtapeAuth(); // ne se résout pas : la page se recharge après le changement
     }
+
+    const { data: { session } } = await monSupabase.auth.getSession();
+    if (!session) {
+        afficherEcranAuth('connexion');
+        await attendreEtapeAuth();
+    }
+
+    let foyer = await chargerFoyer();
+    if (!foyer) {
+        afficherEcranAuth('foyer');
+        foyer = await attendreEtapeAuth();
+    }
+
+    utilisateurActuel = foyer;
+    localStorage.setItem('monFrigo_User', foyer); // simple cache, la sécurité est côté serveur
+    masquerEcranAuth();
+
+    // Session expirée ou déconnexion dans un autre onglet → retour à l'écran de connexion
+    monSupabase.auth.onAuthStateChange((evenement) => {
+        if (evenement === 'SIGNED_OUT') location.reload();
+    });
+}
+
+async function seDeconnecter() {
+    localStorage.removeItem('monFrigo_User');
+    await monSupabase.auth.signOut();
+    location.reload();
+}
+
+async function ouvrirMonCompte() {
+    const { data: { user } } = await monSupabase.auth.getUser();
+    document.getElementById('compte-email').textContent = user?.email || '—';
+    const { data } = await monSupabase.rpc('infos_foyer');
+    const f = (data && data[0]) || {};
+    document.getElementById('compte-foyer').textContent = f.nom || '—';
+    document.getElementById('compte-code').textContent = f.code_invitation || '—';
+    document.getElementById('compte-membres').textContent = f.nb_membres || '—';
+    document.getElementById('modal-compte').style.display = 'flex';
+}
+function fermerMonCompte() {
+    document.getElementById('modal-compte').style.display = 'none';
+}
+function copierCodeFoyer() {
+    const code = document.getElementById('compte-code').textContent;
+    navigator.clipboard?.writeText(code).then(() => afficherToast('📋 Code copié'));
+}
+
+// En-têtes pour les Workers : on joint le jeton de session, que le Worker vérifie
+async function entetesIA() {
+    const h = { 'Content-Type': 'application/json' };
+    const { data: { session } } = await monSupabase.auth.getSession();
+    if (session) h['Authorization'] = 'Bearer ' + session.access_token;
+    return h;
 }
 
 // ============================================================
@@ -876,6 +1092,8 @@ window.onload = async () => {
 
         const supabaseLib = window.supabase || supabase;
 monSupabase = supabaseLib.createClient(elUrl.value, elKey.value);
+
+        await assurerConnexion();
 
         setupCollapsibles();
         setupVocal();
@@ -934,7 +1152,7 @@ async function appelGemini(message) {
 
     const resp = await fetch(urlRelais, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await entetesIA(),
         body: JSON.stringify(corps)
     });
 
@@ -2879,7 +3097,7 @@ async function traiterEANScanne(ean) {
 
         const response = await fetch('https://mon-assistant-cuisine.laurent235.workers.dev/poubelle', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: await entetesIA(),
             body: JSON.stringify({
                 utilisateur: utilisateurActuel,
                 ean: ean,
@@ -3005,7 +3223,7 @@ async function traiterEANContinu(ean) {
 
         const response = await fetch('https://mon-assistant-cuisine.laurent235.workers.dev/identifier', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: await entetesIA(),
             body: JSON.stringify({
                 utilisateur: utilisateurActuel,
                 ean: ean
@@ -3260,7 +3478,7 @@ async function identifierProduitParEAN(ean) {
  
         const response = await fetch('https://mon-assistant-cuisine.laurent235.workers.dev/identifier', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: await entetesIA(),
             body: JSON.stringify({
                 utilisateur: utilisateurActuel,
                 ean: ean
@@ -3759,7 +3977,7 @@ async function ajouterProduitInventaire(ean) {
 
         const response = await fetch('https://mon-assistant-cuisine.laurent235.workers.dev/inventaire', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: await entetesIA(),
             body: JSON.stringify({
                 utilisateur: utilisateurActuel,
                 ean: ean,
@@ -7968,9 +8186,16 @@ async function chargerRecettesFaisables(mode, famillesDispo) {
             }
         });
   
-        const trahis = motsTrahisParLeTitre(titre, produits);
-        titreHonnete = (trahis.length === 0);
         if (produits.length === 0) return;
+
+        // Le titre promet-il un produit precis qu'on n'a pas...
+        const trahis = motsTrahisParLeTitre(titre, produits);
+
+        // ...ou une preparation qu'on ne peut pas faire ?
+        // « Poulet roti » avec des filets, « Gratin » sans fromage.
+        const impossibles = preparationsInventees(r.nom, produits);
+
+        titreHonnete = (trahis.length === 0 && impossibles.length === 0);
 
         // ── SCORE ──
         let score = 10;
