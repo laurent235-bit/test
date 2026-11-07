@@ -1616,53 +1616,6 @@ function reinitialiserChef() {
     window.produitsRecents = [];
     window.signaturesSorties = [];
 }
-// ============================================================
-// DETECTER LA FAMILLE D'UNE RECETTE
-// ============================================================
-function detecterFamille(ingredients) {
-    const premier = ingredients[0] || '';
-    const tous = ingredients.join(' ');
-
-    if (/pate|spaghetti|macaroni|tagliatelle|lasagne|nouille|coquillette|vermicelle/.test(premier)) return 'PATES';
-    if (/riz|risotto|quinoa|couscous|semoule/.test(premier)) return 'CEREALES';
-    if (/lentille|pois|haricot rouge|haricot blanc|chiche|flageolet/.test(premier)) return 'LEGUMINEUSES';
-    if (/pomme de terre|frite|dauphin|puree|rosti/.test(premier)) return 'POMMES_DE_TERRE';
-    if (/oeuf/.test(premier)) return 'OEUFS';
-    if (/steak|boeuf|hache|boulette|brochette|jarret|porc|cote|saucisse|knacki|lardon|bacon|jambon|veau|agneau|canard|merguez/.test(premier)) return 'VIANDE';
-    if (/poulet|dinde|escalope|cordon|nugget|cuisse/.test(premier)) return 'VOLAILLE';
-    if (/poisson|colin|saumon|thon|crevette|baton|sardine|maquereau|cabillaud/.test(premier)) return 'POISSON';
-    if (/pain|mie|croque|wrap|tortilla|pizza|burger|gyoza|nem/.test(premier)) return 'SANDWICH';
-    if (/courgette|brocoli|chou|carotte|legume|tomate|salade|epinard|haricot vert|poireau|champignon|salsifi|poivron|ratatouille|potiron|navet/.test(premier)) return 'LEGUMES';
-    if (/chocolat|yaourt|fruit|banane|biscuit|mascarpone|miel/.test(tous)) return 'DESSERT';
-    if (/reste/.test(tous)) return 'ANTIGASPI';
-
-    return 'AUTRE';
-}
-
-
-
-// DÉTECTER LA FAMILLE D'UNE RECETTE
-// Garantit la diversité des propositions
-// ============================================================
-function detecterFamille(ingredients) {
-    const premier = ingredients[0] || '';
-    const tous = ingredients.join(' ');
- 
-    if (/pate|spaghetti|macaroni|tagliatelle|lasagne|nouille|coquillette|vermicelle|coude/.test(premier)) return 'PATES';
-    if (/riz|risotto|quinoa|couscous|semoule/.test(premier)) return 'CEREALES';
-    if (/lentille|pois|haricot.*rouge|chiche/.test(premier)) return 'LEGUMINEUSES';
-    if (/pomme|frite|dauphin|puree|rosti/.test(premier)) return 'POMMES_DE_TERRE';
-    if (/oeuf/.test(premier)) return 'OEUFS';
-    if (/steak|boeuf|hache|boulette|brochette|jarret|porc|cote|saucisse|knacki|lardon|bacon|jambon/.test(premier)) return 'VIANDE';
-    if (/poulet|dinde|escalope|cordon|nugget|cuisse/.test(premier)) return 'VOLAILLE';
-    if (/poisson|colin|saumon|thon|crevette|baton|sardine|maquereau/.test(premier)) return 'POISSON';
-    if (/pain|mie|croque|wrap|tortilla|pizza|burger|gressin/.test(premier)) return 'SANDWICH';
-    if (/courgette|brocoli|chou|carotte|legume|tomate|salade|epinard|haricot|poireau|champignon|salsifi|poivron|ratatouille|macedoine/.test(premier)) return 'LEGUMES';
-    if (/chocolat|yaourt|fruit|banane|biscuit|peche|flan|avoine|coco|miel|nutella/.test(tous)) return 'DESSERT';
-    if (/reste/.test(tous)) return 'ANTIGASPI';
- 
-    return 'AUTRE';
-}
  
 function sansAccentTitre(s) {
     return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -7201,27 +7154,6 @@ async function classerUnProduit(id, nom, emplacement) {
         console.log('Classement différé pour ' + nom + ' : ' + e.message);
     }
     return null;
-}
-function signaturePlat(produits) {
-    const roles = window.rolesParNumero || {};
-
-    const proteines = [];
-    const feculents = [];
-
-    (produits || []).forEach(function(n) {
-        const role = roles[n];
-        if (role === 'proteine') proteines.push(n);
-        else if (role === 'feculent') feculents.push(n);
-    });
-
-    // Un plat sans protéine ni féculent identifiés n'a pas de
-    // signature exploitable : on le laisse passer
-    if (proteines.length === 0 && feculents.length === 0) return null;
-
-    proteines.sort(function(a, b) { return a - b; });
-    feculents.sort(function(a, b) { return a - b; });
-
-    return 'P:' + proteines.join(',') + '|F:' + feculents.join(',');
 }
  
 function viderMemoireChef() {
