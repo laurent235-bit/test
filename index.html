@@ -292,11 +292,11 @@
         <!-- Boutons rapides -->
         <div style="display:flex; gap:10px; margin-bottom:12px;">
             <button onclick="validerQuantiteRetrait(1)"
-                    style="flex:1; background:#3182ce; color:white; border:none; border-radius:12px; padding:18px; cursor:pointer; font-size:20px; font-weight:bold;">
+                    style="flex:2; background:#3182ce; color:white; border:none; border-radius:12px; padding:18px; cursor:pointer; font-size:20px; font-weight:bold;">
                 −1
             </button>
             <button onclick="validerQuantiteRetraitTout()"
-                    style="flex:2; background:#e53e3e; color:white; border:none; border-radius:12px; padding:18px; cursor:pointer; font-size:15px; font-weight:bold;"
+                    style="flex:1; background:#e53e3e; color:white; border:none; border-radius:12px; padding:18px; cursor:pointer; font-size:15px; font-weight:bold;"
                     id="btn-tout-retirer">
                 🗑️ TOUT (—)
             </button>
@@ -314,6 +314,11 @@
 		 <button onclick="marquerEntame()"
                 style="width:100%; background:#ed8936; color:white; border:none; border-radius:12px; padding:15px; cursor:pointer; font-size:15px; font-weight:bold; margin-bottom:12px;">
             ⚠️ MARQUER COMME ENTAMÉ
+        </button>
+
+        <button onclick="mauvaisProduitPoubelle()"
+                style="width:100%; background:white; color:#dd6b20; border:2px solid #dd6b20; border-radius:12px; padding:13px; cursor:pointer; font-size:14px; font-weight:bold; margin-bottom:8px;">
+            ✏️ Ce n'est pas ce produit
         </button>
 
         <button onclick="annulerQuantiteRetrait()"
@@ -338,7 +343,7 @@
 <div class="card" style="padding:15px; border:2px solid #38a169;">
     <button onclick="ouvrirEconomies()"
             style="background:linear-gradient(135deg,#38a169,#2f855a); color:white; border:none; border-radius:12px; padding:16px; cursor:pointer; font-size:15px; font-weight:bold; width:100%;">
-        &#128176; MES ÉCONOMIES
+        🗑️ MON GASPILLAGE
     </button>
     <p style="font-size:11px; color:#888; margin:8px 0 0 0; text-align:center;" id="apercu-economies">
         Chargement...
@@ -350,17 +355,12 @@
     <div style="width:94%; max-width:480px;">
 
         <div style="background:linear-gradient(135deg,#38a169,#2f855a); border-radius:20px 20px 0 0; padding:25px; text-align:center; color:white;">
-            <div style="font-size:42px;">&#128176;</div>
-            <b style="font-size:19px; display:block; margin-top:8px;">Vos économies</b>
+            <div style="font-size:42px;">🗑️</div>
+            <b style="font-size:19px; display:block; margin-top:8px;">Ton gaspillage</b>
             <p style="font-size:12px; opacity:0.85; margin:6px 0 0 0;">
-                Argent sauvé du gaspillage alimentaire
+                Ce qui a été jeté, pour en jeter moins
             </p>
         </div>
-<button onclick="classerRolesManquants()"
-        style="background:#805ad5; color:white; border:none; border-radius:10px; padding:12px; cursor:pointer; font-size:13px; font-weight:bold; width:100%;">
-    🏷️ Classer les produits non catégorisés
-</button>
-<div id="statut-roles" style="text-align:center; margin-top:8px; font-size:12px; min-height:18px;"></div>
         <div id="contenu-economies" style="background:#f7fafc; padding:18px;">
             <p style="text-align:center; color:#a0aec0; font-size:13px;">Chargement...</p>
         </div>
@@ -415,7 +415,6 @@
     <button id="btn-vocal" class="btn btn-accent">🎤 SORTIR UN ALIMENT (VOCAL)</button>
     <div id="statut-vocal" style="text-align:center; margin-top:5px; font-size:13px;"></div>
 </div>
-
 
 
 <div class="card" style="padding:15px; background:#fff8e1; border:2px solid #ff9800;">
@@ -483,8 +482,6 @@
     <div id="liste-decouvertes"></div>
 </div>
 
-
-   Et ce deuxième bloc, pour les achats les plus utiles :
 
 <div class="card" style="padding:14px; border:2px solid #805ad5;">
     <div style="font-size:13px; font-weight:bold; color:#553c9a; margin-bottom:4px;">
@@ -881,6 +878,19 @@
 </style>
 
 
+<!-- FENÊTRE DU PLANNING -->
+<div id="modal-planning">
+    <div class="modal-box">
+        <b id="modal-titre" style="font-size:16px; color:#2d3748; display:block; margin-bottom:12px; text-align:center;"></b>
+        <input type="text" id="modal-input" placeholder="Quel plat ?"
+               onkeydown="if(event.key==='Enter') validerPlanning()"
+               style="width:100%; padding:13px; border:2px solid #cbd5e0; border-radius:10px; font-size:16px; margin-bottom:8px;">
+        <button class="btn btn-mur" onclick="validerPlanning()">✅ Enregistrer</button>
+        <button class="btn btn-danger" onclick="supprimerPlanning()">🗑️ Vider ce repas</button>
+        <button class="btn" style="background:#718096;" onclick="fermerModal()">✕ Annuler</button>
+    </div>
+</div>
+
 <!-- CLÉS SUPABASE -->
 <input id="sUrl" type="hidden" value="https://ylguhodjcgistealluzy.supabase.co">
 <input id="sKey" type="hidden" value="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlsZ3Vob2RqY2dpc3RlYWxsdXp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA2MjcxMDAsImV4cCI6MjA4NjIwMzEwMH0.0czapM1DeFs7T3pTrExUMUKUcyUHi3w-p_jKj6XkTUM">
@@ -1105,6 +1115,15 @@ monSupabase = supabaseLib.createClient(elUrl.value, elKey.value);
         ]);
 await verifierPeremptions();
         await rafraichirApercuEconomies();
+
+        // Les périmés de longue date : on pose la question une fois par jour, pas à chaque ouverture
+        try {
+            const jour = new Date().toISOString().slice(0, 10);
+            if (localStorage.getItem('monFrigo_PerimesVus') !== jour) {
+                localStorage.setItem('monFrigo_PerimesVus', jour);
+                await detecterPerimes();
+            }
+        } catch (e) { await detecterPerimes(); }
      
 
     } catch (err) {
@@ -1136,6 +1155,14 @@ function setupCollapsibles() {
 // ============================================================
 // 4. TOAST NOTIFICATION (remplace les alert())
 // ============================================================
+// Rend un texte inoffensif avant de l'insérer dans la page :
+// un nom de produit reste du texte, il ne peut plus devenir du code.
+function echapper(t) {
+    return String(t === null || t === undefined ? '' : t)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 function afficherToast(message, duree = 3000) {
     const toast = document.getElementById('toast');
     toast.innerText = message;
@@ -1169,8 +1196,12 @@ let recognition = SpeechRecognition ? new SpeechRecognition() : null;
 
 function setupVocal() {
     if (!recognition) {
-        document.getElementById('btn-vocal').disabled = true;
-        document.getElementById('btn-chef').disabled = true;
+        const btnVocal = document.getElementById('btn-vocal');
+        if (btnVocal) {
+            btnVocal.disabled = true;
+            btnVocal.style.opacity = '0.5';
+            btnVocal.innerText = '🎤 Vocal indisponible sur ce navigateur';
+        }
         return;
     }
     recognition.lang = 'fr-FR';
@@ -1191,11 +1222,6 @@ document.getElementById('btn-vocal')?.addEventListener('click', () => {
     demarrerMicro();
 });
 
-// Bouton CHEF VOCAL
-document.getElementById('btn-chef')?.addEventListener('click', () => {
-    if (!utilisateurActuel) { afficherToast("Identifie-toi d'abord !"); return; }
-    lancerLeChef();
-});
 
 function demarrerMicro() {
     if (!recognition) return;
@@ -1225,8 +1251,15 @@ async function traiterResultatVocal(e) {
         return;
     }
 
+    // Une commande claire (retirer, ranger) passe avant le choix d'un plat :
+    // sinon, après une proposition du Chef, le micro ne servait plus à rien d'autre.
+    const estCommandeStock =
+        phrase.includes("supprime") || phrase.includes("retire") || phrase.includes("enlève")
+        || phrase.includes("j'ai utilisé") || phrase.includes("j'ai mangé")
+        || (phrase.includes("frigo") && (phrase.includes("mis") || phrase.includes("ajoute") || phrase.includes("rangé")));
+
     // ATTENTE CHOIX RECETTE
-    if (window.attenteChoixRecette) {
+    if (window.attenteChoixRecette && !estCommandeStock) {
         await gererChoixRecette(phrase);
         return;
     }
@@ -1264,56 +1297,6 @@ async function traiterResultatVocal(e) {
 
     faireParlerIA("Je n'ai pas compris. Tu peux me demander de supprimer un produit, d'appeler le chef, ou d'ajouter quelque chose au frigo.");
 }
-// Categories d'aliments reconnus dans le stock
-const CATEGORIES_REPAS = {
-    proteines: [
-        { mots: ['steak hache', 'steak', 'hache'], nom: 'steak haché' },
-        { mots: ['cordon bleu', 'cordon'], nom: 'cordon bleu' },
-        { mots: ['escalope'], nom: 'escalope de poulet' },
-        { mots: ['poulet', 'cuisse de poulet'], nom: 'poulet' },
-        { mots: ['dinde'], nom: 'dinde' },
-        { mots: ['nugget'], nom: 'nuggets' },
-        { mots: ['colin', 'poisson pane', 'pane'], nom: 'poisson pané' },
-        { mots: ['saumon'], nom: 'saumon' },
-        { mots: ['cabillaud'], nom: 'cabillaud' },
-        { mots: ['saucisse', 'knacki'], nom: 'saucisses' },
-        { mots: ['merguez'], nom: 'merguez' },
-        { mots: ['chipolata'], nom: 'chipolatas' },
-        { mots: ['brochette'], nom: 'brochettes' },
-        { mots: ['jambon'], nom: 'jambon' },
-        { mots: ['lardon'], nom: 'lardons' },
-        { mots: ['oeuf'], nom: 'oeufs' },
-        { mots: ['boulette'], nom: 'boulettes' },
-        { mots: ['cote de porc', 'porc'], nom: 'côte de porc' }
-    ],
-    feculents: [
-        { mots: ['frite'], nom: 'frites' },
-        { mots: ['puree', 'pomme de terre'], nom: 'purée' },
-        { mots: ['riz'], nom: 'riz' },
-        { mots: ['coquillette'], nom: 'coquillettes' },
-        { mots: ['pate', 'spaghetti', 'torsade', 'penne'], nom: 'pâtes' },
-        { mots: ['dauphin'], nom: 'pommes dauphines' },
-        { mots: ['rosti'], nom: 'röstis' },
-        { mots: ['semoule', 'couscous'], nom: 'semoule' },
-        { mots: ['quinoa'], nom: 'quinoa' },
-        { mots: ['lentille'], nom: 'lentilles' }
-    ],
-    legumes: [
-        { mots: ['haricot vert'], nom: 'haricots verts' },
-        { mots: ['petits pois', 'petit pois'], nom: 'petits pois carottes' },
-        { mots: ['carotte'], nom: 'carottes' },
-        { mots: ['brocoli'], nom: 'brocolis' },
-        { mots: ['courgette'], nom: 'courgettes' },
-        { mots: ['epinard'], nom: 'épinards' },
-        { mots: ['poele', 'legume'], nom: 'poêlée de légumes' },
-        { mots: ['ratatouille'], nom: 'ratatouille' },
-        { mots: ['salade'], nom: 'salade verte' },
-        { mots: ['chou fleur', 'chou-fleur'], nom: 'chou-fleur' },
-        { mots: ['salsifi'], nom: 'salsifis' },
-        { mots: ['poivron'], nom: 'poivrons' },
-        { mots: ['champignon'], nom: 'champignons' }
-    ]
-};
 // Historique de la conversation en cours
 let conversationChef = [];
 let contexteStock = null;
@@ -1333,122 +1316,6 @@ function chefRaccourci(mode) {
     };
     document.getElementById('chef-message').value = phrases[mode] || phrases.quotidien;
     envoyerMessageChef(mode);
-}
-
-
-function construirePromptAgent(message, idees, contexte, mode, platNomme) {
-
-    const nbTotal = idees.combinaisons.length
-                  + idees.realisables.length
-                  + idees.presque.length;
-
-    let sections = '';
-
-    // ── LE PLAT DEMANDE EXPLICITEMENT ──
-    if (platNomme) {
-        sections += '\nPLAT QUE L UTILISATEUR SEMBLE DEMANDER :\n'
-            + '- ' + platNomme.nom + ' (' + platNomme.temps + ' min)\n'
-            + '  Ingrédients nécessaires : ' + platNomme.ingredients.join(', ') + '\n'
-            + (platNomme.realisable
-                ? '  ÉTAT : tu as TOUT ce qu il faut.\n'
-                : '  ÉTAT : il MANQUE — ' + platNomme.manquants.join(', ') + '\n');
-    }
-
-    if (idees.combinaisons.length > 0) {
-        sections += '\nASSIETTES SIMPLES (tu as tout) :\n'
-            + idees.combinaisons.map(function(c) { return '- ' + c.nom; }).join('\n') + '\n';
-    }
-
-    if (idees.realisables.length > 0) {
-        sections += '\nPLATS RÉALISABLES (tu as tous les ingrédients) :\n'
-            + idees.realisables.map(function(r) {
-                const urgent = r.produitUrgent ? ' [permet de finir : ' + r.produitUrgent + ']' : '';
-                return '- ' + r.nom + ' (' + r.temps + ' min)' + urgent;
-              }).join('\n') + '\n';
-    }
-
-    if (idees.presque.length > 0) {
-        sections += '\nNON RÉALISABLES — il manque un ingrédient :\n'
-            + idees.presque.map(function(r) {
-                return '- ' + r.nom + ' — MANQUE : ' + r.manquants.join(', ');
-              }).join('\n') + '\n';
-    }
-
-    let historique = '';
-    let interdits = '';
-    if (conversationChef.length > 0) {
-        historique = '\nCONVERSATION EN COURS :\n'
-            + conversationChef.map(function(c) {
-                return (c.role === 'moi' ? 'Utilisateur : ' : 'Toi : ') + c.texte;
-              }).join('\n') + '\n';
-
-        interdits = `\nTu as déjà proposé des plats dans cette conversation.
-Si l'utilisateur demande autre chose, propose des plats DIFFÉRENTS.
-Ne répète jamais une proposition précédente, même reformulée.\n`;
-    }
-
-    const consigneNombre = nbTotal >= 3
-        ? 'Propose 3 idées différentes.'
-        : (nbTotal === 2
-            ? 'Tu n as que 2 idées possibles : propose-les et dis qu il n y a pas plus de choix.'
-            : 'Tu n as qu une seule idée possible : propose-la et dis que c est la seule option.');
-
-    // Consigne specifique si un plat est demande
-    const consignePlat = platNomme
-        ? `\nPRIORITÉ ABSOLUE — L'utilisateur parle du plat "${platNomme.nom}".
-Ta réponse DOIT porter sur ce plat, pas sur autre chose.
-${platNomme.realisable
-    ? 'Il a tout ce qu il faut : confirme-lui et donne un conseil utile (accompagnement, astuce). Ne propose PAS d autres plats à la place.'
-    : 'Il lui manque : ' + platNomme.manquants.join(', ') + '. Dis-le clairement, puis propose soit de faire sans ou avec un remplacement, soit une alternative des listes.'}
-Si l'utilisateur exclut un ingrédient (par exemple "sans riz"), tiens-en compte :
-propose un autre accompagnement plutôt que de refuser le plat.\n`
-        : '';
-
-    return `Tu es le Chef, un assistant cuisine familier, direct et honnête.
-Tu connais exactement le contenu du frigo et des placards de l'utilisateur.
-
-STOCK DISPONIBLE (information interne, ne le récite pas) :
-${contexte.texte}
-
-CE QUE TU PEUX PROPOSER :
-${sections}
-${historique}${interdits}${consignePlat}
-DEMANDE DE L'UTILISATEUR : "${message}"
-
-COMMENT RÉPONDRE :
-
-Distingue le type de demande :
-- Une QUESTION sur le stock ("est-ce que j ai du poulet ?") : réponds
-  factuellement d'après le stock, sans forcément proposer de plats.
-- Une ANNONCE de décision ("je vais faire un chili") : accompagne-le,
-  confirme qu'il a ce qu'il faut ou dis ce qui manque. Ne propose pas
-  autre chose à la place.
-- Une DEMANDE D'IDÉES : propose des plats des listes.
-  ${consigneNombre}
-  Termine par "Lequel te tente ?"
-
-Ne propose JAMAIS deux fois le même plat dans une même réponse.
-
-NOMS DES PLATS — RÈGLE STRICTE :
-Le STOCK contient les noms bruts des tickets de caisse, laids et techniques.
-N'utilise JAMAIS ces noms dans ta réponse, même pour les desserts tout prêts.
-
-Mauvais : "Danette Liégeois chocolat", "Panes colin Alaska MSC"
-Correct : "une crème au chocolat", "du poisson pané"
-
-PRODUITS À FINIR :
-Certains plats portent la mention [permet de finir : nom du produit].
-Tu peux le signaler en nommant ce produit précis, et uniquement celui-là.
-Sans la mention, n'en parle pas.
-
-COHÉRENCE :
-Les plats en NON RÉALISABLES ne sont pas faisables : ne dis jamais qu'ils
-permettent de finir un produit.
-
-RÈGLES ABSOLUES :
-- Ne prétends jamais qu'un ingrédient est disponible s'il ne l'est pas.
-- Pas de markdown, pas de gras, pas d'astérisques.
-- Trois phrases maximum. Ton naturel, comme un pote qui cuisine bien.`;
 }
 
 
@@ -1472,6 +1339,114 @@ function ajouterBulleChef(texte, qui) {
     zone.scrollTop = zone.scrollHeight;
 }
 
+// ============================================================
+// VIGNETTES DES PLATS PROPOSÉS
+// Photo si la recette en a une (colonne image_url), sinon une
+// illustration : un pictogramme selon le plat, sur une couleur.
+// ============================================================
+const PICTOS_PAR_NOM = [
+    [/soupe|veloute|minestrone|potee|pot.au.feu|bourguignon|blanquette|navarin|goulash|mijot|ragout|daube|choucroute/, '🍲'],
+    [/curry|dahl|tajine|couscous|rougail|colombo/, '🍛'],
+    [/pizza/, '🍕'], [/burger/, '🍔'], [/hot.dog/, '🌭'],
+    [/tacos|fajita|wrap|burrito/, '🌯'],
+    [/quiche|tarte|tourte/, '🥧'],
+    [/salade|tabouleh|taboule|bowl/, '🥗'],
+    [/omelette|oeuf|shakshuka|frittata|tortilla/, '🍳'],
+    [/crepe|pancake|pain perdu/, '🥞'],
+    [/mousse|fondant|brownie|gateau|cookie|tiramisu|crumble|clafoutis|riz au lait|dessert/, '🍰'],
+    [/fruit|compote|pomme/, '🍎'],
+    [/risotto|paella|jambalaya|riz/, '🍚'],
+    [/pates|spaghetti|lasagne|nouille|gnocchi|coquillette|tagliatelle|carbonara|bolognaise/, '🍝'],
+    [/gratin|raclette|savoyard|croque/, '🧀']
+];
+const PICTOS_PAR_FAMILLE = {
+    'poulet': '🍗', 'dinde': '🍗', 'pane volaille': '🍗',
+    'boeuf': '🥩', 'agneau': '🍖', 'porc': '🥓', 'saucisse': '🌭',
+    'colin': '🐟', 'saumon': '🐟', 'thon': '🐟', 'maquereau': '🐟', 'sardine': '🐟',
+    'crevette': '🍤', 'oeuf': '🍳',
+    'lentille': '🫘', 'pois chiche': '🫘', 'haricot rouge': '🫘', 'flageolet': '🫘',
+    'pate': '🍝', 'riz': '🍚', 'pomme de terre': '🥔', 'frite': '🍟', 'pain': '🥪',
+    'chocolat': '🍫', 'fruit': '🍓', 'pomme': '🍎'
+};
+const COULEURS_VIGNETTE = [
+    ['#fbd38d', '#f6ad55'], ['#9ae6b4', '#68d391'], ['#feb2b2', '#fc8181'],
+    ['#bee3f8', '#90cdf4'], ['#e9d8fd', '#d6bcfa'], ['#fefcbf', '#faf089']
+];
+
+function pictoDuPlat(plat) {
+    const nom = sansAccentTitre(plat.nom);
+    for (let i = 0; i < PICTOS_PAR_NOM.length; i++) {
+        if (PICTOS_PAR_NOM[i][0].test(nom)) return PICTOS_PAR_NOM[i][1];
+    }
+    const familles = plat.familles || [];
+    for (let i = 0; i < familles.length; i++) {
+        if (PICTOS_PAR_FAMILLE[familles[i]]) return PICTOS_PAR_FAMILLE[familles[i]];
+    }
+    return '🍽️';
+}
+
+const URL_PHOTO_PLAT = 'https://mon-assistant-cuisine.laurent235.workers.dev/photo-plat';
+
+// Affiche une photo dans la vignette. Si Supabase sait réduire l'image
+// (offre payante), on charge une petite version ; sinon l'originale.
+function poserPhoto(v, url) {
+    if (!url || !/^https:\/\//.test(url)) return;
+    const img = document.createElement('img');
+    img.alt = '';
+    img.style.cssText = 'width:100%; height:100%; object-fit:cover;';
+    img.onload = function() { v.textContent = ''; v.appendChild(img); };
+
+    const petite = url.indexOf('/storage/v1/object/public/') !== -1
+        ? url.replace('/storage/v1/object/public/', '/storage/v1/render/image/public/')
+            + '?width=160&height=160&resize=cover'
+        : null;
+    if (petite) {
+        img.onerror = function() { img.onerror = null; img.src = url; };
+        img.src = petite;
+    } else {
+        img.src = url;
+    }
+}
+
+// Pas encore de photo pour cette recette : on la demande au Worker,
+// qui la crée une fois pour toutes. En attendant, l'illustration reste.
+async function demanderPhoto(v, plat) {
+    try {
+        const r = await fetch(URL_PHOTO_PLAT, {
+            method: 'POST',
+            headers: await entetesIA(),
+            body: JSON.stringify({ recette: plat.recette })
+        });
+        const data = await r.json();
+        if (data.image) {
+            plat.image = data.image;
+            poserPhoto(v, data.image);
+        } else if (data.error) {
+            console.log('📷 Pas de photo pour « ' + plat.recette + ' » : ' + data.error.message);
+        }
+    } catch (e) {
+        console.log('📷 Photo indisponible : ' + e.message);
+    }
+}
+
+function creerVignette(plat, i) {
+    const v = document.createElement('div');
+    v.style.cssText = 'flex:0 0 72px; width:72px; height:72px; border-radius:10px; overflow:hidden; '
+        + 'display:flex; align-items:center; justify-content:center; font-size:34px;';
+
+    // Même plat = même couleur, d'une fois sur l'autre
+    let h = 0;
+    for (const c of (plat.nom || '')) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+    const coul = COULEURS_VIGNETTE[h % COULEURS_VIGNETTE.length];
+    v.style.background = 'linear-gradient(135deg,' + coul[0] + ',' + coul[1] + ')';
+    v.textContent = pictoDuPlat(plat);
+
+    if (plat.image) poserPhoto(v, plat.image);
+    else if (plat.recette) demanderPhoto(v, plat);
+
+    return v;
+}
+
 function afficherBoutonsChoix(plats, mode) {
     if (!plats || plats.length === 0) return;
 
@@ -1480,22 +1455,49 @@ function afficherBoutonsChoix(plats, mode) {
     const rangs = ['premier plat', 'deuxième plat', 'troisième plat'];
 
     const conteneur = document.createElement('div');
-    conteneur.style.cssText = 'display:flex; flex-direction:column; gap:6px; margin:0 0 14px 0;';
+    conteneur.style.cssText = 'display:flex; flex-direction:column; gap:8px; margin:0 0 14px 0;';
 
-    let html = '';
     plats.forEach(function(plat, i) {
         const couleur = couleurs[i] || '#718096';
-        const nom = (plat.nom || '').replace(/'/g, "\\'");
 
-        html += '<button onclick="choisirEtRedigerRecette(\'' + mode + '\', \'' + rangs[i] + '\')" '
-             + 'style="width:100%; text-align:left; background:white; color:' + couleur + '; '
-             + 'border:2px solid ' + couleur + '; border-radius:10px; padding:11px 13px; '
-             + 'cursor:pointer; font-weight:bold; font-size:13px; line-height:1.3;">'
-             + '🍽️ ' + plat.nom
-             + '</button>';
+        const carte = document.createElement('button');
+        carte.style.cssText = 'width:100%; display:flex; align-items:center; gap:12px; text-align:left; '
+            + 'background:white; border:2px solid ' + couleur + '; border-radius:12px; padding:8px; '
+            + 'cursor:pointer; box-shadow:0 1px 4px rgba(0,0,0,0.06);';
+        carte.onclick = function() { choisirEtRedigerRecette(mode, rangs[i]); };
+
+        carte.appendChild(creerVignette(plat, i));
+
+        const texte = document.createElement('div');
+        texte.style.cssText = 'flex:1; min-width:0;';
+
+        const titre = document.createElement('div');
+        titre.style.cssText = 'font-weight:bold; font-size:14px; line-height:1.3; color:' + couleur + ';';
+        titre.textContent = plat.nom || '';
+        texte.appendChild(titre);
+
+        const infos = [];
+        if (plat.temps) infos.push('⏱️ ' + plat.temps + ' min');
+        if (plat.cookeo) infos.push('🍲 Cookeo');
+        if (infos.length) {
+            const ligne = document.createElement('div');
+            ligne.style.cssText = 'font-size:12px; color:#4a5568; margin-top:3px;';
+            ligne.textContent = infos.join('  ·  ');
+            texte.appendChild(ligne);
+        }
+
+        if (plat.ingredients && plat.ingredients.length) {
+            const ingr = document.createElement('div');
+            ingr.style.cssText = 'font-size:11px; color:#a0aec0; margin-top:3px; '
+                + 'white-space:nowrap; overflow:hidden; text-overflow:ellipsis;';
+            ingr.textContent = plat.ingredients.join(', ');
+            texte.appendChild(ingr);
+        }
+
+        carte.appendChild(texte);
+        conteneur.appendChild(carte);
     });
 
-    conteneur.innerHTML = html;
     zone.appendChild(conteneur);
     zone.scrollTop = zone.scrollHeight;
 }
@@ -1514,94 +1516,8 @@ function detecterModeMessage(message) {
 
     return 'quotidien';
 }
-// ============================================================
-// SYNONYMES D'INGREDIENTS
-// Declares au niveau global pour etre reutilisables
-// ============================================================
-const SYNONYMES_INGREDIENTS = {
-    'pate':         ['pate', 'pates', 'spaghetti', 'coquillette', 'macaroni', 'tagliatelle', 'torsade', 'penne', 'vermicelle'],
-    'riz':          ['riz', 'basmati', 'risotto'],
-    'viande':       ['steak', 'hache', 'boeuf', 'viande'],
-    'steak hache':  ['steak', 'hache'],
-    'poulet':       ['poulet', 'filet', 'cuisse'],
-    'dinde':        ['dinde', 'escalope'],
-    'poisson':      ['colin', 'saumon', 'thon', 'poisson', 'baton', 'cabillaud', 'maquereau'],
-    'colin':        ['colin', 'poisson', 'baton'],
-    'pomme de terre': ['pomme de terre', 'puree', 'dauphin', 'rosti'],
-    'frite':        ['frite'],
-    'cordon bleu':  ['cordon'],
-    'lardon':       ['lardon', 'bacon', 'poitrine'],
-    'oeuf':         ['oeuf'],
-    'fromage':      ['fromage', 'emmental', 'gruyere', 'rape', 'comte'],
-    'creme':        ['creme'],
-    'jambon':       ['jambon'],
-    'saucisse':     ['saucisse', 'knacki', 'chipolata', 'merguez'],
-    'haricot vert': ['haricot vert', 'haricots verts'],
-    'petits pois':  ['petits pois', 'petit pois'],
-    'tomate':       ['tomate', 'coulis', 'concasse'],
-    'legume':       ['legume', 'poelee', 'julienne'],
-    'champignon':   ['champignon'],
-    'carotte':      ['carotte'],
-    'courgette':    ['courgette'],
-    'brocoli':      ['brocoli'],
-    'salade':       ['salade', 'laitue', 'batavia'],
-    'pain de mie':  ['pain de mie', 'mie'],
-    'lentille':     ['lentille'],
-    'chocolat':     ['chocolat'],
-    'yaourt':       ['yaourt']
-};
 
-function detecterIngredientExclu(message) {
-    const msg = message.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    const exclusions = [];
 
-    const regex = /\b(sans|pas de|pas d|aucun)\s+([a-z]+)/g;
-    let m;
-    while ((m = regex.exec(msg)) !== null) {
-        const mot = m[2];
-        for (const cle in SYNONYMES_INGREDIENTS) {
-            if (SYNONYMES_INGREDIENTS[cle].some(function(s) { return s.indexOf(mot) === 0; })) {
-                exclusions.push(cle);
-            }
-        }
-    }
-
-    return exclusions;
-}
-
-// ============================================================
-// DETECTER UN INGREDIENT IMPOSE DANS LA DEMANDE
-// Cherche des tournures explicites, pas juste la presence du mot
-// ============================================================
-function detecterIngredientForce(message) {
-    const msg = message.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-
-    // Si la phrase exclut, on ne force pas
-    if (/\b(sans|pas de|pas d|aucun|eviter)\b/.test(msg)) return null;
-
-    // Tournures qui indiquent une envie precise
-    const marqueurs = /\b(avec|envie de|envie d|je veux|plutot|a base de|du|de la|des)\s+/;
-    if (!marqueurs.test(msg)) return null;
-
-    for (const cle in SYNONYMES_INGREDIENTS) {
-        const mots = SYNONYMES_INGREDIENTS[cle];
-        const trouve = mots.some(function(m) {
-            return new RegExp('\\b' + m).test(msg);
-        });
-        if (trouve) return cle;
-    }
-
-    return null;
-}
-// ============================================================
-// TESTER SI UN INGREDIENT EST PRESENT DANS LE STOCK
-// ============================================================
-function matchIngredient(ingRecherche, stockNoms) {
-    const motsCles = SYNONYMES_INGREDIENTS[ingRecherche] || [ingRecherche];
-    return stockNoms.some(function(stockItem) {
-        return motsCles.some(function(m) { return stockItem.indexOf(m) !== -1; });
-    });
-}
 // ============================================================
 // REINITIALISER LA CONVERSATION
 // ============================================================
@@ -1615,6 +1531,9 @@ function reinitialiserChef() {
     window.platsDejaProposes = [];
     window.produitsRecents = [];
     window.signaturesSorties = [];
+    window.assiettesServies = [];
+    window.platsProposes = [];
+    window.attenteChoixRecette = false;
 }
  
 function sansAccentTitre(s) {
@@ -1703,7 +1622,15 @@ async function choisirEtRedigerRecette(mode, choix) {
         const contextesModes = {
             quotidien: 'Rapide, moins de 25 minutes, un soir de semaine.',
             weekend:   'Tu as le temps : cuisson lente, gratin, mijoté.',
-            cookeo:    'Au Cookeo : tout dans la cuve, une seule cuisson.',
+            cookeo:    `RECETTE AU COOKEO (multicuiseur sous pression). Tout se fait dans la cuve, aucune autre casserole.
+Pour chaque étape, indique le programme et le temps :
+- "Dorer", couvercle ouvert, pour saisir la viande et faire revenir les oignons ;
+- "Cuisson sous pression", couvercle fermé, avec un temps précis en minutes ;
+- puis "Mijoter" couvercle ouvert si la sauce doit réduire, ou "Maintien au chaud".
+Il faut toujours assez de liquide dans la cuve pour la cuisson sous pression (eau, bouillon, sauce) : indique la quantité en ml.
+Les pâtes et le riz cuisent directement dans la cuve avec leur liquide.
+Les temps sous pression sont bien plus courts qu'à la casserole : adapte-les.
+Avant d'ouvrir, rappelle de laisser la vapeur s'échapper complètement.`,
             healthy:   'Cuisson douce, peu de matière grasse.',
             monde:     'Donne-lui une tournure d\'une autre cuisine.',
             antigaspi: 'On finit ce qui doit être mangé.',
@@ -1721,7 +1648,7 @@ ${listeProduits}
 RÈGLES :
 
 1. La recette utilise CES produits, et uniquement eux.
-   Tu peux ajouter librement : sel, poivre, eau, huile, vinaigre,
+   Tu peux ajouter librement : sel, poivre, sucre, eau, huile, vinaigre,
    beurre, épices et herbes sèches. RIEN D'AUTRE.
    Pas d'échalote, pas de crème, pas de persil frais, pas de
    bouillon cube s'ils ne sont pas dans la liste ci-dessus.
@@ -1844,8 +1771,8 @@ function plafondRaisonnable(produit) {
         // ── AFFICHAGE ──
         const listeIngredients = ingredientsStock
             .map(function(i) {
-                return '<li style="font-size:12px; color:#4a5568;">' + i.nom
-                     + ' <b>×' + i.quantite_utilisee + '</b></li>';
+                return '<li style="font-size:12px; color:#4a5568;">' + echapper(i.nom)
+                     + ' <b>×' + echapper(i.quantite_utilisee) + '</b></li>';
             })
             .join('');
 
@@ -1855,10 +1782,10 @@ function plafondRaisonnable(produit) {
             '<div style="max-width:95%; background:#f1f5f9; border-radius:14px; border-bottom-left-radius:4px; padding:14px;">'
 
             + '<b style="color:#ff9800; font-size:15px; display:block; margin-bottom:10px;">🍽️ '
-            + (recette.titre || plat.nom) + '</b>'
+            + echapper(recette.titre || plat.nom) + '</b>'
 
             + '<p style="white-space:pre-wrap; font-size:13px; color:#2d3748; margin:0 0 12px 0; line-height:1.6;">'
-            + recette.contenu + '</p>'
+            + echapper(recette.contenu) + '</p>'
 
             + (listeIngredients
                 ? '<div style="background:#f0fff4; border:1px solid #c6f6d5; border-radius:10px; padding:10px; margin-bottom:12px;">'
@@ -1933,6 +1860,7 @@ ${window.historiqueChef.length ? `\nÉVITE : ${window.historiqueChef.slice(-5).j
         if (window.historiqueChef.length > 10) window.historiqueChef.shift();
 
         window.dernieresPropositions = idees;
+        window.platsProposes = [];   // ces idées-là viennent de la voix, pas des cartes du Chef
         window.attenteChoixRecette = true;
         faireParlerIA(idees);
     } catch (err) {
@@ -1940,161 +1868,167 @@ ${window.historiqueChef.length ? `\nÉVITE : ${window.historiqueChef.slice(-5).j
     }
 }
 
-async function demanderAuChef(message, contexte, mode, inspirations, index, statut) {
-    const prompt = construirePromptLibre(message, contexte, mode, inspirations);
- 
-    let brut = null;
-    let tentatives = 0;
-    while (!brut && tentatives < 3) {
-        try {
-            brut = await appelGemini({
-                contents: [{ parts: [{ text: prompt }] }],
-                generationConfig: { temperature: 0.9 }
-            });
-        } catch(e) {
-            tentatives++;
-            if (tentatives < 3) {
-                if (statut) statut.innerText = `⏳ Réessai ${tentatives}/3...`;
-                await new Promise(r => setTimeout(r, 2500));
-            } else {
-                throw e;
-            }
-        }
-    }
- 
-    return extraireReponseChef(brut, index);
-}
  
  
-// ============================================================
-// DETECTER QUE LE CHEF SE REPETE MOT POUR MOT
-// ============================================================
-function estRepetitionChef(message) {
-    if (!message) return false;
- 
-    const normaliser = function(t) {
-        return (t || '')
-            .toLowerCase()
-            .normalize('NFD')
-            .replace(/[̀-ͯ]/g, '')
-            .replace(/[^a-z0-9 ]/g, '')
-            .replace(/\s+/g, ' ')
-            .trim();
-    };
- 
-    const actuel = normaliser(message);
-    if (actuel.length < 30) return false;
- 
-    // On compare aux deux dernieres reponses du Chef
-    const precedentes = conversationChef
-        .filter(function(c) { return c.role === 'chef'; })
-        .slice(-2)
-        .map(function(c) { return normaliser(c.texte); });
- 
-    return precedentes.some(function(p) {
-        if (!p) return false;
-        // Identique, ou l'un contenu dans l'autre
-        return p === actuel || p.includes(actuel) || actuel.includes(p);
-    });
-}
  
  
 async function gererChoixRecette(phrase) {
     const statut = document.getElementById('statut-vocal');
+    const p = sansAccentTitre(phrase);
+    const plats = window.platsProposes || [];
+    const refus = /\b(autre|autres|aucun|bof|non|pas ca)\b/.test(p);
 
-    // Refus
-    if (phrase.includes("autre") || phrase.includes("aucun") || phrase.includes("bof") ||
-        phrase.includes("non") || phrase.includes("pas ça") || phrase.includes("autre chose")) {
-        if (statut) statut.innerText = "🤔 Le Chef cherche de nouvelles idées...";
+    // ── CAS 1 : le Chef a affiché des cartes (propositions écrites) ──
+    if (plats.length > 0) {
+        if (refus) {
+            document.getElementById('chef-message').value = 'Propose-moi autre chose';
+            await envoyerMessageChef(window.modeChefActuel);
+            return;
+        }
 
-        const { data: produits } = await monSupabase
-            .from('inventaire2')
-            .select('nom')
-            .eq('proprietaire', utilisateurActuel)
-            .neq('etat', 'Vide');
+        let rang = -1;
+        if (/premi|1er/.test(p)) rang = 0;
+        else if (/deuxi|second/.test(p)) rang = 1;
+        else if (/troisi/.test(p)) rang = 2;
 
-        const liste = produits?.map(p => p.nom).join(', ') || "";
+        // Sinon, on cherche le plat dont le nom ressemble le plus à la phrase
+        if (rang === -1) {
+            let meilleur = 0;
+            plats.forEach(function(plat, i) {
+                const mots = sansAccentTitre(plat.nom).split(/[^a-z]+/)
+                    .filter(function(m) { return m.length >= 4; });
+                const score = mots.filter(function(m) { return p.indexOf(m) !== -1; }).length;
+                if (score > meilleur) { meilleur = score; rang = i; }
+            });
+        }
+        if (rang === -1 && plats.length === 1) rang = 0;
 
-        const promptNouvellesIdees = `Tu es un Chef cuisinier. L'utilisateur n'a pas aimé tes idées.
-STOCK : ${liste}
-DÉJÀ PROPOSÉ À ÉVITER : ${window.dernieresPropositions}
-Propose 3 NOUVELLES idées TOTALEMENT DIFFÉRENTES.
-Juste les noms en une phrase naturelle.
-Termine par : "Lequel te tente cette fois ?"`;
+        if (rang === -1 || !plats[rang]) {
+            faireParlerIA("Je n'ai pas compris lequel. Dis-moi le premier, le deuxième ou le troisième.");
+            return;
+        }
 
-        const reponseChef = await appelGemini(promptNouvellesIdees);
-        window.dernieresPropositions = reponseChef;
-        faireParlerIA(reponseChef);
+        const rangs = ['premier plat', 'deuxième plat', 'troisième plat'];
+        await choisirEtRedigerRecette(window.modeChefActuel || 'quotidien', rangs[rang]);
         return;
     }
 
-    // Choix validé → rédiger la recette
-    if (statut) statut.innerText = "✍️ Le Chef rédige la recette...";
-
+    // ── CAS 2 : propositions faites à la voix ──
     try {
-       const promptChef = `Tu es un assistant cuisine pour la vie de tous les jours — PAS un chef gastronomique.
-DEMANDE : "${phrase}"
+        const { data: produits } = await monSupabase
+            .from('inventaire2')
+            .select('nom, quantite')
+            .eq('proprietaire', utilisateurActuel)
+            .gt('quantite', 0)
+            .neq('etat', 'Vide');
+
+        const liste = (produits || []).map(function(x) { return x.nom; }).join(', ');
+
+        if (refus) {
+            if (statut) statut.innerText = "🤔 Le Chef cherche de nouvelles idées...";
+
+            const reponseChef = await appelGemini(`Tu es un assistant cuisine du quotidien. L'utilisateur n'a pas aimé tes idées.
 STOCK : ${liste}
+DÉJÀ PROPOSÉ, À ÉVITER : ${window.dernieresPropositions}
 
-RÈGLES STRICTES :
-1. Propose UNIQUEMENT des plats réalisables avec le stock.
-2. Invisibles autorisés : eau, sel, poivre, huile, beurre. Rien d'autre.
-3. Plats SIMPLES et RAPIDES (moins de 20 min).
-4. Noms simples du quotidien : "pâtes au fromage", "riz aux lardons". PAS de noms gastro.
-5. Ne donne PAS la recette, juste 3 noms de plats.
-6. Priorise les produits du FRIGO.
-${window.historiqueChef?.length ? `\nÉVITE : ${window.historiqueChef.slice(-5).join(', ')}` : ''}
+Propose 3 NOUVELLES idées différentes, simples et rapides, réalisables avec le stock.
+Noms simples du quotidien uniquement, en une phrase naturelle.
+Termine par : "Lequel te tente cette fois ?"`);
 
-FORMAT : Une phrase naturelle avec 3 noms courts. Termine par "Lequel te tente ?"`;
+            window.dernieresPropositions = reponseChef;
+            faireParlerIA(reponseChef);
+            return;
+        }
 
-        const resultatBrut = await appelGemini(promptRecette);
-        const jsonStr = resultatBrut.substring(resultatBrut.indexOf('['), resultatBrut.lastIndexOf(']') + 1);
-        recettesTemporaires = JSON.parse(jsonStr);
+        if (statut) statut.innerText = "✍️ Le Chef rédige la recette...";
+
+        const brut = await appelGemini(`Tu écris une recette simple pour 4 personnes.
+
+TU AVAIS PROPOSÉ : ${window.dernieresPropositions}
+L'UTILISATEUR A RÉPONDU : "${phrase}"
+STOCK DISPONIBLE : ${liste}
+
+Écris la recette du plat qu'il a choisi, uniquement avec des produits du stock.
+Tu peux ajouter : sel, poivre, sucre, eau, huile, vinaigre, beurre, épices sèches. Rien d'autre.
+Étapes numérotées, concrètes, avec les temps de cuisson.
+
+RÉPONDS UNIQUEMENT EN JSON valide, sans markdown ni backticks :
+{ "titre": "Nom du plat", "contenu": "Ingrédients:\\n- …\\n\\nÉtapes:\\n1. …" }`);
+
+        const propre = brut.replace(/```json/g, '').replace(/```/g, '').trim();
+        const recette = JSON.parse(propre.substring(propre.indexOf('{'), propre.lastIndexOf('}') + 1));
+        if (!recette.titre || !recette.contenu) throw new Error('Recette incomplète');
+
+        recettesTemporaires = [recette];
 
         const zone = document.getElementById('zone-recette');
         if (zone) {
-            zone.innerHTML = recettesTemporaires.map((r, i) => `
-                <div style="background:white; padding:12px; border-radius:12px; border:1px solid #ddd; margin-bottom:10px;">
-                    <b style="color:var(--chef); font-size:16px;">${r.titre}</b>
-                    <p style="white-space:pre-wrap; font-size:13px; color:#555; margin:10px 0;">${r.contenu}</p>
-                    <button onclick="sauverRecetteDirect(${i})" class="btn btn-mur">💾 SAUVER DANS LE GRIMOIRE</button>
-                </div>`).join('');
-            zone.style.display = "block";
+            zone.innerHTML = '';
+            const carte = document.createElement('div');
+            carte.style.cssText = 'background:white; padding:12px; border-radius:12px; border:1px solid #ddd;';
+
+            const titre = document.createElement('b');
+            titre.style.cssText = 'color:var(--chef); font-size:16px;';
+            titre.textContent = recette.titre;
+
+            const texte = document.createElement('p');
+            texte.style.cssText = 'white-space:pre-wrap; font-size:13px; color:#555; margin:10px 0;';
+            texte.textContent = recette.contenu;
+
+            const bouton = document.createElement('button');
+            bouton.className = 'btn btn-mur';
+            bouton.textContent = '💾 SAUVER DANS LE GRIMOIRE';
+            bouton.onclick = function() { sauverRecetteDirect(0); };
+
+            carte.appendChild(titre);
+            carte.appendChild(texte);
+            carte.appendChild(bouton);
+            zone.appendChild(carte);
+            zone.style.display = 'block';
+            zone.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
 
         window.attenteChoixRecette = false;
-        if (!document.getElementById('mode-silencieux')?.checked) {
-    faireParlerIA("C'est prêt ! Je t'ai affiché la recette.");
-}
+        if (statut) statut.innerText = '';
+        faireParlerIA("C'est prêt ! Je t'ai affiché la recette.");
 
     } catch (err) {
         console.error("Erreur recette :", err);
-        faireParlerIA("Mince, j'ai eu un souci pour la recette. Réessaie.");
+        window.attenteChoixRecette = false;
+        if (statut) statut.innerText = '';
+        faireParlerIA("Mince, j'ai eu un souci pour la recette. Redemande-moi.");
     }
 }
 
 async function gererChoixProduit(phrase) {
+    const possibles = window.produitsPossibles || [];
+
     try {
-        const promptNouvellesIdees = `Tu es un assistant cuisine du quotidien. L'utilisateur n'a pas aimé tes idées.
-STOCK : ${liste}
-DÉJÀ PROPOSÉ À ÉVITER ABSOLUMENT : ${window.dernieresPropositions}
+        const liste = possibles
+            .map(function(x) { return 'ID:' + x.id + ' | ' + x.nom; })
+            .join('\n');
 
-Propose 3 NOUVELLES idées TOTALEMENT DIFFÉRENTES, simples et rapides.
-Noms simples du quotidien uniquement.
-Une phrase naturelle. Termine par : "Lequel te tente cette fois ?"`;
+        const textID = await appelGemini(`L'utilisateur doit choisir UN produit dans cette liste :
+${liste}
 
-        const textID = await appelGemini(promptAffinement);
-        const idTrouve = parseInt(textID.trim().replace(/[^0-9]/g, ''));
+Il a répondu : "${phrase}"
 
-        if (idTrouve > 0) {
-            const p = window.produitsPossibles.find(x => x.id === idTrouve);
-            if (p && p.proprietaire === utilisateurActuel) {
-                window.attenteChoixProduit = false;
-                await executerLogiqueSuppression(p);
-            }
+Réponds UNIQUEMENT avec le nombre (l'ID) du produit qu'il désigne.
+Si ce n'est pas clair, réponds 0.`);
+
+        const idTrouve = parseInt(String(textID).trim().replace(/[^0-9]/g, ''));
+        const p = possibles.find(function(x) { return x.id === idTrouve; });
+
+        if (p && p.proprietaire === utilisateurActuel) {
+            window.attenteChoixProduit = false;
+            await executerLogiqueSuppression(p);
+        } else {
+            faireParlerIA("Je n'ai pas compris lequel. Redis-moi son nom, ou dis annule.");
         }
     } catch (err) {
-        console.error("Erreur affinement produit :", err);
+        console.error("Erreur choix produit :", err);
+        window.attenteChoixProduit = false;
+        faireParlerIA("J'ai eu un souci. Réessaie.");
     }
 }
 
@@ -2396,9 +2330,9 @@ async function chargerTout() {
         if (item.etat === 'Vide') {
             if (sl) sl.innerHTML += `
                 <div class="item" style="background:#fff5f5; border:1px solid #fed7d7;">
-                    <span style="font-weight:600; color:#c53030;">🛒 ${item.nom}</span>
+                    <span style="font-weight:600; color:#c53030;">🛒 ${echapper(item.nom)}</span>
                     <div style="display:flex; gap:8px; align-items:center;">
-                        <button onclick="copierNom('${item.nom.replace(/'/g, "\\'")}', this)"
+                        <button data-nom="${echapper(item.nom)}" onclick="copierNom(this.dataset.nom, this)"
                                 style="background:#4a5568; color:white; border:none; border-radius:6px; padding:6px 12px; cursor:pointer; font-size:12px;">Copier</button>
                         <button onclick="supprimerDefinitif(${item.id})"
                                 style="background:none; border:none; color:#9b2c2c; cursor:pointer; font-size:18px;">🗑️</button>
@@ -2417,7 +2351,7 @@ async function chargerTout() {
                 lt.innerHTML += `
                     <div class="item" style="border-left:6px solid ${couleur};">
                         <div>
-                            <b>🍱 ${item.nom}</b><br>
+                            <b>🍱 ${echapper(item.nom)}</b><br>
                             <small style="color:gray;">Il y a ${joursPasses} jour(s)</small>
                         </div>
                         <div style="display:flex; align-items:center; gap:8px;">
@@ -2470,9 +2404,9 @@ async function chargerTout() {
                     <div style="display:flex; align-items:center; gap:5px; margin-top:2px;">
                         <span>${icone}</span>
                         <small style="font-size:10px; color:${couleurTexte}; ${styleGras}">
-                            Exp: ${prefixe}${item.date_peremption}${suffixe}
+                            Exp: ${prefixe}${echapper(item.date_peremption)}${suffixe}
                         </small>
-                        <button onclick="prolongerDate(${item.id}, '${item.date_peremption}')"
+                        <button data-date="${echapper(item.date_peremption)}" onclick="prolongerDate(${item.id}, this.dataset.date)"
                                 style="font-size:9px; background:#edf2f7; border:1px solid #cbd5e0; border-radius:3px; padding:0 4px; cursor:pointer;">+2j</button>
                     </div>`;
             }
@@ -2491,21 +2425,21 @@ async function chargerTout() {
                style="width:18px; height:18px; cursor:pointer; margin-right:8px; flex-shrink:0;">
 
         <div style="flex:1;">
-            <b style="color:${couleurEtat};">${item.nom}</b>
+            <b style="color:${couleurEtat};">${echapper(item.nom)}</b>
             ${alerteHtml}
             <div style="display:flex; align-items:center; gap:8px; margin-top:4px;">
                 <select onchange="changerEmplacement(${item.id}, this.value)"
                         style="font-size:10px; border:1px solid #ddd; border-radius:4px; background:#f7fafc; color:#4a5568; cursor:pointer; padding:2px;">
                     ${optionsHtml}
                 </select>
-                <small style="cursor:pointer; color:gray;" onclick="basculerEtat(${item.id}, '${item.etat}')">${labelEtat}</small>
+                <small style="cursor:pointer; color:gray;" data-etat="${echapper(item.etat)}" onclick="basculerEtat(${item.id}, this.dataset.etat)">${labelEtat}</small>
             </div>
         </div>
         <div style="display:flex; align-items:center; gap:5px;">
-            <button class="qte-btn" onclick="modifierQuantite(${item.id}, ${item.quantite}, -1)">−</button>
-            <b style="width:28px; text-align:center;">${item.quantite}</b>
-            <button class="qte-btn" onclick="modifierQuantite(${item.id}, ${item.quantite}, 1)">+</button>
-            <button onclick="basculerEtat(${item.id}, '${item.etat}')"
+            <button class="qte-btn" onclick="modifierQuantite(${item.id}, ${parseInt(item.quantite) || 0}, -1)">−</button>
+            <b style="width:28px; text-align:center;">${echapper(item.quantite)}</b>
+            <button class="qte-btn" onclick="modifierQuantite(${item.id}, ${parseInt(item.quantite) || 0}, 1)">+</button>
+            <button data-etat="${echapper(item.etat)}" onclick="basculerEtat(${item.id}, this.dataset.etat)"
                     style="background:none; border:none; font-size:20px; cursor:pointer;">
                 ${item.etat === 'Entamé' ? '🍴' : '🍽️'}
             </button>
@@ -2584,6 +2518,7 @@ Réponds UNIQUEMENT le nom simplifié en minuscules, sans ponctuation.`
         if (error) { alert("Erreur : " + error.message); return; }
     }
  
+    classerEnArrierePlan();
     document.getElementById('add-nom').value = "";
     document.getElementById('add-qte').value = "1";
     await chargerTout();
@@ -2846,8 +2781,8 @@ function afficherGrimoire(recettes) {
             <button onclick="supprimerRecette(${r.id})"
                     style="position:absolute; top:10px; right:10px; background:#ea4335; color:white; border:none; border-radius:5px; cursor:pointer; padding:5px 10px; font-size:11px;">🗑️</button>
             <div style="padding-right:50px;">
-                <b style="color:var(--chef); display:block; margin-bottom:5px;">${r.titre}</b>
-                <p style="font-size:12px; margin:0; white-space:pre-wrap; color:#555;">${r.contenu}</p>
+                <b style="color:var(--chef); display:block; margin-bottom:5px;">${echapper(r.titre)}</b>
+                <p style="font-size:12px; margin:0; white-space:pre-wrap; color:#555;">${echapper(r.contenu)}</p>
             </div>
         </div>`).join('');
 }
@@ -2902,10 +2837,10 @@ function genererCasePlanning(data, jour, moment) {
     const id = repas ? repas.id : '';
 
     return `
-        <div onclick="ouvrirModal('${jour}', '${moment}', '${id}', '${repas ? repas.plat.replace(/'/g, "\\'") : ''}')"
+        <div data-plat="${echapper(repas ? repas.plat : '')}" onclick="ouvrirModal('${jour}', '${moment}', '${echapper(id)}', this.dataset.plat)"
              style="flex:1; background:${bg}; padding:12px 5px; border-radius:8px; text-align:center; cursor:pointer; border:1px dashed #cbd5e0;">
             <b style="font-size:11px; color:#718096; text-transform:uppercase;">${moment}</b><br>
-            <span style="font-size:13px; font-weight:bold; color:${couleur}; display:block; margin-top:4px;">${texte}</span>
+            <span style="font-size:13px; font-weight:bold; color:${couleur}; display:block; margin-top:4px;">${echapper(texte)}</span>
         </div>`;
 }
 
@@ -2978,109 +2913,12 @@ function remplirSuggestions() {
     });
 }
 
-let scannerCodeReader = null;
-let streamActif = null;
-let scanEnCours = false;
 
-async function ouvrirScannerPoubelle() {
-    if (!utilisateurActuel) {
-        utilisateurActuel = localStorage.getItem('monFrigo_User');
-    }
-    if (!utilisateurActuel) {
-        afficherToast('❌ Connecte-toi d\'abord !');
-        return;
-    }
-
-    const modal = document.getElementById('modal-scanner');
-    const statut = document.getElementById('statut-scanner');
-    const resultat = document.getElementById('resultat-scanner');
-
-    modal.style.display = 'flex';
-    statut.innerText = '🔍 Recherche du code-barres...';
-    resultat.innerText = '';
-    scanEnCours = false;
-
-    try {
-        scannerCodeReader = new Html5Qrcode("video-scanner");
-
-        await scannerCodeReader.start(
-            { facingMode: "environment" },
-            { fps: 10, qrbox: { width: 250, height: 150 } },
-            async (ean) => {
-                if (!scanEnCours) {
-                    scanEnCours = true;
-                    statut.innerText = `✅ Code détecté !`;
-                    resultat.innerText = `EAN : ${ean}`;
-                    if (navigator.vibrate) navigator.vibrate(200);
-                    fermerScanner();
-                    await traiterEANScanne(ean);
-                }
-            },
-            (error) => {} // Erreurs ignorées pendant le scan
-        );
-
-    } catch (err) {
-        console.error('Erreur:', err);
-        statut.innerText = `❌ ${err.message}`;
-    }
-}
-async function fermerScanner() {
-    const modal = document.getElementById('modal-scanner');
-    modal.style.display = 'none';
-
-    if (scannerCodeReader) {
-        try { await scannerCodeReader.stop(); } catch(e) {}
-        scannerCodeReader = null;
-    }
-}
-
-async function traiterEANScanne(ean) {
-    // Récupérer l'utilisateur depuis localStorage si besoin
-    if (!utilisateurActuel) {
-        utilisateurActuel = localStorage.getItem('monFrigo_User');
-    }
-    
-    if (!utilisateurActuel) {
-        afficherToast('❌ Connecte-toi d\'abord !');
-        return;
-    }
-    
-    try {
-        afficherToast(`📦 EAN ${ean} — mise à jour du stock...`);
-
-        const response = await fetch('https://mon-assistant-cuisine.laurent235.workers.dev/poubelle', {
-            method: 'POST',
-            headers: await entetesIA(),
-            body: JSON.stringify({
-                utilisateur: utilisateurActuel,
-                ean: ean,
-                source: 'telephone'
-            })
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-            if (data.nouvelleQte === 0) {
-                afficherToast(`✅ ${data.produit} épuisé ! Ajouté à la liste de courses 🛒`);
-            } else {
-                afficherToast(`✅ ${data.produit} retiré ! Il en reste ${data.nouvelleQte}`);
-            }
-             await chargerTout();
-        } else if (data.ean) {
-            afficherToast(`⚠️ Produit non trouvé dans votre stock (EAN: ${ean})`);
-        } else {
-            afficherToast('⚠️ Produit non identifié');
-        }
-
-    } catch (err) {
-        console.error('Erreur:', err);
-        afficherToast('❌ Erreur de connexion');
-    }
-}
 let scannerContinu = null;
 let compteurScans = 0;
 let derniersEAN = [];  // Évite les doublons rapides
+let lecturesPoubelle = {};
+let eanPoubelleEnCours = null;   // le code-barres dont la fenêtre de retrait est ouverte
 let scanEnPause = false;
 let cameraAvant = false;
 
@@ -3118,6 +2956,7 @@ async function ouvrirScannerContinu() {
 }
 
 async function fermerScannerContinu() {
+    desactiverWakeLock();
     const modal = document.getElementById('modal-scanner');
     modal.style.display = 'none';
 
@@ -3151,62 +2990,187 @@ function jouerBip() {
     }
 }
 
+// Petite fenêtre de choix. Renvoie la valeur choisie, ou null si on annule.
+// options : [{ libelle, detail, valeur, principal }]
+function choisirDansListe(titre, sousTitre, options) {
+    return new Promise(function(resoudre) {
+        const fond = document.createElement('div');
+        fond.className = 'fenetre-attente-scan';
+        fond.style.cssText = 'position:fixed; inset:0; z-index:10050; background:rgba(45,55,72,0.92); '
+            + 'display:flex; align-items:center; justify-content:center; padding:18px; font-family:"Segoe UI",sans-serif;';
+
+        const boite = document.createElement('div');
+        boite.style.cssText = 'background:#fff; border-radius:16px; padding:22px 20px; max-width:420px; width:100%; '
+            + 'text-align:center; box-shadow:0 12px 40px rgba(0,0,0,0.3); max-height:90vh; overflow-y:auto;';
+
+        const t = document.createElement('div');
+        t.style.cssText = 'font-size:14px; color:#718096; margin-bottom:8px;';
+        t.textContent = titre;
+        boite.appendChild(t);
+
+        if (sousTitre) {
+            const st = document.createElement('div');
+            st.style.cssText = 'font-size:20px; font-weight:700; color:#2d3748; line-height:1.3; margin-bottom:16px; word-break:break-word;';
+            st.textContent = sousTitre;
+            boite.appendChild(st);
+        }
+
+        function fermer(valeur) {
+            if (fond.parentNode) fond.parentNode.removeChild(fond);
+            resoudre(valeur);
+        }
+
+        options.forEach(function(o) {
+            const b = document.createElement('button');
+            b.style.cssText = 'width:100%; padding:15px; border-radius:14px; font-family:inherit; cursor:pointer; '
+                + 'margin-bottom:10px; font-size:15px; font-weight:700; '
+                + (o.principal
+                    ? 'border:none; background:#38a169; color:#fff;'
+                    : 'border:2px solid #cbd5e0; background:#fff; color:#2d3748;');
+            b.textContent = o.libelle;
+            if (o.detail) {
+                const d = document.createElement('div');
+                d.style.cssText = 'font-size:12px; font-weight:400; opacity:0.8; margin-top:3px;';
+                d.textContent = o.detail;
+                b.appendChild(d);
+            }
+            b.onclick = function() { fermer(o.valeur); };
+            boite.appendChild(b);
+        });
+
+        const annuler = document.createElement('button');
+        annuler.style.cssText = 'width:100%; padding:12px; border:none; border-radius:14px; background:#edf2f7; '
+            + 'color:#4a5568; font-size:14px; font-family:inherit; cursor:pointer;';
+        annuler.textContent = '🔄 Annuler et rescanner';
+        annuler.onclick = function() { fermer(null); };
+        boite.appendChild(annuler);
+
+        fond.appendChild(boite);
+        document.body.appendChild(fond);
+    });
+}
+
 async function traiterEANContinu(ean) {
     const statut = document.getElementById('statut-scanner');
-    const historique = document.getElementById('historique-scans');
+    const enAttente = function(texte) {
+        derniersEAN = derniersEAN.filter(function(e) { return e !== ean; });
+        statut.innerText = texte || '🔍 En attente d\'un code-barres...';
+    };
 
     statut.innerText = '🔍 Recherche du produit...';
+    eanPoubelleEnCours = ean;
 
     try {
-        // 1. Chercher par EAN dans le stock
-        const { data: produits } = await monSupabase
+        // ── 1. Ce code-barres est-il dans ton stock ? ──
+        const { data: produits, error } = await monSupabase
             .from('inventaire2')
             .select('id, nom, quantite, emplacement')
             .eq('proprietaire', utilisateurActuel)
             .eq('ean', ean)
             .neq('etat', 'Vide');
+        if (error) throw new Error(error.message);
 
-        if (produits && produits.length > 0) {
-            ouvrirModaleQuantite(produits[0]);
+        const connus = produits || [];
+        const enStock = connus.filter(function(x) { return (parseInt(x.quantite) || 0) > 0; });
+
+        if (enStock.length === 1) {
+            ouvrirModaleQuantite(enStock[0]);
             return;
         }
 
-        // 2. EAN inconnu → identification via le Worker
+        // Le même produit rangé à plusieurs endroits : c'est toi qui dis lequel
+        if (enStock.length > 1) {
+            const choisi = await choisirDansListe('Ce produit est rangé à plusieurs endroits', 'Lequel sors-tu ?',
+                enStock.map(function(x) {
+                    return { libelle: x.nom, detail: (x.emplacement || '') + ' — en stock : ' + x.quantite, valeur: x };
+                }));
+            if (choisi) ouvrirModaleQuantite(choisi); else enAttente();
+            return;
+        }
+
+        if (connus.length > 0) {
+            enAttente('ℹ️ ' + connus[0].nom + ' : déjà à 0 dans ton stock');
+            afficherToast('ℹ️ ' + connus[0].nom + ' est déjà à 0 dans ton stock');
+            return;
+        }
+
+        // ── 2. Code inconnu chez toi : le Worker propose, sans rien écrire ──
         statut.innerText = '🌐 Identification...';
 
         const response = await fetch('https://mon-assistant-cuisine.laurent235.workers.dev/identifier', {
             method: 'POST',
             headers: await entetesIA(),
-            body: JSON.stringify({
-                utilisateur: utilisateurActuel,
-                ean: ean
-            })
+            body: JSON.stringify({ ean: ean, enregistrer: false })
         });
-
         const data = await response.json();
 
-        // 3. Trouvé automatiquement
+        if (data.error) {
+            enAttente('❌ ' + (data.error.message || data.error));
+            return;
+        }
+
+        // ── 3. Il pense avoir reconnu un produit de ton stock : tu confirmes ──
         if (data.success && data.id) {
             const { data: produit } = await monSupabase
                 .from('inventaire2')
                 .select('id, nom, quantite, emplacement')
                 .eq('id', data.id)
+                .eq('proprietaire', utilisateurActuel)
                 .maybeSingle();
 
             if (produit) {
-                ouvrirModaleQuantite(produit);
+                statut.innerText = '👆 À toi de valider';
+                const reponse = await choisirDansListe('C\'est bien ce produit ?', produit.nom, [
+                    { libelle: '✅ Oui, c\'est ça', valeur: 'oui', principal: true },
+                    { libelle: '✏️ Non, choisir le bon produit', valeur: 'non' }
+                ]);
+
+                if (reponse === null) { enAttente(); return; }
+
+                if (reponse === 'oui') {
+                    // Maintenant seulement, on retient ce code-barres pour ce produit
+                    await modifierStockVerifie(produit.id, { ean: ean });
+                    ouvrirModaleQuantite(produit);
+                    return;
+                }
+
+                // « Non » : on décolle le code si l'ancien Worker l'avait déjà collé
+                await monSupabase.from('inventaire2').update({ ean: null })
+                    .eq('id', produit.id).eq('ean', ean).eq('proprietaire', utilisateurActuel);
+                statut.innerText = '✏️ Choisis le bon produit';
+                await ouvrirAssociation(ean, null, 'poubelle');
                 return;
             }
         }
 
-        // 4. Non trouvé → association manuelle
+        // ── 4. Pas trouvé : tu le désignes dans ton stock ──
         statut.innerText = '❓ Produit à identifier';
         await ouvrirAssociation(ean, data.nomDetecte || null, 'poubelle');
 
     } catch (err) {
         console.error('Erreur:', err);
-        statut.innerText = '❌ Erreur de connexion';
+        enAttente('❌ Erreur de connexion — rescanne');
     }
+}
+
+// Bouton « Ce n'est pas ce produit » de la fenêtre de retrait
+async function mauvaisProduitPoubelle() {
+    const produit = produitARetirer;
+    const ean = eanPoubelleEnCours;
+
+    document.getElementById('modal-quantite').style.display = 'none';
+    produitARetirer = null;
+
+    if (!ean) { annulerQuantiteRetrait(); return; }
+
+    // On décolle le code-barres du mauvais produit, sinon l'erreur reviendrait à chaque scan
+    if (produit) {
+        await monSupabase.from('inventaire2').update({ ean: null })
+            .eq('id', produit.id).eq('ean', ean).eq('proprietaire', utilisateurActuel);
+    }
+    const statut = document.getElementById('statut-scanner');
+    if (statut) statut.innerText = '✏️ Choisis le bon produit';
+    await ouvrirAssociation(ean, null, 'poubelle');
 }
 
 function eanValide(code) {
@@ -3231,6 +3195,7 @@ function eanValide(code) {
 function demanderConfirmation(libelle, ean) {
     return new Promise(function(resoudre) {
         const fond = document.createElement('div');
+        fond.className = 'fenetre-attente-scan';
         fond.style.cssText =
             'position:fixed; inset:0; z-index:10050;' +
             'background:rgba(45,55,72,0.88);' +
@@ -3635,6 +3600,7 @@ function arreterCameraPhoto() {
 // FERMER LE MODE
 // ============================================================
 async function fermerScannerDates() {
+    desactiverWakeLock();
     document.getElementById('modal-dates').style.display = 'none';
 
     if (scannerDates) {
@@ -3656,7 +3622,7 @@ function ajouterHistoriqueDate(message, couleur) {
     const historique = document.getElementById('historique-dates');
     historique.innerHTML = `
         <div style="background:#2d3748; color:${couleur}; padding:8px 12px; border-radius:8px; margin-bottom:5px; font-size:12px; text-align:left;">
-            ${message}
+            ${echapper(message)}
         </div>` + historique.innerHTML;
 }
 
@@ -3741,6 +3707,7 @@ async function demarrerScanInventaire() {
     const statut = document.getElementById('statut-inventaire');
     statut.innerText = '📷 Démarrage de la caméra...';
     scanInventairePause = false;
+    lecturesInventaire = {};
 
     try {
         scannerInventaire = new Html5Qrcode("video-inventaire");
@@ -3749,8 +3716,19 @@ async function demarrerScanInventaire() {
             { facingMode: "environment" },
             { fps: 15, qrbox: { width: 300, height: 200 }, aspectRatio: 1.5 },
             async (ean) => {
-                if (scanInventairePause) return;
+                if (scanInventairePause || fenetreInventaireOuverte()) return;
                 if (derniersEANInventaire.includes(ean)) return;
+
+                // Garde-fou 1 : la clé de contrôle du code-barres
+                if (!eanValide(ean)) {
+                    statut.innerText = '🔍 Lecture incertaine, maintiens le code...';
+                    return;
+                }
+
+                // Garde-fou 2 : deux lectures identiques avant d'y croire
+                lecturesInventaire[ean] = (lecturesInventaire[ean] || 0) + 1;
+                if (lecturesInventaire[ean] < LECTURES_REQUISES) return;
+                lecturesInventaire = {};
 
                 scanInventairePause = true;
                 derniersEANInventaire.push(ean);
@@ -3790,6 +3768,7 @@ async function fermerModeInventaire() {
 
     if (compteurInventaire > 0) {
         afficherToast(`✅ ${compteurInventaire} produit(s) ajouté(s) !`);
+        classerEnArrierePlan();
         await chargerTout();
     }
 }
@@ -3801,7 +3780,7 @@ function ajouterHistoriqueInventaire(message, couleur) {
     const historique = document.getElementById('historique-inventaire');
     historique.innerHTML = `
         <div style="background:#2d3748; color:${couleur}; padding:8px 12px; border-radius:8px; margin-bottom:5px; font-size:12px; text-align:left;">
-            ${message}
+            ${echapper(message)}
         </div>` + historique.innerHTML;
 }
 let eanEnAttente = null;
@@ -3873,6 +3852,7 @@ Réponds UNIQUEMENT le nom simplifié en minuscules, sans ponctuation.`
         document.getElementById('compteur-inventaire').innerText = compteurInventaire;
         if (statut) statut.innerText = `🆕 ${nom} ajouté !`;
         ajouterHistoriqueInventaire(`🆕 ${nom} (saisie manuelle)`, '#805ad5');
+        classerEnArrierePlan();
 
         if (navigator.vibrate) navigator.vibrate(200);
         jouerBip();
@@ -3896,70 +3876,276 @@ function annulerSaisieManuelle() {
     if (statut) statut.innerText = '🔍 Scanne un produit...';
 }
 
+let lecturesInventaire = {};
+
+// Le scan se met en pause tant qu'une de ces fenêtres attend une réponse
+function fenetreInventaireOuverte() {
+    if (document.getElementById('fenetre-confirmation-inventaire')) return true;
+    if (document.querySelector('.fenetre-attente-scan')) return true;
+    return ['modal-association', 'modal-saisie-manuelle', 'modal-etiquette', 'modal-quantite', 'modal-similaires'].some(function(id) {
+        const el = document.getElementById(id);
+        return el && el.style.display && el.style.display !== 'none';
+    });
+}
+
+// ============================================================
+// LA FENÊTRE DE VALIDATION DU MODE INVENTAIRE
+// Rien n'est écrit dans le stock avant ta réponse.
+// Renvoie { action: 'oui', nom, quantite } | { action: 'autre' } | { action: 'annuler' }
+// ============================================================
+function confirmerProduitInventaire(info) {
+    return new Promise(function(resoudre) {
+        const fond = document.createElement('div');
+        fond.id = 'fenetre-confirmation-inventaire';
+        fond.style.cssText = 'position:fixed; inset:0; z-index:10050; background:rgba(45,55,72,0.92); '
+            + 'display:flex; align-items:center; justify-content:center; padding:18px; '
+            + 'font-family:"Segoe UI",sans-serif;';
+
+        const boite = document.createElement('div');
+        boite.style.cssText = 'background:#fff; border-radius:16px; padding:22px 20px; max-width:420px; '
+            + 'width:100%; text-align:center; box-shadow:0 12px 40px rgba(0,0,0,0.3);';
+
+        const titre = document.createElement('div');
+        titre.style.cssText = 'font-size:14px; color:#718096; margin-bottom:10px;';
+        titre.textContent = info.nouveau ? '🆕 Nouveau produit — vérifie le nom' : 'C\'est bien ce produit ?';
+        boite.appendChild(titre);
+
+        let champNom = null;
+        if (info.nouveau) {
+            // Un nouveau produit : le nom se corrige directement ici
+            champNom = document.createElement('input');
+            champNom.type = 'text';
+            champNom.value = info.nom || '';
+            champNom.style.cssText = 'width:100%; box-sizing:border-box; padding:13px; border:2px solid #cbd5e0; '
+                + 'border-radius:12px; font-size:17px; font-weight:700; color:#2d3748; text-align:center;';
+            boite.appendChild(champNom);
+        } else {
+            const nom = document.createElement('div');
+            nom.style.cssText = 'font-size:21px; font-weight:700; color:#2d3748; line-height:1.3; word-break:break-word;';
+            nom.textContent = info.nom || '';
+            boite.appendChild(nom);
+
+            const stock = document.createElement('div');
+            stock.style.cssText = 'font-size:13px; color:#38a169; font-weight:600; margin-top:6px;';
+            stock.textContent = info.surListe
+                ? 'Sur ta liste de courses — il revient en stock'
+                : 'Déjà en stock : ' + (parseInt(info.stock) || 0);
+            boite.appendChild(stock);
+        }
+
+        const code = document.createElement('div');
+        code.style.cssText = 'font-size:12px; color:#a0aec0; margin:8px 0 14px 0;';
+        code.textContent = info.ean || '';
+        boite.appendChild(code);
+
+        // ── Combien en ajouter ──
+        let quantite = 1;
+        const ligneQte = document.createElement('div');
+        ligneQte.style.cssText = 'display:flex; align-items:center; justify-content:center; gap:14px; margin-bottom:16px;';
+
+        const styleRond = 'width:46px; height:46px; border-radius:12px; border:1px solid #cbd5e0; '
+            + 'background:#edf2f7; font-size:22px; font-weight:700; cursor:pointer; font-family:inherit;';
+        const moins = document.createElement('button');
+        moins.style.cssText = styleRond; moins.textContent = '−';
+        const plus = document.createElement('button');
+        plus.style.cssText = styleRond; plus.textContent = '+';
+        const affQte = document.createElement('div');
+        affQte.style.cssText = 'min-width:70px; font-size:15px; color:#4a5568;';
+
+        const oui = document.createElement('button');
+        oui.style.cssText = 'width:100%; padding:16px; border:none; border-radius:14px; background:#38a169; '
+            + 'color:#fff; font-size:17px; font-weight:700; font-family:inherit; cursor:pointer; margin-bottom:10px;';
+
+        function rafraichir() {
+            affQte.innerHTML = '';
+            const b = document.createElement('b');
+            b.style.cssText = 'font-size:24px; color:#2d3748; display:block;';
+            b.textContent = '×' + quantite;
+            affQte.appendChild(b);
+            affQte.appendChild(document.createTextNode('à ajouter'));
+            oui.textContent = '✅ OUI, J\'AJOUTE' + (quantite > 1 ? ' ×' + quantite : '');
+        }
+        moins.onclick = function() { quantite = Math.max(1, quantite - 1); rafraichir(); };
+        plus.onclick  = function() { quantite = Math.min(99, quantite + 1); rafraichir(); };
+        rafraichir();
+
+        ligneQte.appendChild(moins); ligneQte.appendChild(affQte); ligneQte.appendChild(plus);
+        boite.appendChild(ligneQte);
+
+        const autre = document.createElement('button');
+        autre.style.cssText = 'width:100%; padding:14px; border:2px solid #dd6b20; border-radius:14px; background:#fff; '
+            + 'color:#dd6b20; font-size:15px; font-weight:600; font-family:inherit; cursor:pointer; margin-bottom:10px;';
+        autre.textContent = info.nouveau
+            ? '🔗 Je l\'ai déjà en stock — le choisir'
+            : '✏️ Non, ce n\'est pas ce produit';
+
+        const annuler = document.createElement('button');
+        annuler.style.cssText = 'width:100%; padding:12px; border:none; border-radius:14px; background:#edf2f7; '
+            + 'color:#4a5568; font-size:14px; font-family:inherit; cursor:pointer;';
+        annuler.textContent = '🔄 Annuler et rescanner';
+
+        function fermer(reponse) {
+            if (fond.parentNode) fond.parentNode.removeChild(fond);
+            resoudre(reponse);
+        }
+        oui.onclick = function() {
+            const nomFinal = champNom ? champNom.value.trim().replace(/\s+/g, ' ') : info.nom;
+            if (champNom && !nomFinal) { champNom.style.borderColor = '#e53e3e'; champNom.focus(); return; }
+            fermer({ action: 'oui', nom: nomFinal, quantite: quantite });
+        };
+        autre.onclick = function() { fermer({ action: 'autre' }); };
+        annuler.onclick = function() { fermer({ action: 'annuler' }); };
+
+        boite.appendChild(oui); boite.appendChild(autre); boite.appendChild(annuler);
+        fond.appendChild(boite);
+        document.body.appendChild(fond);
+    });
+}
+
+// Le nom court pour Alexa se calcule après coup, sans ralentir le scan
+function genererAliasEnArrierePlan(id, nom) {
+    if (!id) return;
+    appelGemini(
+        'En 2-3 mots max, nom simplifié prononçable pour Alexa. Supprime marques, poids, détails.\n'
+        + 'Produit: "' + nom + '"\nRéponds UNIQUEMENT le nom simplifié en minuscules, sans ponctuation.'
+    ).then(function(r) {
+        const alias = (r || '').trim().toLowerCase().slice(0, 60);
+        if (!alias) return;
+        return monSupabase.from('inventaire2').update({ nom_alexa: alias })
+            .eq('id', id).eq('proprietaire', utilisateurActuel);
+    }).catch(function() {});
+}
+
 async function ajouterProduitInventaire(ean) {
     const statut = document.getElementById('statut-inventaire');
     statut.innerText = '🔍 Identification...';
 
+    const reprendre = function(texte) {
+        // Permet de rescanner le même code tout de suite
+        derniersEANInventaire = derniersEANInventaire.filter(function(e) { return e !== ean; });
+        statut.innerText = texte || '🔍 Scanne un produit...';
+    };
+
     try {
-        // 1. Chercher si l'EAN existe déjà dans le stock
-        const { data: existants } = await monSupabase
+        // ── 1. CE CODE-BARRES EST-IL DÉJÀ CONNU CHEZ TOI ? ──
+        // On regarde aussi la liste de courses : un produit racheté revient en stock
+        // au lieu de créer une deuxième ligne.
+        const { data: connus } = await monSupabase
             .from('inventaire2')
-            .select('id, nom, quantite, emplacement')
+            .select('id, nom, quantite, emplacement, etat, ean')
             .eq('proprietaire', utilisateurActuel)
-            .eq('ean', ean)
-            .neq('etat', 'Vide');
+            .eq('ean', ean);
 
-        if (existants?.length > 0) {
-            const produit = existants[0];
-            const nouvelleQte = (parseInt(produit.quantite) || 0) + 1;
+        const lignes = (connus || []).filter(function(x) { return x.etat !== 'Tup'; });
+        let produit = lignes.find(function(x) { return (parseInt(x.quantite) || 0) > 0 && x.etat !== 'Vide'; })
+                   || lignes[0] || null;
+        let nomDetecte = null;
 
-            await monSupabase
-                .from('inventaire2')
-                .update({ quantite: nouvelleQte, etat: 'Plein' })
-                .eq('id', produit.id);
+        // ── 2. SINON : le Worker cherche (Open Food Facts, puis ton stock par le nom) ──
+        if (!produit) {
+            statut.innerText = '🌐 Recherche du produit...';
 
-            compteurInventaire++;
-            document.getElementById('compteur-inventaire').innerText = compteurInventaire;
-            statut.innerText = `✅ ${produit.nom} → ${nouvelleQte}`;
-            ajouterHistoriqueInventaire(`➕ ${produit.nom} → ${nouvelleQte}`, '#48bb78');
+            const response = await fetch('https://mon-assistant-cuisine.laurent235.workers.dev/identifier', {
+                method: 'POST',
+                headers: await entetesIA(),
+                // enregistrer:false → il propose, il n'écrit rien tant que tu n'as pas validé
+                body: JSON.stringify({ ean: ean, enregistrer: false })
+            });
+            const data = await response.json();
+
+            if (data.success && data.id) {
+                const { data: trouve } = await monSupabase
+                    .from('inventaire2')
+                    .select('id, nom, quantite, emplacement, etat, ean')
+                    .eq('id', data.id)
+                    .eq('proprietaire', utilisateurActuel)
+                    .maybeSingle();
+                produit = trouve || null;
+            }
+            if (!produit) nomDetecte = data.nomDetecte || null;
+
+            // Rien trouvé nulle part : saisie à la main
+            if (!produit && !nomDetecte) {
+                statut.innerText = (data.error && data.error.message)
+                    ? '❌ ' + data.error.message
+                    : '❓ Produit inconnu — saisie manuelle';
+                if (!data.error) ouvrirSaisieManuelle(ean);
+                return;
+            }
+        }
+
+        // ── 3. TU VALIDES, TU CORRIGES, OU TU ANNULES ──
+        statut.innerText = '👆 À toi de valider';
+        const reponse = await confirmerProduitInventaire({
+            ean: ean,
+            nouveau: !produit,
+            nom: produit ? produit.nom : nomDetecte,
+            stock: produit ? produit.quantite : 0,
+            surListe: !!produit && (produit.etat === 'Vide' || produit.etat === 'Archive')
+        });
+
+        if (reponse.action === 'annuler') {
+            reprendre();
             return;
         }
 
-        // 2. EAN inconnu → chercher via le Worker (3 bases Open Facts)
-        statut.innerText = '🌐 Recherche du produit...';
-
-        const response = await fetch('https://mon-assistant-cuisine.laurent235.workers.dev/inventaire', {
-            method: 'POST',
-            headers: await entetesIA(),
-            body: JSON.stringify({
-                utilisateur: utilisateurActuel,
-                ean: ean,
-                emplacement: emplacementInventaire
-            })
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-            compteurInventaire++;
-            document.getElementById('compteur-inventaire').innerText = compteurInventaire;
-
-            if (data.nouveau) {
-                statut.innerText = `🆕 ${data.produit} ajouté !`;
-                ajouterHistoriqueInventaire(`🆕 ${data.produit}`, '#3182ce');
-            } else {
-                statut.innerText = `✅ ${data.produit} → ${data.quantite}`;
-                ajouterHistoriqueInventaire(`➕ ${data.produit} → ${data.quantite}`, '#48bb78');
+        if (reponse.action === 'autre') {
+            // Ce code-barres était collé au mauvais produit : on le décolle,
+            // sinon l'erreur reviendrait à chaque scan.
+            if (produit) {
+                await monSupabase.from('inventaire2')
+                    .update({ ean: null })
+                    .eq('id', produit.id)
+                    .eq('ean', ean)
+                    .eq('proprietaire', utilisateurActuel);
             }
-        } else {
-            // 3. PRODUIT INTROUVABLE → SAISIE MANUELLE
-            statut.innerText = `❓ Produit inconnu — saisie manuelle`;
-            ouvrirSaisieManuelle(ean);
+            statut.innerText = '✏️ Choisis le bon produit';
+            await ouvrirAssociation(ean, nomDetecte, 'inventaire');
+            return;
         }
+
+        // ── 4. OUI : maintenant seulement, on écrit ──
+        const n = reponse.quantite || 1;
+
+        if (produit) {
+            const nouvelleQte = (parseInt(produit.quantite) || 0) + n;
+            const { error } = await monSupabase
+                .from('inventaire2')
+                .update({ quantite: nouvelleQte, etat: 'Plein', ean: ean })
+                .eq('id', produit.id)
+                .eq('proprietaire', utilisateurActuel);
+            if (error) throw new Error(error.message);
+
+            statut.innerText = '✅ ' + produit.nom + ' → ' + nouvelleQte;
+            ajouterHistoriqueInventaire('➕ ' + produit.nom + ' → ' + nouvelleQte, '#48bb78');
+        } else {
+            const { data: cree, error } = await monSupabase
+                .from('inventaire2')
+                .insert([{
+                    nom: reponse.nom,
+                    nom_alexa: reponse.nom.split(' ').slice(0, 2).join(' ').toLowerCase(),
+                    ean: ean,
+                    quantite: n,
+                    emplacement: emplacementInventaire || 'PLACARD',
+                    etat: 'Plein',
+                    proprietaire: utilisateurActuel
+                }])
+                .select()
+                .maybeSingle();
+            if (error) throw new Error(error.message);
+
+            statut.innerText = '🆕 ' + reponse.nom + ' ajouté !';
+            ajouterHistoriqueInventaire('🆕 ' + reponse.nom + (n > 1 ? ' ×' + n : ''), '#3182ce');
+            genererAliasEnArrierePlan(cree && cree.id, reponse.nom);
+            classerEnArrierePlan();
+        }
+
+        compteurInventaire += 1;
+        document.getElementById('compteur-inventaire').innerText = compteurInventaire;
 
     } catch (err) {
         console.error('Erreur ajout inventaire:', err);
-        statut.innerText = '❌ Erreur de connexion';
+        reprendre('❌ Erreur : ' + (err.message || 'connexion'));
     }
 }
 
@@ -3995,8 +4181,18 @@ async function demarrerScanCamera() {
     { facingMode: cameraAvant ? "user" : "environment" },
     { fps: 20 },
     async (ean) => {
-                if (scanEnPause) return;
+                // Tant qu'une fenêtre attend ta réponse, la caméra ne lit plus rien :
+                // avant, elle pouvait relire le même paquet et rouvrir la fenêtre par-dessus ton clic.
+                if (scanEnPause || fenetreInventaireOuverte()) return;
                 if (derniersEAN.includes(ean)) return;
+
+                if (!eanValide(ean)) {
+                    statut.innerText = '🔍 Lecture incertaine, maintiens le code...';
+                    return;
+                }
+                lecturesPoubelle[ean] = (lecturesPoubelle[ean] || 0) + 1;
+                if (lecturesPoubelle[ean] < LECTURES_REQUISES) return;
+                lecturesPoubelle = {};
 
                 scanEnPause = true;
                 derniersEAN.push(ean);
@@ -4047,61 +4243,73 @@ async function desactiverWakeLock() {
     }
 }
 let produitARetirer = null;  
+// Modifie une ligne du stock ET vérifie que la base l'a bien fait.
+// Sans cette vérification, un échec (réseau, session expirée) passait pour une réussite.
+async function modifierStockVerifie(id, champs) {
+    const { data, error } = await monSupabase
+        .from('inventaire2')
+        .update(champs)
+        .eq('id', id)
+        .eq('proprietaire', utilisateurActuel)
+        .select('id');
+    if (error) throw new Error(error.message);
+    if (!data || data.length === 0) throw new Error('aucune ligne modifiée');
+}
+
 async function appliquerRetrait(qteARetirer) {
     if (!produitARetirer) return;
+
+    // On prend le produit tout de suite : plus rien ne peut le remplacer pendant l'écriture
+    const produit = produitARetirer;
+    produitARetirer = null;
 
     const statut = document.getElementById('statut-scanner');
     const historique = document.getElementById('historique-scans');
 
     try {
-        const qteActuelle = parseInt(produitARetirer.quantite) || 0;
+        // La quantité réelle à cet instant (un autre téléphone du foyer a pu la changer)
+        const { data: actuel, error: erreurLecture } = await monSupabase
+            .from('inventaire2')
+            .select('quantite')
+            .eq('id', produit.id)
+            .eq('proprietaire', utilisateurActuel)
+            .maybeSingle();
+        if (erreurLecture) throw new Error(erreurLecture.message);
+
+        const qteActuelle = parseInt(actuel ? actuel.quantite : produit.quantite) || 0;
         const nouvelleQte = Math.max(0, qteActuelle - qteARetirer);
 
         if (nouvelleQte === 0) {
             // Stock épuisé : quantité à zéro, décision courses ensuite
-            await monSupabase
-                .from('inventaire2')
-                .update({ quantite: 0 })
-                .eq('id', produitARetirer.id)
-                .eq('proprietaire', utilisateurActuel);
+            await modifierStockVerifie(produit.id, { quantite: 0 });
 
-            await enregistrerHistorique(produitARetirer, 'vide', qteARetirer, 0);
-            await enregistrerEconomieSauvee(produitARetirer.id, produitARetirer.nom, qteARetirer);
+            await enregistrerHistorique(produit, 'vide', qteARetirer, 0);
 
             // Y a-t-il un autre format du même produit ?
-            const ajouterAuxCourses = await verifierAvantCourses(produitARetirer);
+            const ajouterAuxCourses = await verifierAvantCourses(produit);
 
             if (ajouterAuxCourses) {
-                await monSupabase
-                    .from('inventaire2')
-                    .update({ etat: 'Vide' })
-                    .eq('id', produitARetirer.id)
-                    .eq('proprietaire', utilisateurActuel);
+                await modifierStockVerifie(produit.id, { etat: 'Vide' });
 
-                const msg = `🛒 ${produitARetirer.nom} → liste de courses`;
+                const msg = `🛒 ${produit.nom} → liste de courses`;
                 statut.innerText = msg;
                 historique.innerHTML = `
                     <div style="background:#2d3748; color:#f6ad55; padding:8px 12px; border-radius:8px; margin-bottom:5px; font-size:12px; text-align:left;">
-                        ${msg}
+                        ${echapper(msg)}
                     </div>` + historique.innerHTML;
             }
 
         } else {
             // Il reste du stock : on décrémente simplement
-            await monSupabase
-                .from('inventaire2')
-                .update({ quantite: nouvelleQte })
-                .eq('id', produitARetirer.id)
-                .eq('proprietaire', utilisateurActuel);
+            await modifierStockVerifie(produit.id, { quantite: nouvelleQte });
 
-            await enregistrerHistorique(produitARetirer, 'retire', qteARetirer, nouvelleQte);
-            await enregistrerEconomieSauvee(produitARetirer.id, produitARetirer.nom, qteARetirer);
+            await enregistrerHistorique(produit, 'retire', qteARetirer, nouvelleQte);
 
-            const msg = `✅ ${produitARetirer.nom} −${qteARetirer} → reste ${nouvelleQte}`;
+            const msg = `✅ ${produit.nom} −${qteARetirer} → reste ${nouvelleQte}`;
             statut.innerText = msg;
             historique.innerHTML = `
                 <div style="background:#2d3748; color:#48bb78; padding:8px 12px; border-radius:8px; margin-bottom:5px; font-size:12px; text-align:left;">
-                    ${msg}
+                    ${echapper(msg)}
                 </div>` + historique.innerHTML;
         }
 
@@ -4113,10 +4321,10 @@ async function appliquerRetrait(qteARetirer) {
 
     } catch (err) {
         console.error('Erreur retrait:', err);
-        statut.innerText = '❌ Erreur de mise à jour';
+        statut.innerText = '❌ Retrait NON enregistré — rescanne le produit';
+        afficherToast('❌ ' + produit.nom + ' : le retrait n\'a pas été enregistré. Rescanne-le.', 5000);
+        if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
     }
-
-    produitARetirer = null;
 }
 
 // ============================================================
@@ -4147,7 +4355,8 @@ async function validerQuantiteRetrait(qte) {
 // ============================================================
 async function validerQuantiteRetraitTout() {
     document.getElementById('modal-quantite').style.display = 'none';
-    await appliquerRetrait(produitARetirer.quantite);
+    if (!produitARetirer) return;
+    await appliquerRetrait(parseInt(produitARetirer.quantite) || 1);
 }
 
 // ============================================================
@@ -4177,6 +4386,7 @@ async function verifierPeremptions() {
             .select('id, nom, quantite, date_peremption, emplacement, date_scannee, sans_alerte')
             .eq('proprietaire', utilisateurActuel)
             .neq('etat', 'Vide')
+            .gt('quantite', 0)
             .not('date_peremption', 'is', null)
             .order('date_peremption');
 
@@ -4333,23 +4543,23 @@ function ligneProduitPeremption(p, couleur) {
     return `
         <div style="background:white; border-radius:8px; padding:10px 12px; margin-top:6px;">
             <div style="margin-bottom:8px;">
-                <b style="font-size:13px; color:#2d3748;">${p.nom}</b>
+                <b style="font-size:13px; color:#2d3748;">${echapper(p.nom)}</b>
                 <small style="display:block; font-size:11px; color:${couleur};">
-                    ${texteJours}${badge} • qté ${p.quantite}
+                    ${texteJours}${badge} • qté ${echapper(p.quantite)}
                 </small>
             </div>
             <div style="display:flex; gap:6px; margin-bottom:6px;">
-                <button onclick="event.stopPropagation(); marquerConsomme(${p.id}, ${p.quantite})"
+                <button onclick="event.stopPropagation(); marquerConsomme(${p.id}, ${parseInt(p.quantite) || 1})"
                         style="flex:1; background:#48bb78; color:white; border:none; border-radius:6px; padding:8px; cursor:pointer; font-size:11px; font-weight:bold;">
                     ✓ Consommé
                 </button>
-                <button onclick="event.stopPropagation(); marquerJetePeremption(${p.id}, ${p.quantite})"
+                <button onclick="event.stopPropagation(); marquerJetePeremption(${p.id}, ${parseInt(p.quantite) || 1})"
                         style="flex:1; background:#e53e3e; color:white; border:none; border-radius:6px; padding:8px; cursor:pointer; font-size:11px; font-weight:bold;">
                     🗑️ Jeté
                 </button>
             </div>
             <div style="display:flex; gap:6px;">
-                <button onclick="event.stopPropagation(); prolongerDate(${p.id}, '${p.date_peremption}')"
+                <button data-date="${echapper(p.date_peremption)}" onclick="event.stopPropagation(); prolongerDate(${p.id}, this.dataset.date)"
                         style="flex:1; background:#edf2f7; border:1px solid #cbd5e0; border-radius:6px; padding:8px; cursor:pointer; font-size:11px;">
                     +2j
                 </button>
@@ -4416,7 +4626,7 @@ function lancerChefAntigaspi() {
 
     // Scroller vers le Chef et lancer le mode antigaspi
     document.getElementById('statut-chef')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    setTimeout(() => lancerChefMode('antigaspi'), 400);
+    setTimeout(() => chefRaccourci('antigaspi'), 400);
 }
 // ============================================================
 // PRODUITS SOUVENT VENDUS EN PACK
@@ -4542,7 +4752,7 @@ function afficherModaleVerifPacks() {
 
         // Nom original si le produit a ete renomme
         const nomOriginal = p.nomOriginal
-            ? '<small style="display:block; font-size:10px; color:#a0aec0; margin-top:4px;">Ticket : ' + p.nomOriginal + '</small>'
+            ? '<small style="display:block; font-size:10px; color:#a0aec0; margin-top:4px;">Ticket : ' + echapper(p.nomOriginal) + '</small>'
             : '';
 
         // Options emplacement
@@ -4575,7 +4785,7 @@ function afficherModaleVerifPacks() {
 
             // ── CHAMP NOM EDITABLE ──
             + '<label style="font-size:11px; color:#718096; font-weight:bold; display:block; margin-bottom:4px;">Nom du produit</label>'
-            + '<input type="text" id="nom-verif-' + i + '" value="' + (p.nom || '').replace(/"/g, '&quot;') + '" '
+            + '<input type="text" id="nom-verif-' + i + '" value="' + echapper(p.nom) + '" '
             + 'onchange="modifierNomVerif(' + i + ', this.value)" '
             + 'style="width:100%; padding:10px; border:2px solid #cbd5e0; border-radius:8px; font-size:14px; font-weight:bold; color:#2d3748; margin-bottom:2px; box-sizing:border-box;">'
             + nomOriginal
@@ -4590,7 +4800,7 @@ function afficherModaleVerifPacks() {
             + '<div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">'
             + '<button onclick="modifierQteVerif(' + i + ', -1)" '
             + 'style="background:#e2e8f0; border:none; border-radius:8px; width:40px; height:40px; cursor:pointer; font-size:20px; font-weight:bold;">&minus;</button>'
-            + '<input type="number" id="qte-verif-' + i + '" value="' + p.quantite + '" min="1" '
+            + '<input type="number" id="qte-verif-' + i + '" value="' + (parseInt(p.quantite) || 1) + '" min="1" '
             + 'onchange="setQteVerif(' + i + ', this.value)" '
             + 'style="flex:1; padding:10px; border:2px solid #cbd5e0; border-radius:8px; font-size:18px; text-align:center; font-weight:bold;">'
             + '<button onclick="modifierQteVerif(' + i + ', 1)" '
@@ -4742,6 +4952,7 @@ async function insererTousLesProduits(articles) {
         statut.innerText = `✅ ${ajoutes} ajouté(s), ${fusionnes} fusionné(s)`;
     }
     afficherToast(`✅ ${ajoutes + fusionnes} produit(s) traité(s) !`);
+    if (ajoutes > 0) classerEnArrierePlan();
  
     await chargerTout();
 }
@@ -4874,9 +5085,9 @@ function afficherHistorique(donnees) {
             html += `
                 <div style="background:white; border-radius:10px; padding:10px 12px; margin-bottom:6px; display:flex; align-items:center; justify-content:space-between; border-left:3px solid ${couleur};">
                     <div style="flex:1;">
-                        <b style="font-size:13px; color:#2d3748;">${icone} ${h.nom_produit}</b>
+                        <b style="font-size:13px; color:#2d3748;">${icone} ${echapper(h.nom_produit)}</b>
                         <small style="display:block; font-size:11px; color:${couleur}; margin-top:2px;">
-                            ${texteAction}
+                            ${echapper(texteAction)}
                         </small>
                     </div>
                     <small style="font-size:11px; color:#a0aec0;">${heure}</small>
@@ -4955,7 +5166,6 @@ function fermerHistoriqueScans() {
 }
 
 
-
 // ============================================================
 // REMPLACE marquerEntame() par cette version
 // ============================================================
@@ -4984,7 +5194,7 @@ async function marquerEntame() {
         statut.innerText = msg;
         historique.innerHTML = `
             <div style="background:#2d3748; color:#ed8936; padding:8px 12px; border-radius:8px; margin-bottom:5px; font-size:12px; text-align:left;">
-                ${msg}
+                ${echapper(msg)}
             </div>` + historique.innerHTML;
 
         compteurScans++;
@@ -5000,66 +5210,7 @@ async function marquerEntame() {
 
     produitARetirer = null;
 }
-// ============================================================
-// ENREGISTRER UN PRODUIT SAUVÉ (consommé avant péremption)
-// ============================================================
-async function enregistrerEconomie(produit, quantite, type) {
-    try {
-        const prixUnitaire = parseFloat(produit.prix) || null;
-        if (!prixUnitaire) return;   // pas de prix connu, on n'enregistre pas
 
-        const montant = prixUnitaire * (quantite || 1);
-
-        await monSupabase.from('economies').insert([{
-            nom_produit: produit.nom,
-            type: type,                    // 'sauve' ou 'gaspille'
-            quantite: quantite || 1,
-            prix_unitaire: prixUnitaire,
-            montant: montant,
-            proprietaire: utilisateurActuel
-        }]);
-
-        await rafraichirApercuEconomies();
-
-    } catch (err) {
-        console.log('Economie non enregistree:', err.message);
-    }
-}
-
-// ============================================================
-// MARQUER UN PRODUIT COMME JETÉ (périmé)
-// À appeler depuis les alertes de péremption
-// ============================================================
-async function marquerJete(id, quantite) {
-    if (!utilisateurActuel) return;
-
-    if (!confirm('Marquer ce produit comme jete ?\n\nIl sera compte comme gaspillage.')) return;
-
-    try {
-        const { data: produit } = await monSupabase
-            .from('inventaire2')
-            .select('id, nom, prix, quantite')
-            .eq('id', id)
-            .maybeSingle();
-
-        if (produit) {
-            await enregistrerEconomie(produit, quantite || produit.quantite, 'gaspille');
-        }
-
-        await monSupabase
-            .from('inventaire2')
-            .update({ quantite: 0, etat: 'Vide' })
-            .eq('id', id)
-            .eq('proprietaire', utilisateurActuel);
-
-        afficherToast('Produit marque comme jete');
-        await chargerTout();
-        await verifierPeremptions();
-
-    } catch (err) {
-        console.error('Erreur marquage jete:', err);
-    }
-}
 
 // ============================================================
 // OUVRIR LE TABLEAU DE BORD
@@ -5200,7 +5351,7 @@ async function chargerEconomies() {
                 const largeur = Math.max(4, Math.round(p.montant / maxi * 100));
                 html += '<div style="margin-bottom:11px;">'
                     + '<div style="display:flex; justify-content:space-between; align-items:baseline;">'
-                    + '<span style="font-size:12px; color:#2d3748;">' + p.nom + '</span>'
+                    + '<span style="font-size:12px; color:#2d3748;">' + echapper(p.nom) + '</span>'
                     + '<b style="font-size:12px; color:#e53e3e; white-space:nowrap; padding-left:8px;">'
                     + p.montant.toFixed(2) + ' &euro;</b>'
                     + '</div>'
@@ -5235,7 +5386,7 @@ async function chargerEconomies() {
 
             html += '<div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid #f1f5f9;">'
                 + '<div style="flex:1; min-width:0;">'
-                + '<div style="font-size:12px; color:#2d3748;">' + e.nom_produit
+                + '<div style="font-size:12px; color:#2d3748;">' + echapper(e.nom_produit)
                 + (qte > 1 ? ' <small style="color:#a0aec0;">&times;' + qte + '</small>' : '')
                 + '</div>'
                 + '<small style="font-size:10px; color:#a0aec0;">' + date + '</small>'
@@ -5348,10 +5499,6 @@ async function validerPlatCuisine() {
 
             if (error) { echecs.push(actuel.nom + ' (' + error.message + ')'); continue; }
 
-            // Cuisiner un produit avant sa peremption, c'est une economie.
-            // La fonction verifie elle-meme la date et le prix.
-            await enregistrerEconomieSauvee(ing.id, actuel.nom, utilise);
-
             retires.push(actuel.nom + ' ' + dispo + '→' + reste);
             console.log('🍽️ ' + actuel.nom + ' : ' + dispo + ' → ' + reste);
         }
@@ -5405,84 +5552,8 @@ async function enregistrerGaspillage(id, nom, quantite) {
 }
 
 
-// ============================================================
-// 2. ENREGISTRER UNE ECONOMIE (consomme avant peremption)
-// ============================================================
-async function enregistrerEconomieSauvee(id, nom, quantite) {
-    try {
-        const { data: produit } = await monSupabase
-            .from('inventaire2')
-            .select('nom, prix, date_peremption')
-            .eq('id', id)
-            .maybeSingle();
-
-        if (!produit || !produit.prix) return;
-
-        // Si le produit est deja perime, ce n'est pas une economie
-        if (produit.date_peremption) {
-            const datePeremption = new Date(produit.date_peremption);
-            if (new Date() > datePeremption) return;
-        }
-
-        const prix = parseFloat(produit.prix);
-
-        await monSupabase.from('economies').insert([{
-            nom_produit: nom || produit.nom,
-            type: 'sauve',
-            quantite: quantite || 1,
-            prix_unitaire: prix,
-            montant: prix * (quantite || 1),
-            proprietaire: utilisateurActuel
-        }]);
-
-        await rafraichirApercuEconomies();
-
-    } catch (err) {
-        console.log('Economie non enregistree:', err.message);
-    }
-}
-
 const DELAI_GRACE_PERIME = 5;
 let produitsPerimes = [];
-
-// ============================================================
-// 3. BOUTON "PERIME - JETE" dans la modale de quantite
-// ============================================================
-async function validerJetePerime() {
-    if (!produitARetirer) return;
-
-    document.getElementById('modal-quantite').style.display = 'none';
-
-    const p = produitARetirer;
-    const qte = parseInt(p.quantite) || 1;
-
-    await enregistrerGaspillage(p.id, p.nom, qte);
-
-    await monSupabase
-        .from('inventaire2')
-        .update({ quantite: 0, etat: 'Vide' })
-        .eq('id', p.id)
-        .eq('proprietaire', utilisateurActuel);
-
-    await enregistrerHistorique(p, 'vide', qte, 0);
-
-    const statut = document.getElementById('statut-scanner');
-    const historique = document.getElementById('historique-scans');
-
-    if (statut) statut.innerText = p.nom + ' marque comme perime';
-    if (historique) {
-        historique.innerHTML = '<div style="background:#2d3748; color:#fc8181; padding:8px 12px; border-radius:8px; margin-bottom:5px; font-size:12px; text-align:left;">'
-            + '🗑️ ' + p.nom + ' jete (perime)</div>' + historique.innerHTML;
-    }
-
-    compteurScans++;
-    document.getElementById('compteur-scans').innerText = compteurScans;
-
-    if (navigator.vibrate) navigator.vibrate(200);
-    jouerBip();
-
-    produitARetirer = null;
-}
 
 
 // ============================================================
@@ -5497,15 +5568,22 @@ async function detecterPerimes() {
 
         const { data, error } = await monSupabase
             .from('inventaire2')
-            .select('id, nom, quantite, prix, date_peremption, emplacement')
+            .select('id, nom, quantite, prix, date_peremption, emplacement, sans_alerte')
             .eq('proprietaire', utilisateurActuel)
             .neq('etat', 'Vide')
+            .gt('quantite', 0)
             .not('date_peremption', 'is', null)
             .lt('date_peremption', limite.toISOString().split('T')[0]);
 
-        if (error || !data || !data.length) return;
+        if (error || !data) return;
 
-        produitsPerimes = data;
+        // Mêmes exceptions que le bandeau : le congélateur, et ce que tu as masqué
+        const aTraiter = data.filter(function(p) {
+            return p.emplacement !== 'CONGELATEUR' && p.sans_alerte !== true;
+        });
+        if (!aTraiter.length) return;
+
+        produitsPerimes = aTraiter;
         afficherModalePerimes();
 
     } catch (err) {
@@ -5529,9 +5607,9 @@ function afficherModalePerimes() {
 
         html += '<div style="background:white; border-radius:12px; padding:14px; margin-bottom:10px;">'
             + '<div style="margin-bottom:10px;">'
-            + '<b style="font-size:14px; color:#2d3748; display:block;">' + p.nom + '</b>'
+            + '<b style="font-size:14px; color:#2d3748; display:block;">' + echapper(p.nom) + '</b>'
             + '<small style="font-size:11px; color:#e53e3e;">Perime depuis ' + jours + ' jours'
-            + ' &bull; quantite ' + p.quantite
+            + ' &bull; quantite ' + echapper(p.quantite)
             + (prixTotal ? ' &bull; ' + prixTotal + ' &euro;' : '')
             + '</small></div>'
             + '<div style="display:flex; gap:8px;">'
@@ -5800,10 +5878,10 @@ function afficherModaleSimilaires(produit, similaires) {
     similaires.forEach(function(s) {
         html += '<div style="display:flex; justify-content:space-between; align-items:center; background:white; border-radius:8px; padding:10px 12px; margin-bottom:6px;">'
             + '<div style="flex:1;">'
-            + '<b style="font-size:13px; color:#2d3748;">' + s.nom + '</b>'
-            + '<small style="display:block; font-size:11px; color:#718096;">' + s.emplacement + '</small>'
+            + '<b style="font-size:13px; color:#2d3748;">' + echapper(s.nom) + '</b>'
+            + '<small style="display:block; font-size:11px; color:#718096;">' + echapper(s.emplacement) + '</small>'
             + '</div>'
-            + '<b style="font-size:16px; color:#38a169;">' + s.quantite + '</b>'
+            + '<b style="font-size:16px; color:#38a169;">' + echapper(s.quantite) + '</b>'
             + '</div>';
     });
 
@@ -5818,17 +5896,14 @@ async function confirmerAjoutCourses() {
     document.getElementById('modal-similaires').style.display = 'none';
 
     if (produitEpuise) {
-            // Hors stock et hors liste de courses, mais la ligne
-            // garde son code-barres et son prix pour la prochaine fois.
-            await monSupabase
-                .from('inventaire2')
-                .update({ quantite: 0, etat: 'Archive' })
-                .eq('id', produitEpuise.id)
-                .eq('proprietaire', utilisateurActuel);
+        await monSupabase
+            .from('inventaire2')
+            .update({ quantite: 0, etat: 'Vide' })
+            .eq('id', produitEpuise.id)
+            .eq('proprietaire', utilisateurActuel);
 
-            afficherToast('✓ ' + produitEpuise.nom + ' retiré du stock');
-        }
-
+        afficherToast('🛒 ' + produitEpuise.nom + ' ajouté aux courses');
+    }
 
     produitEpuise = null;
     await chargerTout();
@@ -5870,8 +5945,8 @@ async function ouvrirAssociation(ean, nomDetecte, contexte) {
 
     const info = document.getElementById('association-info');
     info.innerHTML = nomDetecte
-        ? 'Détecté : <b>' + nomDetecte + '</b><br><small>EAN ' + ean + '</small>'
-        : '<small>EAN ' + ean + '</small>';
+        ? 'Détecté : <b>' + echapper(nomDetecte) + '</b><br><small>EAN ' + echapper(ean) + '</small>'
+        : '<small>EAN ' + echapper(ean) + '</small>';
 
     document.getElementById('recherche-association').value = '';
 
@@ -5934,10 +6009,10 @@ function afficherListeAssociation(produits) {
         html += '<div onclick="associerEan(' + p.id + ')" '
             + 'style="background:white; border-radius:10px; padding:12px; margin-bottom:6px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; border:1px solid #e2e8f0;">'
             + '<div style="flex:1;">'
-            + '<b style="font-size:13px; color:#2d3748;">' + p.nom + '</b>' + dejaEan
-            + '<small style="display:block; font-size:11px; color:#718096;">' + p.emplacement + '</small>'
+            + '<b style="font-size:13px; color:#2d3748;">' + echapper(p.nom) + '</b>' + dejaEan
+            + '<small style="display:block; font-size:11px; color:#718096;">' + echapper(p.emplacement) + '</small>'
             + '</div>'
-            + '<b style="font-size:17px; color:#38a169;">' + p.quantite + '</b>'
+            + '<b style="font-size:17px; color:#38a169;">' + echapper(p.quantite) + '</b>'
             + '</div>';
     });
 
@@ -6003,6 +6078,8 @@ async function associerEan(produitId) {
                 compteurInventaire++;
                 document.getElementById('compteur-inventaire').innerText = compteurInventaire;
                 ajouterHistoriqueInventaire('➕ ' + produit.nom + ' → ' + nouvelleQte, '#48bb78');
+                const statutInv = document.getElementById('statut-inventaire');
+                if (statutInv) statutInv.innerText = '✅ ' + produit.nom + ' → ' + nouvelleQte;
             }
         }
 
@@ -6057,6 +6134,7 @@ async function creerNouveauProduitAssociation() {
 
         document.getElementById('modal-association').style.display = 'none';
         afficherToast('🆕 ' + nom + ' créé');
+        classerEnArrierePlan();
 
         if (contexteAssociation === 'inventaire' && nouveau) {
             compteurInventaire++;
@@ -6085,110 +6163,9 @@ function fermerAssociation() {
     const statut = document.getElementById('statut-scanner');
     if (statut) statut.innerText = '🔍 En attente d\'un code-barres...';
 }
-// ============================================================
-// DETECTER LES ALIMENTS PRESENTS PAR CATEGORIE
-// ============================================================
-function detecterCategories(nomsProduits) {
-    const trouves = { proteines: [], feculents: [], legumes: [] };
 
-    Object.keys(CATEGORIES_REPAS).forEach(function(cat) {
-        CATEGORIES_REPAS[cat].forEach(function(item) {
-            const present = item.mots.some(function(mot) {
-                return nomsProduits.some(function(nom) {
-                    return nom.indexOf(mot) !== -1;
-                });
-            });
-            if (present) {
-                trouves[cat].push(item.nom);
-            }
-        });
-    });
-
-    return trouves;
-}
-
-// ============================================================
-// GENERER DES COMBINAISONS DE REPAS
-// ============================================================
-function genererCombinaisons(categories, nombre) {
-    const combinaisons = [];
-
-    const prot = categories.proteines.slice();
-    const fec = categories.feculents.slice();
-    const leg = categories.legumes.slice();
-
-    if (prot.length === 0) return combinaisons;
-
-    // Melanger pour varier a chaque appel
-    const melanger = function(arr) {
-        return arr.sort(function() { return Math.random() - 0.5; });
-    };
-
-    melanger(prot);
-    melanger(fec);
-    melanger(leg);
-
-    const utilisees = { prot: [], fec: [], leg: [] };
-
-    for (let i = 0; i < prot.length && combinaisons.length < nombre; i++) {
-        const p = prot[i];
-
-        // Choisir un feculent pas encore utilise
-        const fecDispo = fec.filter(function(f) {
-            return utilisees.fec.indexOf(f) === -1;
-        });
-        const f = fecDispo.length > 0 ? fecDispo[0] : (fec.length > 0 ? fec[i % fec.length] : null);
-
-        // Choisir un legume pas encore utilise
-        const legDispo = leg.filter(function(l) {
-            return utilisees.leg.indexOf(l) === -1;
-        });
-        const l = legDispo.length > 0 ? legDispo[0] : (leg.length > 0 ? leg[i % leg.length] : null);
-
-        let nom = p;
-        if (f && l) {
-            nom = p + ', ' + f + ' et ' + l;
-        } else if (f) {
-            nom = p + ' et ' + f;
-        } else if (l) {
-            nom = p + ' et ' + l;
-        }
-
-        combinaisons.push({
-            nom: nom.charAt(0).toUpperCase() + nom.slice(1),
-            famille: 'COMBINAISON',
-            base: p,
-            temps_minutes: 20,
-            estCombinaison: true
-        });
-
-        utilisees.prot.push(p);
-        if (f) utilisees.fec.push(f);
-        if (l) utilisees.leg.push(l);
-    }
-
-    return combinaisons;
-}
-// Mots a ignorer quand on compare les noms de plats
-const MOTS_VIDES_PLAT = ['de', 'du', 'la', 'le', 'les', 'des', 'au', 'aux',
-                         'et', 'a', 'en', 'un', 'une', 'avec', 'sans',
-                         'pour', 'ce', 'soir', 'midi', 'faire', 'veux',
-                         'voudrais', 'peux', 'envie', 'plutot', 'maison'];
 						 
 						 
-// ============================================================
-// NORMALISER UN TEXTE POUR COMPARAISON
-// ============================================================
-function motsSignificatifs(texte) {
-    return (texte || '')
-        .toLowerCase()
-        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-        .replace(/[^a-z\s]/g, ' ')
-        .split(/\s+/)
-        .filter(function(m) {
-            return m.length >= 3 && MOTS_VIDES_PLAT.indexOf(m) === -1;
-        });
-}
 						 
 
 function estNomAbrege(nom) {
@@ -6333,116 +6310,8 @@ async function ouvrirScannerDates() {
     await demarrerScanCodeBarre();
 }
 
-const ORDRE_ROLES = [
-    { cle: 'proteine',       titre: 'PROTÉINES (viande, poisson, oeufs, légumineuses)' },
-    { cle: 'feculent',       titre: 'FÉCULENTS' },
-    { cle: 'legume',         titre: 'LÉGUMES' },
-    { cle: 'fromage',        titre: 'FROMAGES' },
-    { cle: 'sauce',          titre: 'SAUCES ET CRÈMES' },
-    { cle: 'condiment',      titre: 'CONDIMENTS ET BASES' },
-    { cle: 'dessert',        titre: 'DESSERTS (ne se cuisinent pas dans un plat salé)' },
-    { cle: 'petit_dejeuner', titre: 'PETIT-DÉJEUNER (ne se cuisinent pas dans un plat salé)' },
-    { cle: 'grignotage',     titre: 'GRIGNOTAGE (ne se cuisinent pas dans un plat salé)' }
-];
  
  
-async function construireContexteStock() {
-    if (!utilisateurActuel) return null;
- 
-    const { data: produits, error } = await monSupabase
-        .from('inventaire2')
-        .select('nom, quantite, emplacement, etat, date_peremption, role_culinaire')
-        .eq('proprietaire', utilisateurActuel)
-        .gt('quantite', 0)
-        .not('emplacement', 'in', '("ANIMAUX","SALLE_DE_BAIN","AUTRES")')
-        .or('role_culinaire.is.null,role_culinaire.neq.non_alimentaire');
- 
-    if (error) {
-        console.error('Erreur stock :', error.message);
-        return null;
-    }
-    if (!produits || produits.length === 0) return null;
- 
-    const utiles = produits.filter(function(p) {
-        return p.role_culinaire !== 'boisson';
-    });
- 
-    if (utiles.length === 0) return null;
- 
-    // ── PRODUITS URGENTS ──
-    const urgents = [];
-    utiles.forEach(function(p) {
-        if (p.etat === 'Entamé') {
-            urgents.push(p.nom + ' (entamé)');
-            return;
-        }
-        if (p.date_peremption) {
-            const jours = Math.ceil((new Date(p.date_peremption) - new Date()) / 86400000);
-            if (jours <= 3) {
-                urgents.push(p.nom + (jours <= 0 ? ' (à consommer tout de suite)' : ' (dans ' + jours + ' j)'));
-            }
-        }
-    });
- 
-    // ── GROUPEMENT PAR ROLE, NUMEROTATION CONTINUE ──
-    window.rolesParNumero = {};
- 
-    const lignes = [];
-    const nomsProduits = [];
-    let numero = 0;
- 
-    ORDRE_ROLES.forEach(function(groupe) {
-        const duGroupe = utiles.filter(function(p) {
-            return p.role_culinaire === groupe.cle;
-        });
-        if (duGroupe.length === 0) return;
- 
-        lignes.push('');
-        lignes.push('── ' + groupe.titre + ' ──');
- 
-        duGroupe.forEach(function(p) {
-            numero++;
-            window.rolesParNumero[numero] = groupe.cle;
-            lignes.push(numero + '. ' + p.nom + ' (' + p.emplacement
-                + (p.etat === 'Entamé' ? ', entamé' : '') + ')');
-            nomsProduits.push(p.nom.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''));
-        });
-    });
- 
-    // ── PRODUITS SANS ROLE, EN FIN DE LISTE ──
-    const orphelins = utiles.filter(function(p) {
-        return !p.role_culinaire
-            || ORDRE_ROLES.every(function(g) { return g.cle !== p.role_culinaire; });
-    });
- 
-    if (orphelins.length > 0) {
-        lignes.push('');
-        lignes.push('── AUTRES PRODUITS ──');
-        orphelins.forEach(function(p) {
-            numero++;
-            window.rolesParNumero[numero] = 'inconnu';
-            lignes.push(numero + '. ' + p.nom + ' (' + p.emplacement
-                + (p.etat === 'Entamé' ? ', entamé' : '') + ')');
-            nomsProduits.push(p.nom.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''));
-        });
-        console.log('🏷️ ' + orphelins.length + ' produits sans rôle — lance le classement');
-    }
- 
-    let texte = lignes.join('\n').trim();
- 
-    if (urgents.length > 0) {
-        texte += '\n\n── À UTILISER EN PRIORITÉ ──\n' + urgents.join(', ');
-    }
- 
-    console.log('📦 Stock pour le Chef : ' + numero + ' produits');
- 
-    return {
-        texte: texte,
-        nomsProduits: nomsProduits,
-        urgents: urgents,
-        nombre: numero
-    };
-}
 
 
 async function envoyerMessageChef(modeForce) {
@@ -6555,433 +6424,13 @@ async function envoyerMessageChef(modeForce) {
     }
 }
 
-// ============================================================
-// 4. PROMPT DE COMPOSITION LIBRE
-// ============================================================
-function construirePromptLibre(message, contexte, mode, inspirations) {
-
-    let historique = '';
-    if (conversationChef.length > 0) {
-        historique = '\nCONVERSATION EN COURS :\n'
-            + conversationChef.map(function(c) {
-                return (c.role === 'moi' ? 'Utilisateur : ' : 'Toi : ') + c.texte;
-              }).join('\n') + '\n';
-    }
-
-    let bloc = '';
-    if (inspirations.length > 0) {
-        bloc = '\nPISTES POSSIBLES (indicatif, tu n es pas obligé) :\n'
-             + inspirations.map(function(r) {
-                 return '- ' + r.nom;
-               }).join('\n') + '\n';
-    }
-
-    // ── ANTI-REPETITION ──
-    let interdits = '';
-    const bannis = window.platsDejaProposes || [];
-    const recents = window.produitsRecents || [];
-
-    if (bannis.length > 0) {
-        interdits = `
-═══════════════════════════════════════
-PLATS DÉJÀ PROPOSÉS — INTERDITS
-═══════════════════════════════════════
-
-Ces plats sont déjà sortis dans cette conversation. Tu ne peux pas les
-reproposer, ni sous un autre nom, ni avec une variante mineure :
-${bannis.map(function(n) { return '- ' + n; }).join('\n')}
-`;
-
-        if (recents.length > 0) {
-            interdits += `
-Au dernier tour tu as utilisé : ${recents.join(', ')}.
-Change de base : autre protéine, autre féculent, autre mode de cuisson.
-Un plat qui réutilise la même protéine ET le même féculent qu'au dernier
-tour compte comme une répétition.
-
-Si tu as vraiment fait le tour de ce que permet le stock, dis-le
-franchement plutôt que de recycler. C'est une réponse acceptable.
-`;
-        }
-    }
-
-    const contextesModes = {
-        quotidien: `C'est un soir de semaine. Il faut du simple et rapide, moins de 25 minutes.
-Dans la cuisine familiale française, c'est souvent une protéine, un féculent et un
-légume dans la même assiette. Ou un plat unique classique : croque-monsieur,
-coquillettes au jambon, omelette, pâtes carbonara, hachis parmentier.`,
-
-        weekend: `C'est le week-end, il y a du temps. Plat qui mijote, rôti, gratin, quelque chose de généreux.`,
-
-        cookeo: `Cuisine au Cookeo, multicuiseur sous pression : mijotés express, riz et pâtes en cuisson unique, légumes vapeur, soupes.
-Tout se fait dans la cuve, en une seule cuisson. Pas de four, pas de plusieurs casseroles.`,
-
-        healthy: `Repas léger et équilibré : légumes, protéines maigres, cuissons douces.`,
-
-        monde: `Changer du quotidien français : plats d'autres cuisines, réalisables avec ce qu'il y a.`,
-
-        dessert: `Un dessert.`,
-
-        antigaspi: `Utiliser en priorité ce qui doit être mangé rapidement.`
-    };
-
-    return `Tu es le Chef, un cuisinier familier et débrouillard.
-Tu connais la cuisine française du quotidien et tu sais improviser.
-
-${contextesModes[mode] || contextesModes.quotidien}
-
-INVENTAIRE COMPLET — voici TOUT ce que l'utilisateur possède, rien d'autre :
-${contexte.texte}
-${bloc}${historique}
-DEMANDE DE L'UTILISATEUR : "${message}"
-${interdits}
-
-═══════════════════════════════════════
-RÈGLE N°1 — NE RIEN INVENTER
-═══════════════════════════════════════
-
-Tu ne proposes QUE des plats réalisables avec l'inventaire ci-dessus.
-Si un ingrédient n'y figure pas, il n'existe pas : tu ne peux pas l'utiliser.
-
-Seules exceptions, toujours disponibles sans être listées :
-sel, poivre, eau, huile, vinaigre, herbes et épices sèches.
-
-Tu peux adapter un plat classique à ce qu'il y a — remplacer un fromage par
-un autre, une viande par une autre, un féculent par un autre — mais tu dois
-le dire franchement plutôt que de faire comme si la recette était complète.
-
-Si l'inventaire ne permet vraiment rien de correct, dis-le simplement.
-Mieux vaut une réponse honnête qu'un plat impossible.
-
-Les produits listés sous DESSERTS, PETIT-DÉJEUNER et GRIGNOTAGE
-ne peuvent JAMAIS entrer dans un plat salé. Pas de céréales du
-petit-déjeuner dans une poêlée, pas de compote ni de dessert aux
-fruits en accompagnement d'une viande, pas de biscuits apéritif
-dans une recette. Ils ne servent que pour un dessert ou un goûter.
-
-
-═══════════════════════════════════════
-VOCABULAIRE DES INGRÉDIENTS
-═══════════════════════════════════════
-
-Nomme toujours les ingrédients comme ils apparaissent dans l'inventaire,
-jamais par un terme culinaire générique ou une découpe différente.
-
-Si l'inventaire dit "filet de poulet", écris "filet de poulet",
-pas "escalope de poulet" ni "blanc de poulet".
-Si l'inventaire dit "épaule", écris "épaule", pas "rôti de porc".
-Si l'inventaire dit "jarret", écris "jarret", pas "jambonneau".
-
-Tu peux expliquer une transformation si elle est nécessaire à la recette,
-mais en partant du produit réel :
-"tes filets de poulet taillés en fines tranches" plutôt que "des escalopes".
-
-
-═══════════════════════════════════════
-QUANTITÉS
-═══════════════════════════════════════
-
-L'inventaire compte des EMBALLAGES, pas des portions.
-"3 lardons fumés" veut dire trois barquettes, pas trois lardons.
-Ne dis jamais à l'utilisateur qu'il n'a pas assez d'un produit en te basant
-sur ce chiffre : une seule barquette suffit presque toujours pour un repas.
-
-
-═══════════════════════════════════════
-COMMENT RÉPONDRE
-═══════════════════════════════════════
-
-- QUESTION sur le stock : réponds factuellement d'après l'inventaire.
-- ANNONCE d'une décision : accompagne-le, dis s'il a tout, propose un
-  accompagnement. Ne propose pas autre chose à la place.
-- DEMANDE D'IDÉES : propose 3 repas franchement différents — pas la même
-  viande, pas le même féculent. Termine par "Lequel te tente ?"
-
-
-═══════════════════════════════════════
-FORMAT DE TA RÉPONSE
-═══════════════════════════════════════
-
-Réponds UNIQUEMENT en JSON valide, sans markdown ni backticks :
-
-{
-  "message": "ta réponse naturelle à l'utilisateur",
-  "plats": [
-    { "nom": "Nom court du plat", "produits": [3, 12, 18] },
-    { "nom": "Nom court du plat", "produits": [7, 21] },
-    { "nom": "Nom court du plat", "produits": [5, 9, 14] }
-  ]
-}
-
-RÈGLE ABSOLUE SUR "produits" :
-Tu dois lister les NUMÉROS exacts des lignes de l'inventaire ci-dessus
-que le plat utilise. Chaque ingrédient principal que tu cites dans ton
-message doit correspondre à un numéro présent dans cette liste.
-
-Tu n'as PAS le droit d'utiliser un ingrédient qui n'a pas de numéro.
-Si tu ne trouves pas le numéro d'un ingrédient dans l'inventaire,
-c'est qu'il n'existe pas : change de plat.
-
-Les seules exceptions, que tu ne listes jamais dans "produits" :
-sel, poivre, eau, huile, vinaigre, herbes et épices sèches.
-Tout le reste — viande, poisson, féculent, légume, fromage, crème,
-oeufs, conserve, sauce — doit avoir son numéro.
-
-Le champ "message" contient ta réponse telle que l'utilisateur la lira.
-Trois phrases maximum, ton naturel et direct, comme un pote qui cuisine bien.
-Pas de markdown, pas de gras, pas de listes à puces, pas de sauts de ligne.
-Ne cite JAMAIS les numéros dans le message : ils servent uniquement au contrôle.
-
-Le champ "nom" est court et clair, 2 à 6 mots, sans durée ni commentaire.
-
-Exemple, avec un inventaire où 4 = coquillettes, 11 = lardons,
-17 = cancoillotte, 2 = jarret, 23 = carottes :
-
-{
-  "message": "Ce soir je peux te faire des coquillettes aux lardons et à la cancoillotte, ou un jarret mijoté avec des carottes. Lequel te tente ?",
-  "plats": [
-    { "nom": "Coquillettes aux lardons et cancoillotte", "produits": [4, 11, 17] },
-    { "nom": "Jarret mijoté aux carottes", "produits": [2, 23] }
-  ]
-}
-
-Si tu ne proposes aucun plat — question sur le stock, réponse à une
-annonce — laisse le tableau vide :
-
-{ "message": "Oui, tu as bien du poulet au congélateur, deux filets.", "plats": [] }
-`;
-}
 
  
-function extraireReponseChef(brut, index) {
-    if (!brut) return { message: '', plats: [] };
-
-    index = index || {};
-    let data = null;
-
-    try {
-        const propre = brut.replace(/```json/g, '').replace(/```/g, '').trim();
-        const debut = propre.indexOf('{');
-        const fin = propre.lastIndexOf('}');
-        if (debut !== -1 && fin > debut) {
-            data = JSON.parse(propre.substring(debut, fin + 1));
-        }
-    } catch (e) {
-        console.log('⚠️ Réponse non JSON, texte brut affiché');
-    }
-
-    // Repli : Gemini n'a pas respecté le format
-    if (!data || typeof data.message !== 'string') {
-        return { message: brut, plats: [] };
-    }
-
-    const platsBruts = Array.isArray(data.plats) ? data.plats : [];
-    const valides = [];
-    const rejetes = [];
-
-    platsBruts.forEach(function(plat) {
-        // Tolérance : ancien format en simple chaîne
-        if (typeof plat === 'string') {
-            valides.push({ nom: plat, produits: [], ingredients: [] });
-            return;
-        }
-        if (!plat || !plat.nom) return;
-
-        const numeros = Array.isArray(plat.produits) ? plat.produits : [];
-        const invalides = numeros.filter(function(n) { return !index[n]; });
-
-        if (invalides.length > 0) {
-            rejetes.push({ nom: plat.nom, numeros: invalides });
-            console.warn('🚫 Plat rejeté : "' + plat.nom + '" — numéros inconnus : ' + invalides.join(', '));
-            return;
-        }
-
-        valides.push({
-            nom: plat.nom,
-            produits: numeros,
-            ingredients: numeros.map(function(n) { return index[n]; })
-        });
-    });
-
-    let message = data.message;
-    if (rejetes.length > 0) {
-        message = nettoyerMessageChef(message, rejetes, valides);
-    }
-
-    return { message: message, plats: valides.slice(0, 3), rejetes: rejetes };
-}
-// ============================================================
-// 3. NETTOYER LE MESSAGE QUAND UN PLAT EST RETIRE
-// ============================================================
-function nettoyerMessageChef(message, rejetes, valides) {
-    if (valides.length === 0) {
-        return "Je me suis emmêlé les pinceaux avec ton stock. Redemande-moi, je regarde mieux.";
-    }
-
-    const normaliser = function(t) {
-        return (t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-    };
-
-    const phrases = message.split(/(?<=[.!?])\s+/);
-
-    const gardees = phrases.filter(function(phrase) {
-        const p = normaliser(phrase);
-        return !rejetes.some(function(r) {
-            const mots = normaliser(r.nom).split(/\s+/).filter(function(m) { return m.length >= 4; });
-            if (mots.length === 0) return false;
-            const trouves = mots.filter(function(m) { return p.includes(m); });
-            return trouves.length >= Math.ceil(mots.length / 2);
-        });
-    });
-
-    const resultat = gardees.join(' ').trim();
-
-    if (resultat.length < 20) {
-        const noms = valides.map(function(v) { return v.nom.toLowerCase(); });
-        if (noms.length === 1) {
-            return "Avec ce que tu as, je te propose " + noms[0] + ". Ça te va ?";
-        }
-        return "Avec ce que tu as, je te propose "
-            + noms.slice(0, -1).join(', ')
-            + " ou " + noms[noms.length - 1] + ". Lequel te tente ?";
-    }
-
-    return resultat;
-}
 
 
-
-function normaliser(texte) {
-    return (texte || '')
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[̀-ͯ]/g, '');
-}
-
-function construireIndexInventaire(texte) {
-    const index = {};
-    if (!texte) return index;
-
-    texte.split('\n').forEach(function(ligne) {
-        const m = ligne.match(/^\s*(\d+)\s*[.)\-–]\s*(.+)$/);
-        if (m) {
-            index[parseInt(m[1], 10)] = m[2].trim();
-        }
-    });
-
-    console.log('📋 Index inventaire : ' + Object.keys(index).length + ' produits');
-    return index;
-}
-
-function nomDuPlatChoisi(choix) {
-    const plats = window.platsProposes || [];
-    if (!plats.length) return null;
-
-    let i = 0;
-    if (/deuxi/.test(choix)) i = 1;
-    else if (/troisi/.test(choix)) i = 2;
-
-    return plats[i] || null;
-}
-
-function memoriserPlats(plats) {
-    if (!plats || plats.length === 0) return;
-
-    if (!window.platsDejaProposes) window.platsDejaProposes = [];
-    if (!window.produitsRecents) window.produitsRecents = [];
-    if (!window.signaturesSorties) window.signaturesSorties = [];
-
-    plats.forEach(function(p) {
-        if (p.nom) window.platsDejaProposes.push(p.nom);
-
-        const sig = signaturePlat(p.produits);
-        if (sig && window.signaturesSorties.indexOf(sig) === -1) {
-            window.signaturesSorties.push(sig);
-        }
-    });
-
-    window.produitsRecents = [];
-    plats.forEach(function(p) {
-        (p.ingredients || []).forEach(function(nom) {
-            if (window.produitsRecents.indexOf(nom) === -1) {
-                window.produitsRecents.push(nom);
-            }
-        });
-    });
-
-    if (window.platsDejaProposes.length > 8) {
-        window.platsDejaProposes = window.platsDejaProposes.slice(-8);
-    }
-
-    // Une signature par plat, donc 15 signatures = 15 plats de memoire
-    if (window.signaturesSorties.length > 15) {
-        window.signaturesSorties = window.signaturesSorties.slice(-15);
-    }
-
-    console.log('🚫 Bannis : ' + window.platsDejaProposes.length
-        + ' plats | ' + window.signaturesSorties.length + ' duos');
-}
  
-function signaturePlat(produits) {
-    const roles = window.rolesParNumero || {};
-
-    const proteines = [];
-    const feculents = [];
-
-    (produits || []).forEach(function(n) {
-        const role = roles[n];
-        if (role === 'proteine') proteines.push(n);
-        else if (role === 'feculent') feculents.push(n);
-    });
-
-    // Un plat sans protéine ni féculent identifiés n'a pas de
-    // signature exploitable : on le laisse passer
-    if (proteines.length === 0 && feculents.length === 0) return null;
-
-    proteines.sort(function(a, b) { return a - b; });
-    feculents.sort(function(a, b) { return a - b; });
-
-    return 'P:' + proteines.join(',') + '|F:' + feculents.join(',');
-}
 
 
-// ============================================================
-// 3. FILTRER LES PLATS QUI REPRENNENT LE MEME DUO
-// ============================================================
-function filtrerDoublons(plats) {
-    const connues = window.signaturesSorties || [];
-    const gardes = [];
-    const vues = [];
-
-    (plats || []).forEach(function(p) {
-        const sig = signaturePlat(p.produits);
-
-        if (!sig) {
-            gardes.push(p);
-            return;
-        }
-
-        if (connues.indexOf(sig) !== -1 || vues.indexOf(sig) !== -1) {
-            console.warn('♻️ Même duo protéine-féculent : "' + p.nom + '" (' + sig + ')');
-            return;
-        }
-
-        vues.push(sig);
-        gardes.push(p);
-    });
-
-    return gardes;
-}
-
-function genererPaires(nums) {
-    const paires = [];
-    for (let i = 0; i < nums.length; i++) {
-        for (let j = i + 1; j < nums.length; j++) {
-            paires.push(nums[i] + '-' + nums[j]);
-        }
-    }
-    return paires;
-}
  
 const ROLES_VALIDES = [
     'proteine', 'feculent', 'legume', 'fromage', 'sauce',
@@ -6994,7 +6443,28 @@ const ROLES_VALIDES = [
 // ============================================================
 // CLASSER TOUT CE QUI N'A PAS DE ROLE
 // ============================================================
-async function classerRolesManquants() {
+let classementEnCours = false;
+let minuterieClassement = null;
+
+// À appeler après chaque ajout de produit : classe en silence ce qui n'a pas de rôle.
+// Plusieurs ajouts de suite ne font qu'une seule demande.
+function classerEnArrierePlan() {
+    clearTimeout(minuterieClassement);
+    minuterieClassement = setTimeout(function() { classerRolesManquants(true); }, 2000);
+}
+
+async function classerRolesManquants(silencieux) {
+    silencieux = (silencieux === true);
+    if (classementEnCours) return;
+    classementEnCours = true;
+    try {
+        await classerRolesManquantsInterne(silencieux);
+    } finally {
+        classementEnCours = false;
+    }
+}
+
+async function classerRolesManquantsInterne(silencieux) {
     if (!utilisateurActuel) {
         utilisateurActuel = localStorage.getItem('monFrigo_User');
     }
@@ -7004,7 +6474,7 @@ async function classerRolesManquants() {
     }
  
     const statut = document.getElementById('statut-roles');
-    const dire = function(t) { if (statut) statut.innerText = t; };
+    const dire = function(t) { if (statut && !silencieux) statut.innerText = t; };
  
     dire('🔍 Recherche des produits non classés...');
  
@@ -7020,7 +6490,7 @@ async function classerRolesManquants() {
  
         if (!produits || produits.length === 0) {
             dire('✅ Tout est déjà classé');
-            afficherToast('Tous les produits ont un rôle');
+            if (!silencieux) afficherToast('Tous les produits ont un rôle');
             return;
         }
  
@@ -7068,7 +6538,8 @@ async function classerRolesManquants() {
         }
  
         dire(`✅ ${classes} classés${echecs > 0 ? ` — ${echecs} en échec` : ''}`);
-        afficherToast(`${classes} produits classés`);
+        if (!silencieux) afficherToast(`${classes} produits classés`);
+        if (classes > 0) rafraichirDisponibiliteFiltres();
  
     } catch (err) {
         console.error('Erreur classement :', err);
@@ -7133,79 +6604,15 @@ avec l'id en clé et le rôle en valeur :
 }
  
  
-// ============================================================
-// CLASSER UN SEUL PRODUIT — au scan, a l'ajout manuel
-// A appeler apres l'insertion d'un nouveau produit
-// ============================================================
-async function classerUnProduit(id, nom, emplacement) {
-    try {
-        const roles = await demanderRoles([{ id: id, nom: nom, emplacement: emplacement }]);
-        const role = roles[String(id)];
  
-        if (role && ROLES_VALIDES.indexOf(role) !== -1) {
-            await monSupabase
-                .from('inventaire2')
-                .update({ role_culinaire: role })
-                .eq('id', id);
-            console.log(`🏷️ ${nom} → ${role}`);
-            return role;
-        }
-    } catch (e) {
-        console.log('Classement différé pour ' + nom + ' : ' + e.message);
-    }
-    return null;
-}
- 
-function viderMemoireChef() {
-    window.assiettesServies = [];
-    window.rolesParId = {};
-    conversationChef = [];
-    console.log('🧹 Mémoire du Chef vidée');
-}
 
-
-const ROLES_INCOMPATIBLES_SALE = ['dessert', 'petit_dejeuner', 'grignotage'];
-
-
-function filtrerIncoherences(plats, mode) {
-    // En mode dessert, tout est permis
-    if (mode === 'dessert') return plats;
-
-    const roles = window.rolesParNumero || {};
-    const gardes = [];
-
-    (plats || []).forEach(function(p) {
-        const nums = p.produits || [];
-
-        const sale = nums.some(function(n) {
-            return roles[n] === 'proteine' || roles[n] === 'feculent' || roles[n] === 'legume';
-        });
-
-        const sucre = nums.filter(function(n) {
-            return ROLES_INCOMPATIBLES_SALE.indexOf(roles[n]) !== -1;
-        });
-
-        if (sale && sucre.length > 0) {
-            const noms = sucre.map(function(n) {
-                return (p.ingredients && p.ingredients[nums.indexOf(n)]) || ('n°' + n);
-            });
-            console.warn('🚫 Plat incohérent : "' + p.nom + '" — mélange salé et '
-                + noms.join(', '));
-            return;
-        }
-
-        gardes.push(p);
-    });
-
-    return gardes;
-}
 
 function construirePromptChef(message, mode, vivier) {
 
     const contextesModes = {
         quotidien: "C'est un soir de semaine : simple et rapide.",
         weekend:   "C'est le week-end, il y a du temps.",
-        cookeo:    "Au Cookeo : tout dans la cuve, une seule cuisson.",
+        cookeo:    "Au Cookeo : des plats qui se font entièrement dans la cuve (mijotés, currys, risottos, soupes, pâtes ou riz cuits dans leur sauce).",
         healthy:   "Repas léger.",
         monde:     "Une cuisine d'ailleurs.",
         antigaspi: "On finit en priorité ce qui doit être mangé vite.",
@@ -7339,6 +6746,10 @@ async function chargerStockParRole() {
     data.forEach(function(p) {
         if (horsCuisine.indexOf(p.role_culinaire) !== -1) return;
 
+        // Ce qui est sur la liste de courses, archivé, ou noté comme reste
+        // n'est pas un ingrédient disponible.
+        if (p.etat === 'Vide' || p.etat === 'Archive' || p.etat === 'Tup') return;
+
         // Jours restants avant peremption, pour la priorite
         let jours = 999;
         if (p.date_peremption) {
@@ -7471,216 +6882,16 @@ function lireReponseChef(brut, vivier) {
             nom: nomDePlatFiable(c.nom, assiette),
             signature: assiette.signature,
             produits: assiette.produits.map(function(p) { return p.id; }),
-            ingredients: assiette.produits.map(function(p) { return p.nom; })
+            ingredients: assiette.produits.map(function(p) { return p.nom; }),
+            temps: assiette.temps || null,
+            image: assiette.image || null,
+            recette: String(assiette.signature || '').indexOf('r:') === 0 ? assiette.nom : null,
+            cookeo: !!assiette.cookeo,
+            familles: assiette.familles || []
         });
     });
 
     return { message: data.message, plats: plats.slice(0, 3) };
-}
-
-
-// ============================================================
-// 2. COMPOSER LES ASSIETTES
-// Trois formes : complete, sans feculent, plat unique
-// ============================================================
-function composerAssiettes(parRole, mode) {
-    const assiettes = [];
-
-    const proteines = parRole.proteine;
-    const feculents = parRole.feculent;
-    const legumes   = parRole.legume;
-    const fromages  = parRole.fromage;
-
-    // Protéine + féculent + légume
-    proteines.forEach(function(prot) {
-        feculents.forEach(function(fec) {
-            legumes.forEach(function(leg) {
-                assiettes.push({
-                    produits: [prot, fec, leg],
-                    forme: 'complete',
-                    score: noterAssiette([prot, fec, leg], mode)
-                });
-            });
-        });
-    });
-
-    // Protéine + légume
-    proteines.forEach(function(prot) {
-        legumes.forEach(function(leg) {
-            assiettes.push({
-                produits: [prot, leg],
-                forme: 'leger',
-                score: noterAssiette([prot, leg], mode) - 1
-            });
-        });
-    });
-
-    // Féculent + fromage
-    feculents.forEach(function(fec) {
-        fromages.forEach(function(fro) {
-            assiettes.push({
-                produits: [fec, fro],
-                forme: 'simple',
-                score: noterAssiette([fec, fro], mode) - 2
-            });
-        });
-    });
-
-    // Protéine + féculent
-    proteines.forEach(function(prot) {
-        feculents.forEach(function(fec) {
-            assiettes.push({
-                produits: [prot, fec],
-                forme: 'classique',
-                score: noterAssiette([prot, fec], mode) - 1
-            });
-        });
-    });
-
-    console.log('🍽️ ' + assiettes.length + ' assiettes composées');
-    return assiettes;
-}
-
-// ============================================================
-// 3. NOTER UNE ASSIETTE
-// L'urgence pese lourd, le frigo avant le placard,
-// et un peu de hasard pour ne pas figer le classement
-// ============================================================
-function noterAssiette(produits, mode) {
-    let score = 0;
-
-    if (mode === 'antigaspi') {
-        produits.forEach(function(p) {
-            if (p.entame) score += 6;
-            else if (p.jours <= 1) score += 8;
-            else if (p.jours <= 3) score += 5;
-            else if (p.jours <= 7) score += 2;
-        });
-    }
-
-    // Un leger penchant pour le frais, qui tourne plus vite
-    // que le placard, mais sans dominer quoi que ce soit
-    produits.forEach(function(p) {
-        if (p.emplacement === 'FRIGO') score += 1;
-    });
-
-    // L'essentiel du classement : du hasard.
-    // C'est ce qui donne la variete d'un soir a l'autre.
-    score += Math.random() * 10;
-
-    return score;
-}
-
-function choisirVivier(assiettes, taille) {
-    const dejaVus = window.assiettesServies || [];
-    const roles = window.rolesParId || {};
-
-    // Famille de chaque role, pour chaque assiette
-    const candidates = [];
-    assiettes.forEach(function(a) {
-        const sig = signatureAssiette(a);
-        if (dejaVus.indexOf(sig) !== -1) return;
-
-        const familles = {};
-        a.produits.forEach(function(p) {
-            const role = roles[p.id] || 'inconnu';
-            familles[role] = familleIngredient(p.nom, role);   // ← le role en 2e argument
-        });
-
-        a.signature = sig;
-        a.familles = familles;
-        candidates.push(a);
-    });
-
-    if (candidates.length === 0) return [];
-
-    // Regrouper par famille de legume ; les assiettes sans legume
-    // forment leur propre groupe
-    const groupes = {};
-    candidates.forEach(function(a) {
-        const cle = a.familles.legume || '(sans légume)';
-        if (!groupes[cle]) groupes[cle] = [];
-        groupes[cle].push(a);
-    });
-
-    // Dans chaque groupe, les meilleures d'abord
-    Object.keys(groupes).forEach(function(cle) {
-        groupes[cle].sort(function(x, y) { return y.score - x.score; });
-    });
-
-    // Les familles rares passent en premier : sinon elles n'ont
-    // jamais leur tour quand le vivier se remplit
-    const ordreFamilles = Object.keys(groupes).sort(function(a, b) {
-        return groupes[a].length - groupes[b].length;
-    });
-
-    // ── ROTATION ──
-    const vivier = [];
-    const compteurs = { proteine: {}, feculent: {} };
-    const indexGroupe = {};
-    ordreFamilles.forEach(function(cle) { indexGroupe[cle] = 0; });
-
-    let tour = 0;
-    while (vivier.length < taille && tour < 6) {
-        let aAvance = false;
-
-        for (let i = 0; i < ordreFamilles.length && vivier.length < taille; i++) {
-            const cle = ordreFamilles[i];
-            const groupe = groupes[cle];
-
-            // Une assiette par famille de légume et par tour,
-            // et pas plus de 4 assiettes sans légume en tout
-            if (cle === '(sans légume)' && tour >= 4) continue;
-
-            while (indexGroupe[cle] < groupe.length) {
-                const a = groupe[indexGroupe[cle]];
-                indexGroupe[cle]++;
-
-                const fp = a.familles.proteine || 'sans';
-                const ff = a.familles.feculent || 'sans';
-
-                // Deux assiettes au maximum par protéine et par féculent
-                if ((compteurs.proteine[fp] || 0) >= 2) continue;
-                if ((compteurs.feculent[ff] || 0) >= 2) continue;
-
-                compteurs.proteine[fp] = (compteurs.proteine[fp] || 0) + 1;
-                compteurs.feculent[ff] = (compteurs.feculent[ff] || 0) + 1;
-
-                vivier.push(a);
-                aAvance = true;
-                break;
-            }
-        }
-
-        if (!aAvance) break;
-        tour++;
-    }
-
-    const legumesRetenus = {};
-    vivier.forEach(function(a) {
-        const l = a.familles.legume || '(sans)';
-        legumesRetenus[l] = (legumesRetenus[l] || 0) + 1;
-    });
-    console.log('🥬 Légumes dans le vivier : '
-        + Object.keys(legumesRetenus).map(function(k) {
-            return k + '×' + legumesRetenus[k];
-          }).join(', '));
-
-    return vivier;
-}
-
-
-// Un produit a-t-il ce role ? On se sert de la table remplie au chargement
-function estRole(produit, role) {
-    return window.rolesParId && window.rolesParId[produit.id] === role;
-}
-
-
-function signatureAssiette(assiette) {
-    return assiette.produits
-        .map(function(p) { return p.id; })
-        .sort(function(a, b) { return a - b; })
-        .join('-');
 }
 
 
@@ -8053,7 +7264,7 @@ function motsTrahisParLeTitre(titreNormalise, produits) {
 async function chargerRecettesFaisables(mode, famillesDispo) {
     const { data: recettes, error } = await monSupabase
         .from('recettes_chef')
-        .select('nom, mode, familles_obligatoires, familles_optionnelles, temps_minutes, difficulte, saison')
+        .select('nom, mode, familles_obligatoires, familles_optionnelles, temps_minutes, difficulte, saison, cookeo, image_url')
         .eq('actif', true);
 
     if (error || !recettes) {
@@ -8130,8 +7341,11 @@ async function chargerRecettesFaisables(mode, famillesDispo) {
         titreHonnete = (trahis.length === 0 && impossibles.length === 0);
 
         // ── SCORE ──
+        const auCookeo = (r.cookeo === true) || (r.mode === 'cookeo');
+
         let score = 10;
         if (r.mode === mode) score += 8;
+        if (mode === 'cookeo' && auCookeo) score += 6;
         else if (mode === 'quotidien' && r.temps_minutes <= 30) score += 3;
         if (mode === 'antigaspi') {
             const urgents = produits.filter(function(p) { return p.urgent; }).length;
@@ -8162,6 +7376,8 @@ async function chargerRecettesFaisables(mode, famillesDispo) {
             nom: r.nom,
             temps: r.temps_minutes,
             modeRecette: r.mode,
+            cookeo: auCookeo,
+            image: r.image_url || null,
             produits: produits,
             familles: obligatoires,
             titreHonnete: titreHonnete,
@@ -8192,6 +7408,17 @@ async function preparerVivier(mode) {
 
     let faisables = await chargerRecettesFaisables(mode, famillesDispo);
     faisables = appliquerFiltresChef(faisables);
+
+    if (mode === 'cookeo') {
+        const auCookeo = faisables.filter(function(r) { return r.cookeo; });
+        if (auCookeo.length === 0 && faisables.length > 0) {
+            window.messageVivierVide =
+                "Avec ton stock de ce soir, je n'ai pas de plat qui se fait au Cookeo. "
+                + "Demande-moi plutôt une idée en mode normal.";
+            return null;
+        }
+        faisables = auCookeo;
+    }
     console.log('✅ ' + faisables.length + ' recettes réalisables');
 
     if (faisables.length === 0) {
@@ -8574,7 +7801,6 @@ function demanderAvecFiltres() {
 }
 
 
-
 // ─────────────────────────────────────────────────────────
 // APPLIQUER LES FILTRES AUX RECETTES RÉALISABLES
 // ─────────────────────────────────────────────────────────
@@ -8760,7 +7986,7 @@ async function decouvrirRecettes(manqueMax) {
         console.error('Découverte :', e.message);
         zone.innerHTML = '<div style="text-align:center; padding:14px; font-size:12px; '
                        + 'color:#c53030;">Je n\'ai pas réussi à chercher. '
-                       + e.message + '</div>';
+                       + echapper(e.message) + '</div>';
     }
 }
 
@@ -8803,13 +8029,13 @@ function rendreDecouvertes(liste) {
         + 'margin-bottom:7px; border:1px solid #e9d8fd;">'
 
         + '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">'
-        + '<b style="font-size:13px; color:#2d3748;">' + r.nom + '</b>'
+        + '<b style="font-size:13px; color:#2d3748;">' + echapper(r.nom) + '</b>'
         + '<small style="font-size:10px; color:#a0aec0; white-space:nowrap;">'
         + (r.temps ? r.temps + ' min' : '') + '</small>'
         + '</div>'
 
         + '<div style="font-size:11px; color:#6b46c1; margin:5px 0 8px 0;">'
-        + 'il te manque : <b>' + manquants + '</b>'
+        + 'il te manque : <b>' + echapper(manquants) + '</b>'
         + '</div>'
 
         + '<button onclick="ajouterManquantsAuxCourses(' + i + ')" '
@@ -8948,7 +8174,7 @@ async function suggererCourses() {
     } catch (e) {
         console.error('Achats utiles :', e.message);
         zone.innerHTML = '<div style="text-align:center; padding:14px; font-size:12px; '
-                       + 'color:#c53030;">Calcul impossible. ' + e.message + '</div>';
+                       + 'color:#c53030;">Calcul impossible. ' + echapper(e.message) + '</div>';
     }
 }
 
@@ -8973,7 +8199,7 @@ function rendreAchatsUtiles(classement) {
 
         + '<div style="display:flex; align-items:center; gap:8px;">'
         + '<div style="flex:1; min-width:0;">'
-        + '<b style="font-size:13px; color:#2d3748;">' + a.label + '</b>'
+        + '<b style="font-size:13px; color:#2d3748;">' + echapper(a.label) + '</b>'
         + '<small style="display:block; font-size:11px; color:#6b46c1;">'
         + 'débloque ' + a.plats.length + ' plat' + (a.plats.length > 1 ? 's' : '')
         + '</small>'
@@ -8990,7 +8216,7 @@ function rendreAchatsUtiles(classement) {
         + '<div id="plats-debloques-' + i + '" '
         + 'style="display:none; margin-top:8px; padding-top:8px; '
         + 'border-top:1px solid #f1f5f9; font-size:11px; color:#4a5568; line-height:1.6;">'
-        + a.plats.join(' · ')
+        + echapper(a.plats.join(' · '))
         + '</div>'
 
         + '</div>';
@@ -9160,9 +8386,9 @@ Si l'image est illisible :
 
         const info = document.getElementById('association-info');
         if (info) {
-            info.innerHTML = 'Lu sur l\'emballage : <b>' + lu.nom + '</b>'
-                + (lu.marque ? ' <small>(' + lu.marque + ')</small>' : '')
-                + '<br><small>EAN ' + eanAAssocier + '</small>';
+            info.innerHTML = 'Lu sur l\'emballage : <b>' + echapper(lu.nom) + '</b>'
+                + (lu.marque ? ' <small>(' + echapper(lu.marque) + ')</small>' : '')
+                + '<br><small>EAN ' + echapper(eanAAssocier) + '</small>';
         }
 
         // Reclasser la liste du stock sur ce nouveau nom : peut-être
@@ -9288,7 +8514,7 @@ function rendreConsommables(items) {
 
         + '<div style="flex:1; min-width:0;">'
         + '<div style="font-size:13px; color:#2d3748; font-weight:600; '
-        + 'overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + p.nom + '</div>'
+        + 'overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + echapper(p.nom) + '</div>'
         + '<small style="font-size:11px; color:' + couleur + ';">' + etat + '</small>'
         + '</div>'
 
@@ -9296,7 +8522,7 @@ function rendreConsommables(items) {
         + 'title="Régler le rythme à la main" '
         + 'style="background:#edf2f7; border:1px solid #cbd5e0; border-radius:7px; '
         + 'padding:6px 9px; cursor:pointer; font-size:11px; flex-shrink:0;">'
-        + (p.jours_rachat ? p.jours_rachat + ' j' : '· j') + '</button>'
+        + (p.jours_rachat ? (parseInt(p.jours_rachat) || 0) + ' j' : '· j') + '</button>'
 
         + '<button onclick="ajouterConsommableAuxCourses(' + p.id + ')" '
         + 'title="Ajouter à la liste de courses" '
